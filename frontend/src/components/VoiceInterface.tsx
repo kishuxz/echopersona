@@ -296,7 +296,6 @@ export function VoiceInterface({ sessionId, personaId, personaName, onLatencyUpd
               autoPlay
               playsInline
               muted={false}
-              crossOrigin="anonymous"
               onError={(e) => console.error("[VIDEO] playback error:", e)}
             />
           ) : (
