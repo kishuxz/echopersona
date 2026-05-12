@@ -1,13 +1,17 @@
 services:
   redis:
     image: redis:7-alpine
+    command: redis-server --appendonly yes
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 5
+    restart: always
 
   backend:
     build: ./backend
@@ -16,28 +20,31 @@ services:
     env_file:
       - .env
     environment:
-      # Override .env values that differ inside Docker networking
+      # Always use the Docker-internal Redis, not any external URL from .env
       - REDIS_URL=redis://redis:6379
-      - CORS_ORIGINS=http://localhost
+      # Override CORS per environment; default to localhost for local dev
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost}
     depends_on:
       redis:
         condition: service_healthy
-    restart: unless-stopped
+    restart: always
 
   frontend:
     build:
       context: ./frontend
-      # VITE_ vars are baked into the JS bundle at build time — pass them as
-      # build args, not runtime environment vars.
-      # Empty API base → relative URLs proxied through nginx to backend.
-      # WS base points to this nginx instance on port 80.
+      # VITE_ vars are baked into the JS bundle at build time.
+      # WS base must match the public host so browsers can reach the socket.
+      # Supabase client vars come from the same .env as the backend.
       args:
-        - VITE_API_BASE_URL=
-        - VITE_WS_BASE_URL=ws://localhost
+        - VITE_API_BASE_URL=${VITE_API_BASE_URL:-}
+        - VITE_WS_BASE_URL=${VITE_WS_BASE_URL:-ws://localhost}
+        - VITE_SUPABASE_URL=${SUPABASE_URL}
+        - VITE_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
     ports:
-      - "80:80"
+      - "3000:80"
     depends_on:
       - backend
-    restart: unless-stopped
+    restart: always
 
-volumes: {}
+volumes:
+  redis_data:

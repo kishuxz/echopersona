@@ -9,7 +9,8 @@ deepgram-sdk==3.4.0
 groq==1.2.0
 elevenlabs==1.5.0
 openai==1.35.7
-sentence-transformers==3.0.1
+sentence-transformers==2.2.2
+psutil>=5.9.0
 faiss-cpu>=1.12.0,<2
 numpy==1.26.4
 websockets>=13.0

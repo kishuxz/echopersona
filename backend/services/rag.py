@@ -16,7 +16,7 @@ class PersonaRAG:
         if self.model is None:
             from sentence_transformers import SentenceTransformer
 
-            self.model = SentenceTransformer("all-MiniLM-L6-v2")
+            self.model = SentenceTransformer("paraphrase-MiniLM-L3-v2")
 
     def _chunk_stories(self, stories: list[str]) -> list[str]:
         chunks: list[str] = []
@@ -45,6 +45,7 @@ class PersonaRAG:
             faiss.normalize_L2(embeddings)
             self.index = faiss.IndexFlatIP(embeddings.shape[1])
             self.index.add(embeddings)
+            del embeddings  # FAISS copied the data; release the numpy array
         except Exception:
             norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
             self.index = embeddings / np.maximum(norms, 1e-12)
