@@ -57,6 +57,7 @@ export function VoiceInterface({ sessionId, personaId, personaName, onLatencyUpd
   const [items, setItems]             = useState<TranscriptItem[]>([]);
   const [stage, setStage]             = useState<Stage>("idle");
   const [connected, setConnected]     = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [videoUrl, setVideoUrl]       = useState<string | null>(null);
@@ -108,21 +109,31 @@ export function VoiceInterface({ sessionId, personaId, personaName, onLatencyUpd
   }
 
   const handleConnect = async () => {
+    if (isConnecting) return;
+    setIsConnecting(true);
     setIsProcessing(false);
     setIsRecording(false);
     isRecordingRef.current    = false;
     sentenceChunksRef.current = [];
     nextPlayAtRef.current     = 0;
 
-    const wsUrl = personaId
-      ? await buildWsUrl(sessionId, personaId)
-      : `${import.meta.env.VITE_WS_BASE_URL ?? 'ws://localhost:8000'}/ws/${sessionId}`;
+    let wsUrl: string;
+    try {
+      wsUrl = personaId
+        ? await buildWsUrl(sessionId, personaId)
+        : `${import.meta.env.VITE_WS_BASE_URL ?? 'ws://localhost:8000'}/ws/${sessionId}`;
+    } catch (e) {
+      console.error("[WS] failed to build URL:", e);
+      setIsConnecting(false);
+      return;
+    }
     const ws = connect(wsUrl);
-    if (!ws) return;
+    if (!ws) { setIsConnecting(false); return; }
 
     ws.onopen = () => {
       console.log("[WS] connected");
       setConnected(true);
+      setIsConnecting(false);
       setIsProcessing(false);
       setIsRecording(false);
     };
@@ -130,6 +141,7 @@ export function VoiceInterface({ sessionId, personaId, personaName, onLatencyUpd
     ws.onclose = (e) => {
       console.log("[WS] closed", e.code, e.reason);
       setConnected(false);
+      setIsConnecting(false);
       setIsProcessing(false);
       setIsRecording(false);
       isRecordingRef.current = false;
@@ -323,10 +335,21 @@ export function VoiceInterface({ sessionId, personaId, personaName, onLatencyUpd
         {/* Mic button area */}
         {!connected ? (
           <button
-            className="w-full rounded-lg border border-green bg-green py-3 font-mono text-sm font-bold uppercase tracking-widest text-bg transition-opacity hover:opacity-90"
+            className="w-full rounded-lg border border-green bg-green py-3 font-mono text-sm font-bold uppercase tracking-widest text-bg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             onClick={handleConnect}
+            disabled={isConnecting}
           >
-            Start Session
+            {isConnecting ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                  <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Connecting…
+              </span>
+            ) : (
+              "Start Session"
+            )}
           </button>
         ) : (
           <>

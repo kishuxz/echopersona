@@ -4,10 +4,11 @@ export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null);
 
   const connect = (url: string) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) return wsRef.current;
+    const state = wsRef.current?.readyState;
+    if (state === WebSocket.OPEN || state === WebSocket.CONNECTING) return wsRef.current!;
+    wsRef.current?.close();
     const ws = new WebSocket(url);
     ws.onerror = (e) => console.error('[WS] error', e);
-    ws.onclose = (e) => console.log('[WS] closed', e.code, e.reason);
     wsRef.current = ws;
     return ws;
   };
