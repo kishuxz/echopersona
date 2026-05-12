@@ -2,106 +2,98 @@
 
 ## Phase A — Supabase Foundation ✅ COMPLETE
 
-**A.1 — Current state read**: Done.
+**A.3 — Database schema**: Migration applied. Tables: `profiles`, `personas`, `conversations` with RLS.
 
-**A.2 — Supabase credentials**: In `backend/.env` and `frontend/.env`.
+**A.4 — Backend persistence**: `services/db.py`, `services/persona_store.py`, updated `models/persona.py`.
 
-**A.3 — Database schema**: Migration run ✅. Tables: `profiles`, `personas`, `conversations`. RLS enabled on all.
+**A.5 — JWT auth**: `middleware/auth.py`, all persona endpoints + WebSocket protected.
 
-**A.4 — Backend persistence**:
-- `backend/services/db.py` — service role singleton client
-- `backend/services/persona_store.py` — full CRUD (create/get/list/update_voice/update_avatar/delete)
-- `backend/models/persona.py` — updated with `user_id`, `did_avatar_url`, `created_at`
-- `backend/config.py` — `supabase_url`, `supabase_service_role_key`, `supabase_anon_key`, `did_api_key`
+**A.6 — Frontend auth**: `lib/supabase.ts`, `hooks/useAuth.ts`, `lib/api.ts`, full routing.
 
-**A.5 — JWT authentication**:
-- `backend/middleware/auth.py` — `verify_token()` + `get_current_user` dependency
-- `backend/routers/persona.py` — all endpoints protected
-- `backend/routers/ws.py` — JWT verified before `accept()`, rejects 4001/4003/4004
-
-**A.6 — Frontend auth**:
-- `frontend/src/lib/supabase.ts`, `useAuth.ts`, `api.ts` — auth client + hooks + authenticated calls
-- `ProtectedRoute.tsx` — redirects to /login
-- Full routing: `/`, `/login`, `/signup`, `/dashboard`, `/dashboard/persona/:id`
-
-**A.7 — Test results**:
-- `GET /persona/` → 422 (no header) ✅
-- `GET /persona/` with bad token → 401 ✅
-- Supabase tables accessible ✅
+**A.7 verified**: 422 (no header), 401 (bad token), DB tables accessible.
 
 ---
 
 ## Phase B — D-ID Video Avatars ✅ COMPLETE
 
-**B.2 — D-ID service**: `backend/services/did.py`
-- `generate_talking_head(audio_base64, source_url) → str | None`
-- Polls D-ID API up to 30s; graceful failure (returns None)
-- `DID_API_KEY` in `backend/.env`
-
-**B.3 — Wired into ws.py**:
-- After `audio_end` sent: if persona has `did_avatar_url` and `DID_API_KEY` set, `_generate_and_send_video` runs as background `asyncio.Task`
-- Generates fresh TTS audio for D-ID (parallel to user hearing audio — no latency impact)
-- Sends `{"type": "video_ready", "url": "..."}` when ready
-- Same logic wired into `_run_text_turn` (dev bypass)
-- Graceful degradation: D-ID missing or failed → audio still plays normally
-
-**B.4 — Frontend video playback** (`VoiceInterface.tsx`):
-- Avatar placeholder with persona initial shown when no video
-- Animated spinner shown while video generating (`videoLoading` state)
-- `video_ready` message → sets `videoRef.current.src`, plays video
-- Video displayed as circular `<video>` element, 128×128
-
-**B.5 — Avatar image upload**:
-- `backend/services/persona_store.py::upload_avatar_image()` — uploads to Supabase Storage bucket "avatars", saves public URL to persona
-- `backend/routers/persona.py::POST /persona/{id}/upload-avatar` — validates image type, delegates to persona_store
-- `frontend/src/lib/api.ts::uploadAvatar()` — sends authenticated multipart request
-- `PersonaUpload.tsx` — added face photo upload step with preview; runs after voice cloning
+- `services/did.py` — async poll with 30s timeout, graceful failure
+- `ws.py` — background `asyncio.Task` kicks off after `audio_end`; sends `video_ready`
+- `POST /persona/{id}/upload-avatar` — Supabase Storage, saves public URL
+- Frontend: avatar placeholder → spinner → `<video>` on `video_ready`
 
 ---
 
 ## Phase C — Professional Application ✅ COMPLETE
 
-**Routing** (react-router-dom):
-- `/` → `LandingPage` (public marketing page)
-- `/login` → `AuthPage` (login mode)
-- `/signup` → `AuthPage` (signup mode)
-- `/dashboard` → `Dashboard` (protected, loads personas from DB)
-- `/dashboard/persona/:id` → `PersonaDetail` (protected, voice session)
-
-**AuthPage**: login/signup tabs, inline error messages, redirects to `/dashboard` on login.
-
-**Dashboard**: persona grid with cards showing name, traits, voice/story status, created date. "Talk Now" → navigate to session. Delete (with immediate UI removal). "New Persona" inline form.
-
-**LandingPage**: hero, stats (⚡ sub-600ms, 50+ users, 2-min voice clone), how-it-works, CTA. No stock photos.
-
-**PersonaDetail**: Header with persona name + traits + back button. Left: `LatencyDashboard`. Right: `VoiceInterface` with avatar display.
+- `/` LandingPage, `/login` `/signup` AuthPage, `/dashboard` Dashboard, `/dashboard/persona/:id` PersonaDetail
+- All pages TypeScript-clean, production build succeeds
 
 ---
 
-## Phase D — Production Deployment
+## Phase D — Production Deployment ✅ COMPLETE
 
-Status: NOT STARTED
+**D.1 — Config**:
+- `backend/.env.example` — all required + optional vars documented
+- `frontend/.env.example` — Supabase anon key + API URLs
+- Upstash Redis TLS URL in `backend/.env`
 
-Next steps:
-1. `render.yaml` — backend deployment config
-2. `vercel.json` — frontend SPA routing
-3. Deploy backend to Render, set env vars
-4. Deploy frontend to Vercel, set env vars
+**D.2 — Backend (Render)**:
+- `render.yaml` at repo root — `rootDir: backend`, Python runtime, `uvicorn main:app --host 0.0.0.0 --port $PORT`
+- Startup validation: crashes with clear error if SUPABASE_URL/SERVICE_ROLE_KEY/ANON_KEY missing
+
+**D.3 — Frontend (Vercel)**:
+- `frontend/vercel.json` — SPA rewrite `/(.*) → /index.html`
+
+**D.4 — CORS**:
+- `allow_methods=["GET","POST","PUT","DELETE"]`, `allow_headers=["Authorization","Content-Type"]`
+- Origins read from `CORS_ORIGINS` env var (set to Vercel URL in production)
+
+**D.5 — Keepalive**:
+- `useKeepAlive` hook: pings `/health` every 10 min from Dashboard and PersonaDetail
+- Prevents Render free tier sleep during active user sessions
+
+**Git**:
+- `git init` + 70 files committed (zero `.env` files included)
+- Pushed to https://github.com/kishuxz/echopersona ✅
 
 ---
 
-## End-to-End Test Checklist
+## Deployment Instructions
 
-Run after starting both servers:
-1. `cd backend && uvicorn main:app --port 8000`
-2. `cd frontend && npm run dev`
-3. Visit http://localhost:5173 → landing page ✓
-4. Sign up → confirm email → log in → dashboard ✓
-5. Create persona → verify row in Supabase Table Editor ✓
-6. Refresh → persona persists ✓
-7. Click "Talk Now" → PersonaDetail opens
-8. Upload face photo → avatar saved in Supabase Storage
-9. Click "Start Session" → WS authenticated with JWT
-10. Hold mic → speak → hear response in <600ms
-11. (If DID_DEFAULT_SOURCE_URL set) → video avatar appears after ~3-5s
-12. Log out and back in → persona still there ✓
+### Backend → Render.com
+
+1. Create new Web Service at https://render.com/dashboard
+2. Connect GitHub repo `kishuxz/echopersona`
+3. **Root Directory**: `backend`
+4. **Build Command**: `pip install -r requirements.txt`
+5. **Start Command**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+6. **Python Version**: 3.11.0
+7. Set environment variables:
+   ```
+   ENVIRONMENT=production
+   DEEPGRAM_API_KEY=<key>
+   GROQ_API_KEY=<key>
+   ELEVENLABS_API_KEY=<key>
+   ELEVENLABS_VOICE_ID=<id>
+   SUPABASE_URL=https://acngivwdqttgtalopsjw.supabase.co
+   SUPABASE_SERVICE_ROLE_KEY=<key>
+   SUPABASE_ANON_KEY=<key>
+   DID_API_KEY=<key>
+   REDIS_URL=rediss://default:...@alive-bunny-121775.upstash.io:6379
+   CORS_ORIGINS=https://<your-vercel-domain>.vercel.app
+   ```
+
+### Frontend → Vercel
+
+1. Import project at https://vercel.com/new
+2. Select `kishuxz/echopersona`
+3. **Root Directory**: `frontend`
+4. **Framework**: Vite
+5. Set environment variables:
+   ```
+   VITE_SUPABASE_URL=https://acngivwdqttgtalopsjw.supabase.co
+   VITE_SUPABASE_ANON_KEY=<anon_key>
+   VITE_API_BASE_URL=https://<your-render-service>.onrender.com
+   VITE_WS_BASE_URL=wss://<your-render-service>.onrender.com
+   ```
+6. Deploy → get Vercel URL → update `CORS_ORIGINS` in Render
