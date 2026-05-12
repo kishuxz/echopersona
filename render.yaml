@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: echopersona-backend
+    env: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+      - key: ENVIRONMENT
+        value: production
+      # Set these in the Render dashboard — never commit secrets:
+      # DEEPGRAM_API_KEY
+      # GROQ_API_KEY
+      # ELEVENLABS_API_KEY
+      # ELEVENLABS_VOICE_ID
+      # SUPABASE_URL
+      # SUPABASE_SERVICE_ROLE_KEY
+      # SUPABASE_ANON_KEY
+      # DID_API_KEY
+      # REDIS_URL
+      # CORS_ORIGINS   ← set to your Vercel URL, e.g. https://echopersona.vercel.app

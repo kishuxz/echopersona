@@ -1,0 +1,52 @@
+import logging
+import sys
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from config import settings
+from routers import health, persona, ws
+
+logger = logging.getLogger(__name__)
+
+_REQUIRED_ALWAYS = [
+    ("supabase_url", "SUPABASE_URL"),
+    ("supabase_service_role_key", "SUPABASE_SERVICE_ROLE_KEY"),
+    ("supabase_anon_key", "SUPABASE_ANON_KEY"),
+]
+_REQUIRED_LIVE = [
+    ("deepgram_api_key", "DEEPGRAM_API_KEY"),
+    ("groq_api_key", "GROQ_API_KEY"),
+]
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    missing = [name for attr, name in _REQUIRED_ALWAYS if not getattr(settings, attr)]
+    if not settings.mock_mode:
+        missing += [name for attr, name in _REQUIRED_LIVE if not getattr(settings, attr)]
+    if missing:
+        logger.critical("Missing required environment variables: %s", ", ".join(missing))
+        sys.exit(1)
+    logger.info(
+        "EchoPersona starting — environment=%s mock_mode=%s",
+        settings.environment,
+        settings.mock_mode,
+    )
+    yield
+
+
+app = FastAPI(title="EchoPersona", version="1.0.0", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origin_list,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
+)
+
+app.include_router(health.router)
+app.include_router(persona.router)
+app.include_router(ws.router)

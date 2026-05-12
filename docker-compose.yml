@@ -1,0 +1,43 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      # Override .env values that differ inside Docker networking
+      - REDIS_URL=redis://redis:6379
+      - CORS_ORIGINS=http://localhost
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      # VITE_ vars are baked into the JS bundle at build time — pass them as
+      # build args, not runtime environment vars.
+      # Empty API base → relative URLs proxied through nginx to backend.
+      # WS base points to this nginx instance on port 80.
+      args:
+        - VITE_API_BASE_URL=
+        - VITE_WS_BASE_URL=ws://localhost
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes: {}
