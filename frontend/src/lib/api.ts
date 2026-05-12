@@ -50,7 +50,7 @@ export async function getPersona(personaId: string): Promise<Persona> {
   return res.json()
 }
 
-export async function uploadVoice(personaId: string, files: FileList): Promise<Persona> {
+export async function uploadVoice(personaId: string, files: File[] | FileList): Promise<Persona> {
   const authHeader = await getAuthHeadersNoContentType()
   const formData = new FormData()
   Array.from(files).forEach((f) => formData.append('files', f))
