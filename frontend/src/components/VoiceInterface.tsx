@@ -72,9 +72,13 @@ export function VoiceInterface({ sessionId, personaId, personaName, onLatencyUpd
 
   useEffect(() => {
     if (videoUrl && videoRef.current) {
-      videoRef.current.src = videoUrl;
-      videoRef.current.load();
-      videoRef.current.play().catch(() => {});
+      videoRef.current.play().catch((err) => {
+        console.warn("[VIDEO] autoplay blocked, attempting muted play:", err);
+        if (videoRef.current) {
+          videoRef.current.muted = true;
+          videoRef.current.play().catch(() => {});
+        }
+      });
     }
   }, [videoUrl]);
 
@@ -287,10 +291,13 @@ export function VoiceInterface({ sessionId, personaId, personaName, onLatencyUpd
           {videoUrl ? (
             <video
               ref={videoRef}
+              src={videoUrl ?? undefined}
               className="h-32 w-32 rounded-full border-2 border-green object-cover"
               autoPlay
               playsInline
               muted={false}
+              crossOrigin="anonymous"
+              onError={(e) => console.error("[VIDEO] playback error:", e)}
             />
           ) : (
             <div
