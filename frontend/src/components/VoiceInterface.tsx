@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAudioRecorder } from "../hooks/useAudioRecorder";
 import { useWebSocket } from "../hooks/useWebSocket";
 import { buildWsUrl } from "../lib/api";
@@ -69,6 +69,14 @@ export function VoiceInterface({ sessionId, personaId, personaName, onLatencyUpd
   const turnStartRef         = useRef<number>(0);
   const firstTokenLoggedRef  = useRef<boolean>(false);
   const firstAudioLoggedRef  = useRef<boolean>(false);
+
+  useEffect(() => {
+    if (videoUrl && videoRef.current) {
+      videoRef.current.src = videoUrl;
+      videoRef.current.load();
+      videoRef.current.play().catch(() => {});
+    }
+  }, [videoUrl]);
 
   // Playback — lazy AudioContext, per-sentence chunk buffer, gapless scheduler
   const playbackCtxRef    = useRef<AudioContext | null>(null);
@@ -168,10 +176,6 @@ export function VoiceInterface({ sessionId, personaId, personaName, onLatencyUpd
         console.log("[VIDEO] video_ready:", message.url);
         setVideoUrl(message.url);
         setVideoLoading(false);
-        if (videoRef.current) {
-          videoRef.current.src = message.url;
-          videoRef.current.play().catch(() => {});
-        }
       }
 
       if (message.type === "llm_token") {
