@@ -58,13 +58,9 @@ async def _generate_and_send_video(
     voice_id: str | None,
     source_url: str,
 ) -> None:
-    """Background task: collect TTS audio, generate D-ID video, push video_ready to client."""
+    """Background task: generate D-ID talking-head video from text, push video_ready to client."""
     try:
-        all_chunks = await _collect_tts_chunks(response_text, voice_id)
-        if not all_chunks:
-            return
-        audio_b64 = base64.b64encode(b"".join(all_chunks)).decode()
-        video_url = await did.generate_talking_head(audio_b64, source_url)
+        video_url = await did.generate_talking_head(response_text, voice_id, source_url)
         if video_url:
             await websocket.send_json({"type": "video_ready", "url": video_url})
     except Exception as exc:

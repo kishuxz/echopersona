@@ -1,7 +1,7 @@
 """
 D-ID video generation service.
-Takes collected TTS audio + source image URL → returns talking head video URL.
-Called AFTER audio has already been streamed to the client.
+Takes LLM response text + source image URL → returns talking head video URL.
+D-ID renders TTS internally (ElevenLabs when voice_id present, Microsoft fallback).
 Video is delivered as a separate WebSocket message: {"type": "video_ready", "url": "..."}
 Degrades gracefully: if DID_API_KEY is absent or generation fails, audio still played normally.
 """
@@ -19,11 +19,11 @@ _POLL_INTERVAL_S = 2.0
 _MAX_POLLS = 15  # 30s total
 
 
-async def generate_talking_head(audio_base64: str, source_url: str) -> str | None:
+async def generate_talking_head(text: str, voice_id: str | None, source_url: str) -> str | None:
     """
     Submit a D-ID talk request and poll until complete.
     Returns the result video URL, or None if generation fails or is skipped.
-    Audio must be base64-encoded MP3.
+    Uses ElevenLabs TTS when voice_id is provided, falls back to Microsoft.
     """
     if not settings.did_api_key:
         logger.debug("DID_API_KEY not configured — skipping video generation")
@@ -35,6 +35,12 @@ async def generate_talking_head(audio_base64: str, source_url: str) -> str | Non
         "Accept": "application/json",
     }
 
+    provider = (
+        {"type": "elevenlabs", "voice_id": voice_id}
+        if voice_id
+        else {"type": "microsoft", "voice_id": "en-US-JennyNeural"}
+    )
+
     async with httpx.AsyncClient(timeout=30.0) as client:
         try:
             create_res = await client.post(
@@ -43,8 +49,9 @@ async def generate_talking_head(audio_base64: str, source_url: str) -> str | Non
                 json={
                     "source_url": source_url,
                     "script": {
-                        "type": "audio",
-                        "audio_url": f"data:audio/mp3;base64,{audio_base64}",
+                        "type": "text",
+                        "input": text,
+                        "provider": provider,
                     },
                     "config": {
                         "fluent": True,
@@ -55,7 +62,7 @@ async def generate_talking_head(audio_base64: str, source_url: str) -> str | Non
             )
             create_res.raise_for_status()
             talk_id = create_res.json()["id"]
-            logger.info("D-ID talk submitted: %s", talk_id)
+            logger.info("D-ID talk submitted: %s (provider=%s)", talk_id, provider["type"])
 
         except httpx.HTTPStatusError as exc:
             logger.error(
