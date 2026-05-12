@@ -64,6 +64,7 @@ async def upload_avatar(
     file: UploadFile = File(...),
     user_id: str = Depends(get_current_user),
 ) -> Persona:
+    logger.info(f"[AVATAR] upload request for persona {persona_id}, content_type={file.content_type}, filename={file.filename}")
     persona = await persona_store.get_persona(persona_id, user_id)
     if not persona:
         raise HTTPException(status_code=404, detail="Persona not found")

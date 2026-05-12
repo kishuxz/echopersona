@@ -15,6 +15,7 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
   const [style, setStyle] = useState("short sentences, calm pacing");
   const [voiceFiles, setVoiceFiles] = useState<File[]>([]);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const avatarFileRef = useRef<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [voiceStatus, setVoiceStatus] = useState<"idle" | "cloning" | "cloned" | "error">("idle");
@@ -40,6 +41,11 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  const updateAvatarFile = (file: File | null) => {
+    avatarFileRef.current = file;
+    setAvatarFile(file);
+  };
 
   // Recording duration timer — resets when recording stops
   useEffect(() => {
@@ -157,11 +163,13 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
 
   const usePhoto = () => {
     if (!capturedImage || !canvasRef.current) return;
+    const snapshotUrl = capturedImage;
     canvasRef.current.toBlob((blob) => {
       if (!blob) return;
       const file = new File([blob], `avatar-${Date.now()}.jpg`, { type: "image/jpeg" });
-      setAvatarFile(file);
-      setAvatarPreview(capturedImage);
+      console.log('[AVATAR] setAvatarFile called with:', file.name, file.size);
+      updateAvatarFile(file);
+      setAvatarPreview(snapshotUrl);
     }, "image/jpeg", 0.9);
     setCapturedImage(null);
   };
@@ -200,9 +208,11 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
         }
       }
 
-      if (avatarFile) {
+      const fileToUpload = avatarFileRef.current ?? avatarFile;
+      console.log('[BUILD] avatarFile:', avatarFile?.name ?? null, '| ref:', avatarFileRef.current?.name ?? null);
+      if (fileToUpload) {
         try {
-          persona = await uploadAvatar(persona.id, avatarFile);
+          persona = await uploadAvatar(persona.id, fileToUpload);
         } catch (e) {
           console.error("[AVATAR UPLOAD]", e);
         }
@@ -584,7 +594,8 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
                     className="hidden"
                     onChange={(e) => {
                       const f = e.target.files?.[0] ?? null;
-                      setAvatarFile(f);
+                      console.log('[AVATAR] setAvatarFile called with:', f?.name, f?.size);
+                      updateAvatarFile(f);
                       if (f) setAvatarPreview(URL.createObjectURL(f));
                       else setAvatarPreview(null);
                     }}
