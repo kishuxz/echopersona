@@ -20,6 +20,8 @@ from services.stt import stream_stt
 from services.tts import prewarm_elevenlabs_ws, stream_tts, stream_tts_prewarmed, tts_audio_chunks
 from services.tts_cartesia import stream_tts_cartesia, tts_audio_chunks_cartesia
 
+_background_tasks: set[asyncio.Task] = set()
+
 
 def _stream_tts(text, websocket, first_audio_cb, voice_id, send_end=False):
     """Route to Cartesia or ElevenLabs based on TTS_PROVIDER setting."""
@@ -308,7 +310,7 @@ async def _run_turn_inner(websocket: WebSocket, session_id: str, audio_queue: as
             and settings.did_api_key
             and response_text.strip()
         ):
-            asyncio.create_task(
+            _did_task = asyncio.create_task(
                 _generate_and_send_video(
                     websocket=websocket,
                     response_text=response_text.strip(),
@@ -316,6 +318,8 @@ async def _run_turn_inner(websocket: WebSocket, session_id: str, audio_queue: as
                     source_url=persona.did_avatar_url,
                 )
             )
+            _background_tasks.add(_did_task)
+            _did_task.add_done_callback(_background_tasks.discard)
 
         SESSION_HISTORY.setdefault(session_id, []).extend(
             [
@@ -496,7 +500,7 @@ async def _run_text_turn(websocket: WebSocket, session_id: str, user_text: str) 
             and settings.did_api_key
             and response_text.strip()
         ):
-            asyncio.create_task(
+            _did_task = asyncio.create_task(
                 _generate_and_send_video(
                     websocket=websocket,
                     response_text=response_text.strip(),
@@ -504,6 +508,8 @@ async def _run_text_turn(websocket: WebSocket, session_id: str, user_text: str) 
                     source_url=persona.did_avatar_url,
                 )
             )
+            _background_tasks.add(_did_task)
+            _did_task.add_done_callback(_background_tasks.discard)
 
         SESSION_HISTORY.setdefault(session_id, []).extend([
             ConversationTurn(role="user", content=user_text),
