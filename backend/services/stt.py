@@ -5,8 +5,6 @@ from config import settings
 
 logger = logging.getLogger(__name__)
 
-DEEPGRAM_URL = "https://api.deepgram.com/v1/listen"
-
 
 def _pcm_to_wav(pcm_bytes: bytes, sample_rate: int = 16000) -> bytes:
     """Wrap raw Int16 LE PCM bytes in a minimal WAV container."""
@@ -25,13 +23,6 @@ def _pcm_to_wav(pcm_bytes: bytes, sample_rate: int = 16000) -> bytes:
 
 
 async def transcribe_audio(audio_bytes: bytes, sample_rate: int = 16000) -> str | None:
-    """
-    Transcribe audio using Deepgram's REST pre-recorded API.
-    Returns the transcript string, or None if transcription fails.
-    No SDK — direct HTTP call, immune to SDK version changes.
-    PCM bytes are wrapped in a WAV container so Deepgram can parse the
-    format without relying on query-param encoding hints.
-    """
     if settings.mock_mode:
         return "Hello, tell me how this real time avatar pipeline works."
 
@@ -41,23 +32,41 @@ async def transcribe_audio(audio_bytes: bytes, sample_rate: int = 16000) -> str 
 
     wav_bytes = _pcm_to_wav(audio_bytes, sample_rate)
 
-    params = {
-        "model": "nova-2",
-        "language": "en-US",
-        "smart_format": "true",
-        "punctuate": "true",
-    }
-    headers = {
-        "Authorization": f"Token {settings.deepgram_api_key}",
-        "Content-Type": "audio/wav",
-    }
-
+    # Try Groq Whisper first (faster — same API connection already used for LLM)
     try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                "https://api.groq.com/openai/v1/audio/transcriptions",
+                headers={"Authorization": f"Bearer {settings.groq_api_key}"},
+                files={"file": ("audio.wav", wav_bytes, "audio/wav")},
+                data={"model": "whisper-large-v3-turbo", "language": "en", "response_format": "text"},
+            )
+            response.raise_for_status()
+            transcript = response.text.strip()
+            logger.info("[STT] Groq Whisper transcript: %s", transcript)
+            return transcript if transcript else None
+    except Exception as e:
+        logger.warning("[STT] Groq Whisper failed (%s) — falling back to Deepgram", e)
+
+    # Fallback: Deepgram REST
+    try:
+        params = {
+            "model": "nova-2",
+            "language": "en-US",
+            "smart_format": "true",
+            "punctuate": "true",
+            "encoding": "linear16",
+            "sample_rate": str(sample_rate),
+            "channels": "1",
+        }
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.post(
-                DEEPGRAM_URL,
+                "https://api.deepgram.com/v1/listen",
                 params=params,
-                headers=headers,
+                headers={
+                    "Authorization": f"Token {settings.deepgram_api_key}",
+                    "Content-Type": "audio/wav",
+                },
                 content=wav_bytes,
             )
             response.raise_for_status()
@@ -69,11 +78,8 @@ async def transcribe_audio(audio_bytes: bytes, sample_rate: int = 16000) -> str 
                 .get("transcript", "")
                 .strip()
             )
-            logger.info("[STT] transcript: %s", transcript)
+            logger.info("[STT] Deepgram fallback transcript: %s", transcript)
             return transcript if transcript else None
-    except httpx.HTTPStatusError as e:
-        logger.error("[STT] Deepgram HTTP error: %s %s", e.response.status_code, e.response.text)
-        return None
     except Exception as e:
-        logger.error("[STT] Deepgram error: %s", e)
+        logger.error("[STT] Deepgram fallback also failed: %s", e)
         return None
