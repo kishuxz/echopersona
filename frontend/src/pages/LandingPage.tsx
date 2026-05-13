@@ -56,44 +56,68 @@ export function LandingPage() {
             </div>
           </div>
 
-          {/* Right — floating chat preview cards */}
-          <div className="flex-shrink-0 relative w-full max-w-xs lg:w-80 hidden sm:flex flex-col gap-4 select-none">
-            {/* User bubble */}
-            <div className="float-a self-end max-w-[85%]">
-              <div className="rounded-2xl rounded-br-sm bg-accent px-4 py-3 shadow-card-hover">
-                <p className="font-sans text-sm text-white leading-relaxed">
-                  Tell me about your first job
-                </p>
+          {/* Right — product mockup */}
+          <div className="flex-shrink-0 w-full max-w-[300px] hidden sm:flex flex-col items-center gap-4 select-none">
+
+            {/* Portrait card */}
+            <div className="relative w-full overflow-hidden rounded-2xl shadow-card-hover" style={{ height: '320px' }}>
+              <img
+                src="https://images.unsplash.com/photo-1566616213894-2d4e1baee5d8?w=300&q=80"
+                alt="Grandpa Joe"
+                className="h-full w-full object-cover"
+              />
+              {/* Live badge */}
+              <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-black/40 px-2.5 py-1 backdrop-blur-sm">
+                <span
+                  className="h-1.5 w-1.5 rounded-full bg-green"
+                  style={{ animation: 'blink 1s step-end infinite' }}
+                />
+                <span className="font-sans text-[10px] font-medium text-white">Live</span>
               </div>
-              <p className="mt-1 text-right font-mono text-[10px] text-muted">You</p>
             </div>
 
-            {/* Persona bubble */}
-            <div className="float-b self-start max-w-[90%]">
-              <div className="mb-1 flex items-center gap-1.5">
-                <div
-                  className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full font-mono text-[10px] font-semibold"
-                  style={{ backgroundColor: '#F0EDE8', color: '#18181B' }}
-                >
-                  GJ
+            {/* Persona name */}
+            <p className="font-fraunces text-base font-semibold text-text">Grandpa Joe</p>
+
+            {/* Chat bubbles */}
+            <div className="flex w-full flex-col gap-3">
+              {/* User bubble */}
+              <div className="float-a self-end max-w-[85%]">
+                <div className="rounded-2xl rounded-br-sm bg-accent px-4 py-3 shadow-card-hover">
+                  <p className="font-sans text-sm text-white leading-relaxed">
+                    Tell me about your first job
+                  </p>
                 </div>
-                <span className="font-mono text-[10px] text-muted">Grandpa Joe</span>
+                <p className="mt-1 text-right font-mono text-[10px] text-muted">You</p>
               </div>
-              <div className="rounded-2xl rounded-bl-sm bg-surface border border-border px-4 py-3 shadow-card-hover">
-                <p className="font-sans text-sm text-text leading-relaxed">
-                  I remember it like yesterday — 1987, downtown Chicago. Started at the warehouse at 6am…
-                </p>
-              </div>
-            </div>
 
-            {/* Second exchange */}
-            <div className="float-a self-end max-w-[80%]" style={{ animationDelay: '1.5s' }}>
-              <div className="rounded-2xl rounded-br-sm bg-accent px-4 py-3 shadow-card-hover">
-                <p className="font-sans text-sm text-white leading-relaxed">
-                  What did you love most about it?
-                </p>
+              {/* Persona bubble */}
+              <div className="float-b self-start max-w-[90%]">
+                <div className="mb-1 flex items-center gap-1.5">
+                  <div
+                    className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full font-mono text-[10px] font-semibold"
+                    style={{ backgroundColor: '#F0EDE8', color: '#18181B' }}
+                  >
+                    GJ
+                  </div>
+                  <span className="font-mono text-[10px] text-muted">Grandpa Joe</span>
+                </div>
+                <div className="rounded-2xl rounded-bl-sm border border-border bg-surface px-4 py-3 shadow-card-hover">
+                  <p className="font-sans text-sm text-text leading-relaxed">
+                    I remember it like yesterday — 1987, downtown Chicago. Started at the warehouse at 6am…
+                  </p>
+                </div>
               </div>
-              <p className="mt-1 text-right font-mono text-[10px] text-muted">You</p>
+
+              {/* Second user bubble */}
+              <div className="float-a self-end max-w-[80%]" style={{ animationDelay: '1.5s' }}>
+                <div className="rounded-2xl rounded-br-sm bg-accent px-4 py-3 shadow-card-hover">
+                  <p className="font-sans text-sm text-white leading-relaxed">
+                    What did you love most about it?
+                  </p>
+                </div>
+                <p className="mt-1 text-right font-mono text-[10px] text-muted">You</p>
+              </div>
             </div>
           </div>
         </div>
