@@ -295,7 +295,7 @@ export function VoiceInterface({
               autoPlay
               playsInline
               className="h-full w-full object-cover"
-              onEnded={() => { setPlayingVideo(false); setVideoUrl(null); setVideoGenSeconds(""); }}
+              onEnded={() => { setPlayingVideo(false); }}
             />
           )}
 
