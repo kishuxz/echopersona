@@ -1,9 +1,11 @@
 import logging
+import os
 import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from config import settings
 from routers import health, persona, ws
@@ -38,6 +40,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="EchoPersona", version="1.0.0", lifespan=lifespan)
+
+os.makedirs("/tmp/echopersona_audio", exist_ok=True)
+app.mount("/audio", StaticFiles(directory="/tmp/echopersona_audio"), name="audio")
 
 app.add_middleware(
     CORSMiddleware,

@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     cartesia_api_key: str = Field(default="", alias="CARTESIA_API_KEY")
     cartesia_voice_id: str = Field(default="", alias="CARTESIA_VOICE_ID")
 
+    public_base_url: str = Field(default="https://kishoreai.online", alias="PUBLIC_BASE_URL")
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]

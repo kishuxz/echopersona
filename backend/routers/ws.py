@@ -12,7 +12,7 @@ from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from config import settings
 from middleware.auth import verify_token
 from models.session import ConversationTurn
-from services import did, persona_store
+from services import audio_store, did, persona_store
 from services.latency import LatencyTimer
 from services.llm import stream_llm
 from services.chunker import extract_complete_sentence, is_sentence_complete
@@ -63,19 +63,19 @@ async def _collect_tts_chunks(text: str, voice_id: str | None) -> list[bytes]:
 
 
 async def _generate_and_send_video(
-    websocket: WebSocket,
-    response_text: str,
-    voice_id: str | None,
+    audio_bytes: bytes,
     source_url: str,
+    websocket: WebSocket,
 ) -> None:
-    """Background task: generate D-ID talking-head video from text, push video_ready to client."""
+    """Background task: save pre-generated audio, submit to D-ID for lip-sync, push video_ready."""
     try:
-        logger.info("[D-ID] firing with source_url=%s voice_id=%s", source_url, voice_id)
-        video_url = await did.generate_talking_head(response_text, voice_id, source_url)
+        filename = await audio_store.save_audio(audio_bytes, extension="mp3")
+        audio_url = f"{settings.public_base_url}/audio/{filename}"
+        video_url = await did.generate_talking_head(audio_url, source_url)
         if video_url:
             await websocket.send_json({"type": "video_ready", "url": video_url})
     except Exception as exc:
-        logger.error("D-ID video generation failed: %s", exc)
+        logger.error("[D-ID] video generation failed: %s", exc)
 
 
 async def _run_turn(
@@ -174,8 +174,10 @@ async def _run_turn_inner(
     # - Sentences 2+ are prefetched concurrently while sentence 1 is streaming,
     #   then sent immediately after sentence 1 finishes — eliminating the 400ms
     #   ElevenLabs round-trip gap between sequential sentences.
+    # Raw audio bytes are collected into collected_audio for D-ID lip-sync.
     tts_queue: asyncio.Queue[str | None] = asyncio.Queue()
     tts_error: list[BaseException] = []
+    collected_audio: list[bytes] = []
 
     async def tts_worker() -> None:
         try:
@@ -195,8 +197,18 @@ async def _run_turn_inner(
 
             collector = asyncio.create_task(_collect_pending())
 
-            # Stream sentence 1 directly — fires mark_first_audio on first TTS byte
-            await _stream_tts(first_text, websocket, mark_first_audio, voice_id, send_end=False)
+            # Stream sentence 1 directly — iterate chunks so we can collect raw bytes
+            first_audio_sent = False
+            if settings.tts_provider == "cartesia":
+                chunk_gen = tts_audio_chunks_cartesia(first_text, voice_id)
+            else:
+                chunk_gen = tts_audio_chunks(first_text, voice_id)
+            async for chunk in chunk_gen:
+                if not first_audio_sent:
+                    first_audio_sent = True
+                    mark_first_audio()
+                collected_audio.append(chunk)
+                await websocket.send_json({"type": "audio_chunk", "data": base64.b64encode(chunk).decode()})
             await websocket.send_json({"type": "sentence_end"})
 
             # All remaining sentences collected; send pre-fetched audio in order
@@ -204,6 +216,7 @@ async def _run_turn_inner(
             for task in prefetch:
                 audio_bytes = await task
                 for chunk in audio_bytes:
+                    collected_audio.append(chunk)
                     await websocket.send_json(
                         {"type": "audio_chunk", "data": base64.b64encode(chunk).decode()}
                     )
@@ -232,18 +245,6 @@ async def _run_turn_inner(
                 if len(s) >= _MIN_TTS_CHARS:
                     await tts_queue.put(s)
             response_text = cached_text
-            if persona and persona.did_avatar_url and settings.did_api_key and cached_text.strip():
-                _did_task = asyncio.create_task(
-                    _generate_and_send_video(
-                        websocket=websocket,
-                        response_text=cached_text.strip(),
-                        voice_id=voice_id,
-                        source_url=persona.did_avatar_url,
-                    )
-                )
-                _background_tasks.add(_did_task)
-                _did_task.add_done_callback(_background_tasks.discard)
-                logger.info("D-ID video queued for cached response (%d chars)", len(cached_text.strip()))
         else:
             # Latency floor: ~620-640ms warm on Groq free tier due to network RTT.
             # To break 600ms: set USE_VLLM=true in .env (local vLLM, 5-30ms TTFT).
@@ -311,19 +312,6 @@ async def _run_turn_inner(
             # Store successful response in cache
             if response_text.strip():
                 _RESPONSE_CACHE[cache_key] = (response_text.strip(), time.time() + _CACHE_TTL_S)
-            # Fire D-ID with the complete response once LLM finishes
-            if persona and persona.did_avatar_url and settings.did_api_key and response_text.strip():
-                _did_task = asyncio.create_task(
-                    _generate_and_send_video(
-                        websocket=websocket,
-                        response_text=response_text.strip(),
-                        voice_id=voice_id,
-                        source_url=persona.did_avatar_url,
-                    )
-                )
-                _background_tasks.add(_did_task)
-                _did_task.add_done_callback(_background_tasks.discard)
-                logger.info("D-ID video queued for response (%d chars)", len(response_text.strip()))
     except Exception as e:
         logger.error("LLM streaming failed: %s", e)
         await tts_queue.put(None)
@@ -338,6 +326,16 @@ async def _run_turn_inner(
 
     if tts_error:
         raise tts_error[0]
+
+    # Fire D-ID with pre-generated ElevenLabs audio for lip-sync
+    if persona and persona.did_avatar_url and settings.did_api_key and collected_audio:
+        all_audio = b"".join(collected_audio)
+        _did_task = asyncio.create_task(
+            _generate_and_send_video(all_audio, persona.did_avatar_url, websocket)
+        )
+        _background_tasks.add(_did_task)
+        _did_task.add_done_callback(_background_tasks.discard)
+        logger.info("[D-ID] video queued (%d audio bytes)", len(all_audio))
 
     await websocket.send_json({"type": "audio_end"})
     logger.debug("audio_end sent to client")
@@ -393,6 +391,7 @@ async def _run_text_turn(websocket: WebSocket, session_id: str, user_text: str) 
 
         tts_queue: asyncio.Queue[str | None] = asyncio.Queue()
         tts_error: list[BaseException] = []
+        collected_audio: list[bytes] = []
 
         async def tts_worker() -> None:
             try:
@@ -409,12 +408,26 @@ async def _run_text_turn(websocket: WebSocket, session_id: str, user_text: str) 
                         prefetch.append(asyncio.create_task(_collect_tts_chunks(text, voice_id)))
 
                 collector = asyncio.create_task(_collect_pending())
-                await _stream_tts(first_text, websocket, mark_first_audio, voice_id, send_end=False)
+
+                # Stream sentence 1 directly — iterate chunks so we can collect raw bytes
+                first_audio_sent = False
+                if settings.tts_provider == "cartesia":
+                    chunk_gen = tts_audio_chunks_cartesia(first_text, voice_id)
+                else:
+                    chunk_gen = tts_audio_chunks(first_text, voice_id)
+                async for chunk in chunk_gen:
+                    if not first_audio_sent:
+                        first_audio_sent = True
+                        mark_first_audio()
+                    collected_audio.append(chunk)
+                    await websocket.send_json({"type": "audio_chunk", "data": base64.b64encode(chunk).decode()})
                 await websocket.send_json({"type": "sentence_end"})
+
                 await collector
                 for task in prefetch:
                     audio_bytes = await task
                     for chunk in audio_bytes:
+                        collected_audio.append(chunk)
                         await websocket.send_json(
                             {"type": "audio_chunk", "data": base64.b64encode(chunk).decode()}
                         )
@@ -446,18 +459,6 @@ async def _run_text_turn(websocket: WebSocket, session_id: str, user_text: str) 
                     if len(s) >= _MIN_TTS_CHARS:
                         await tts_queue.put(s)
                 response_text = cached_text
-                if persona and persona.did_avatar_url and settings.did_api_key and cached_text.strip():
-                    _did_task = asyncio.create_task(
-                        _generate_and_send_video(
-                            websocket=websocket,
-                            response_text=cached_text.strip(),
-                            voice_id=voice_id,
-                            source_url=persona.did_avatar_url,
-                        )
-                    )
-                    _background_tasks.add(_did_task)
-                    _did_task.add_done_callback(_background_tasks.discard)
-                    logger.info("D-ID video queued for cached response (%d chars)", len(cached_text.strip()))
             else:
                 async for token in stream_llm(user_text, system_prompt, history):
                     response_text += token
@@ -502,18 +503,6 @@ async def _run_text_turn(websocket: WebSocket, session_id: str, user_text: str) 
                         time_flush_done = True
                 if response_text.strip():
                     _RESPONSE_CACHE[cache_key] = (response_text.strip(), time.time() + _CACHE_TTL_S)
-                if persona and persona.did_avatar_url and settings.did_api_key and response_text.strip():
-                    _did_task = asyncio.create_task(
-                        _generate_and_send_video(
-                            websocket=websocket,
-                            response_text=response_text.strip(),
-                            voice_id=voice_id,
-                            source_url=persona.did_avatar_url,
-                        )
-                    )
-                    _background_tasks.add(_did_task)
-                    _did_task.add_done_callback(_background_tasks.discard)
-                    logger.info("D-ID video queued for response (%d chars)", len(response_text.strip()))
         except Exception as e:
             logger.error("LLM streaming failed: %s", e)
             await tts_queue.put(None)
@@ -527,6 +516,16 @@ async def _run_text_turn(websocket: WebSocket, session_id: str, user_text: str) 
 
         if tts_error:
             raise tts_error[0]
+
+        # Fire D-ID with pre-generated ElevenLabs audio for lip-sync
+        if persona and persona.did_avatar_url and settings.did_api_key and collected_audio:
+            all_audio = b"".join(collected_audio)
+            _did_task = asyncio.create_task(
+                _generate_and_send_video(all_audio, persona.did_avatar_url, websocket)
+            )
+            _background_tasks.add(_did_task)
+            _did_task.add_done_callback(_background_tasks.discard)
+            logger.info("[D-ID] video queued (%d audio bytes)", len(all_audio))
 
         await websocket.send_json({"type": "audio_end"})
 
