@@ -16,33 +16,39 @@ interface VoiceInterfaceProps {
 // ── Pipeline stage display ─────────────────────────────────────────────────
 type Stage = "idle" | "recording" | "STT" | "LLM" | "TTS";
 const STAGES: { key: Stage; label: string }[] = [
-  { key: "STT",       label: "STT" },
-  { key: "LLM",       label: "LLM" },
-  { key: "TTS",       label: "TTS" },
-  { key: "idle",      label: "DONE" },
+  { key: "STT",  label: "STT" },
+  { key: "LLM",  label: "LLM" },
+  { key: "TTS",  label: "TTS" },
+  { key: "idle", label: "DONE" },
 ];
 
 function PipelineBar({ stage }: { stage: Stage }) {
   const activeIndex = STAGES.findIndex((s) => s.key === stage);
   return (
-    <div className="flex items-center gap-1 font-mono text-[10px]">
+    <div className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-widest">
       {STAGES.map((s, i) => {
-        const isActive = s.key === stage;
-        const isDone   = activeIndex > i && stage !== "idle";
-        const isIdle   = stage === "idle" && i < STAGES.length - 1;
+        const isActive   = s.key === stage;
+        const isDone     = activeIndex > i && stage !== "idle";
+        const isIdle     = stage === "idle" && i < STAGES.length - 1;
+        const isComplete = isDone || isIdle;
         return (
-          <div key={s.key} className="flex items-center gap-1">
-            {i > 0 && <span className="text-muted">→</span>}
-            <span
-              className={
-                isActive
-                  ? "text-green"
-                  : isDone || isIdle
-                  ? "text-textdim"
-                  : "text-muted"
-              }
-            >
-              {isDone || (stage === "idle" && s.key !== "idle") ? "✓" : ""}{s.label}
+          <div key={s.key} className="flex items-center gap-1.5">
+            {i > 0 && (
+              <span className={`transition-colors duration-300 ${
+                isComplete || isActive ? "text-green/20" : "text-[#1a1a1a]"
+              }`}>→</span>
+            )}
+            <span className={`flex items-center gap-0.5 transition-colors duration-200 ${
+              isActive ? "text-green" : isComplete ? "text-[#3a3a3a]" : "text-[#1e1e1e]"
+            }`}>
+              {isComplete ? (
+                <span className="mr-0.5 text-green/40">✓</span>
+              ) : isActive ? (
+                <span className="blink mr-0.5">●</span>
+              ) : (
+                <span className="mr-0.5">○</span>
+              )}
+              {s.label}
             </span>
           </div>
         );
@@ -256,87 +262,87 @@ export function VoiceInterface({ sessionId, personaId, personaName, idleVideoUrl
   console.log("[STATE] isRecording:", isRecording, "isProcessing:", isProcessing, "connected:", connected);
 
   // ── Derived UI state ──────────────────────────────────────────────────
-  const micBorderColor = isProcessing ? "#00aaff" : isRecording ? "#00ff88" : "#1e1e1e";
-  const micBgColor     = isProcessing ? "rgba(0,170,255,0.05)" : isRecording ? "rgba(0,255,136,0.08)" : "#111111";
-  const micIconColor   = isProcessing ? "#00aaff" : isRecording ? "#00ff88" : "#444444";
+  const micBorderColor = isProcessing ? "#0088ff" : isRecording ? "#00ff88" : "#1e1e1e";
+  const micBgColor     = isProcessing ? "rgba(0,136,255,0.06)" : isRecording ? "rgba(0,255,136,0.1)" : "#0a0a0a";
+  const micIconColor   = isProcessing ? "#0088ff" : isRecording ? "#00ff88" : "#2e2e2e";
 
   return (
     <div className="flex flex-col gap-4 lg:flex-row">
 
       {/* ── Voice control panel ── */}
-      <div className="flex min-h-[280px] flex-col items-center gap-5 rounded-lg border border-border bg-surface p-6 lg:w-64 lg:flex-shrink-0">
+      <div className="flex min-h-[340px] flex-col items-center gap-5 rounded-lg border border-[#1a1a1a] bg-[#0d0d0d] p-6 lg:w-64 lg:flex-shrink-0">
 
-        {/* Avatar / video display — priority: response video > idle loop > placeholder */}
+        {/* Avatar / video display */}
         <div className="flex flex-col items-center gap-2">
+          <div className={`rounded-full ${
+            isRecording ? "avatar-speaking" : connected ? "avatar-idle" : "avatar-disconnected"
+          }`}>
+            {/* 1. D-ID response video */}
+            {videoUrl && (
+              <video
+                ref={videoRef}
+                src={videoUrl}
+                className="h-40 w-40 rounded-full object-cover"
+                autoPlay
+                playsInline
+                muted={false}
+                onEnded={() => setVideoUrl(null)}
+                onError={(e) => console.error("[VIDEO] playback error:", e)}
+              />
+            )}
 
-          {/* 1. D-ID response video — shown when video_ready arrives; returns to idle on end */}
-          {videoUrl && (
-            <video
-              ref={videoRef}
-              src={videoUrl}
-              className="h-32 w-32 rounded-full border-2 border-green object-cover"
-              autoPlay
-              playsInline
-              muted={false}
-              onEnded={() => setVideoUrl(null)}
-              onError={(e) => console.error("[VIDEO] playback error:", e)}
-            />
-          )}
+            {/* 2. Idle loop */}
+            {!videoUrl && idleVideoUrl && (
+              <video
+                src={idleVideoUrl}
+                className="h-40 w-40 rounded-full object-cover"
+                autoPlay
+                loop
+                playsInline
+                muted
+              />
+            )}
 
-          {/* 2. Idle loop — plays while waiting for a response video */}
-          {!videoUrl && idleVideoUrl && (
-            <video
-              src={idleVideoUrl}
-              className="h-32 w-32 rounded-full border-2 border-green object-cover"
-              autoPlay
-              loop
-              playsInline
-              muted
-            />
-          )}
-
-          {/* 3. Letter / spinner placeholder */}
-          {!videoUrl && !idleVideoUrl && (
-            <div
-              className="flex h-32 w-32 items-center justify-center rounded-full border-2 bg-surface"
-              style={{ borderColor: connected ? "#00ff88" : "#1e1e1e" }}
-            >
-              {videoLoading ? (
-                <svg className="h-6 w-6 animate-spin" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-20" cx="12" cy="12" r="10" stroke="#00ff88" strokeWidth="3" />
-                  <path className="opacity-80" fill="#00ff88" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-              ) : (
-                <span className="font-mono text-2xl font-bold text-textdim">
-                  {personaName?.[0]?.toUpperCase() ?? "?"}
-                </span>
-              )}
-            </div>
-          )}
+            {/* 3. Letter / spinner placeholder */}
+            {!videoUrl && !idleVideoUrl && (
+              <div className="flex h-40 w-40 items-center justify-center rounded-full bg-[#0a0a0a]">
+                {videoLoading ? (
+                  <svg className="h-7 w-7 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-20" cx="12" cy="12" r="10" stroke="#00ff88" strokeWidth="2.5" />
+                    <path className="opacity-80" fill="#00ff88" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                ) : (
+                  <span className="font-mono text-3xl font-bold text-[#222]">
+                    {personaName?.[0]?.toUpperCase() ?? "?"}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
 
           {videoLoading && !videoUrl && !idleVideoUrl && connected && (
-            <p className="font-mono text-[9px] uppercase tracking-widest text-textdim">
+            <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-[#2a2a2a]">
               generating video…
             </p>
           )}
         </div>
 
         {/* Connection status */}
-        <div className="flex w-full items-center justify-between">
-          <span className="font-mono text-[10px] uppercase tracking-widest text-textdim">Voice</span>
+        <div className="flex w-full items-center justify-between border-t border-[#151515] pt-3">
+          <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-[#272727]">Status</span>
           <div className="flex items-center gap-1.5">
             <span
               className="h-1.5 w-1.5 rounded-full"
               style={{
-                background: connected ? "#00ff88" : "#444",
+                background: connected ? "#00ff88" : "#252525",
                 animation: connected ? "blink 1s step-end infinite" : "none",
               }}
             />
             <span
-              className="font-mono text-[10px] uppercase"
-              style={{ color: connected ? "#00ff88" : "#444" }}
+              className="font-mono text-[9px] uppercase tracking-widest"
+              style={{ color: connected ? "#00ff88" : "#252525" }}
             >
-              {connected ? "Connected" : "Offline"}
+              {connected ? "Live" : "Offline"}
             </span>
           </div>
         </div>
@@ -344,7 +350,7 @@ export function VoiceInterface({ sessionId, personaId, personaName, idleVideoUrl
         {/* Mic button area */}
         {!connected ? (
           <button
-            className="w-full rounded-lg border border-green bg-green py-3 font-mono text-sm font-bold uppercase tracking-widest text-bg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            className="btn-glow-green w-full rounded border border-green bg-green py-3 font-mono text-sm font-bold uppercase tracking-widest text-[#001f0e] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             onClick={handleConnect}
             disabled={isConnecting}
           >
@@ -364,10 +370,8 @@ export function VoiceInterface({ sessionId, personaId, personaName, idleVideoUrl
           <>
             {/* Instruction text */}
             <p
-              className="font-mono text-xs uppercase tracking-widest transition-colors"
-              style={{
-                color: isProcessing ? "#00aaff" : isRecording ? "#00ff88" : "#888",
-              }}
+              className="font-mono text-[10px] uppercase tracking-[0.2em] transition-colors"
+              style={{ color: isProcessing ? "#0088ff" : isRecording ? "#00ff88" : "#2e2e2e" }}
             >
               {isProcessing ? "Processing…" : isRecording ? "Listening…" : "Hold to speak"}
             </p>
@@ -376,7 +380,7 @@ export function VoiceInterface({ sessionId, personaId, personaName, idleVideoUrl
             <div className="relative flex items-center justify-center">
               {isRecording && (
                 <div
-                  className="absolute h-24 w-24 rounded-full border border-green"
+                  className="absolute h-28 w-28 rounded-full border border-green/30"
                   style={{ animation: "ping-ring 1.2s ease-out infinite" }}
                 />
               )}
@@ -388,22 +392,22 @@ export function VoiceInterface({ sessionId, personaId, personaName, idleVideoUrl
                 onTouchStart={(e) => { e.preventDefault(); handleMicMouseDown(); }}
                 onTouchEnd={(e)   => { e.preventDefault(); handleMicMouseUp(); }}
                 disabled={isProcessing}
-                className="relative z-10 flex h-20 w-20 items-center justify-center rounded-full border-2 transition-all duration-150"
+                className="relative z-10 flex h-24 w-24 items-center justify-center rounded-full border-2 transition-all duration-150"
                 style={{
                   borderColor:     micBorderColor,
                   backgroundColor: micBgColor,
                   cursor: isProcessing ? "not-allowed" : "pointer",
                   boxShadow: isRecording
-                    ? "0 0 20px rgba(0,255,136,0.2)"
+                    ? "0 0 28px rgba(0,255,136,0.3), 0 0 0 1px rgba(0,255,136,0.2)"
                     : isProcessing
-                    ? "0 0 20px rgba(0,170,255,0.2)"
+                    ? "0 0 24px rgba(0,136,255,0.25)"
                     : "none",
                 }}
               >
                 {isProcessing ? (
-                  <svg className="h-6 w-6 animate-spin" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-20" cx="12" cy="12" r="10" stroke="#00aaff" strokeWidth="3" />
-                    <path className="opacity-80" fill="#00aaff" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  <svg className="h-7 w-7 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-20" cx="12" cy="12" r="10" stroke="#0088ff" strokeWidth="3" />
+                    <path className="opacity-80" fill="#0088ff" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
                 ) : (
                   <svg
@@ -413,7 +417,7 @@ export function VoiceInterface({ sessionId, personaId, personaName, idleVideoUrl
                     strokeWidth="1.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className="h-7 w-7 transition-colors duration-150"
+                    className="h-8 w-8 transition-colors duration-150"
                   >
                     <rect x="9" y="2" width="6" height="12" rx="3" />
                     <path d="M5 10a7 7 0 0014 0" />
@@ -444,7 +448,7 @@ export function VoiceInterface({ sessionId, personaId, personaName, idleVideoUrl
       </div>
 
       {/* ── Conversation log ── */}
-      <div className="min-h-[280px] flex-1">
+      <div className="min-h-[340px] flex-1">
         <ConversationLog items={items} draft="" />
       </div>
     </div>

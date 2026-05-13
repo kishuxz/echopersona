@@ -39,9 +39,9 @@ function MetricCard({
   const display = ms > 0 ? `${Math.round(ms)}` : "--";
 
   return (
-    <div className="relative flex flex-col overflow-hidden rounded-lg border border-border bg-surface p-4">
+    <div className="relative flex flex-col overflow-hidden rounded-lg border border-[#181818] bg-[#0a0a0a] p-4 transition-all duration-150 hover:border-[#252525]">
       {/* Stage label */}
-      <span className="font-mono text-[10px] uppercase tracking-widest text-textdim">
+      <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-[#2e2e2e]">
         {label}
       </span>
 
@@ -52,21 +52,21 @@ function MetricCard({
           style={{ color }}
         >
           {display}
-          <span className="ml-0.5 font-mono text-base font-normal text-textdim">ms</span>
+          <span className="ml-0.5 font-mono text-base font-normal text-[#333]">ms</span>
         </span>
       ) : (
-        <span className="mt-1 font-mono text-4xl leading-none tabular-nums text-muted">
+        <span className="mt-1 font-mono text-4xl leading-none tabular-nums text-[#252525]">
           {display}
         </span>
       )}
 
       {/* Target */}
-      <span className="mt-2 font-mono text-[10px] text-muted">{target}</span>
+      <span className="mt-2 font-mono text-[9px] text-[#2a2a2a]">{target}</span>
 
       {/* Bottom bar */}
       <div
         className="absolute bottom-0 left-0 right-0 h-0.5 transition-colors duration-500"
-        style={{ background: ms > 0 ? color : "#1e1e1e" }}
+        style={{ background: ms > 0 ? color : "#141414" }}
       />
     </div>
   );
@@ -75,7 +75,7 @@ function MetricCard({
 function CustomTooltip({ active, payload }: { active?: boolean; payload?: any[] }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded border border-border bg-surface px-3 py-2 font-mono text-xs shadow-lg">
+    <div className="rounded border border-[#1e1e1e] bg-[#0a0a0a] px-3 py-2 font-mono text-xs shadow-lg">
       {payload.map((p: any) => (
         <div key={p.dataKey} className="flex gap-3">
           <span style={{ color: p.color }}>{p.name}</span>
@@ -92,7 +92,7 @@ export function LatencyDashboard({ snapshots }: { snapshots: LatencySnapshot[] }
   const isLive = snapshots.length > 0;
 
   return (
-    <div className="relative overflow-hidden rounded-lg border border-border bg-surface">
+    <div className="relative overflow-hidden rounded-lg border border-[#1a1a1a] bg-[#0d0d0d]">
       {/* Scan-line overlay */}
       <div className="scan-overlay" />
 
@@ -103,11 +103,11 @@ export function LatencyDashboard({ snapshots }: { snapshots: LatencySnapshot[] }
             className="h-2 w-2 rounded-full bg-green"
             style={{ animation: "blink 1s step-end infinite" }}
           />
-          <span className="font-mono text-[10px] uppercase tracking-widest text-textdim">
+          <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-[#2e2e2e]">
             Live Latency
           </span>
           {isLive && (
-            <span className="ml-auto font-mono text-xs text-textdim">
+            <span className="ml-auto rounded border border-[#1e1e1e] bg-[#0a0a0a] px-2 py-0.5 font-mono text-[9px] text-[#3a3a3a]">
               {snapshots.length} turns
             </span>
           )}
