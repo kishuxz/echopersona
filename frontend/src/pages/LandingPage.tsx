@@ -61,9 +61,9 @@ export function LandingPage() {
 
             {/* Portrait card */}
             <div className="relative w-full overflow-hidden rounded-2xl shadow-card-hover" style={{ height: '320px' }}>
-              <div className="w-full h-[320px] rounded-2xl overflow-hidden flex items-center justify-center bg-[#b6e3f4]">
+              <div className="w-full h-[320px] rounded-2xl overflow-hidden flex items-center justify-center bg-[#ffdfbf]">
                 <img
-                  src="https://api.dicebear.com/7.x/personas/svg?seed=GrandpaJoe&backgroundColor=b6e3f4&hair=shortCurly&eyes=happy&mouth=smile"
+                  src="https://api.dicebear.com/7.x/adventurer/svg?seed=GrandpaJoe&backgroundColor=ffdfbf&skinColor=f2d3b1&hair=short01&eyes=variant01&eyebrows=variant01&mouth=variant01&features=wrinkles"
                   className="w-full h-full"
                   alt="Grandpa Joe"
                   style={{ objectFit: 'contain' }}
@@ -98,7 +98,7 @@ export function LandingPage() {
               <div className="float-b self-start max-w-[90%]">
                 <div className="mb-1 flex items-center gap-1.5">
                   <img
-                    src="https://api.dicebear.com/7.x/personas/svg?seed=GrandpaJoe&backgroundColor=b6e3f4"
+                    src="https://api.dicebear.com/7.x/adventurer/svg?seed=GrandpaJoe&backgroundColor=ffdfbf"
                     className="w-7 h-7 rounded-full"
                     alt="GJ"
                   />
