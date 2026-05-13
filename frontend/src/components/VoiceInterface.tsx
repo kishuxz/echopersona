@@ -75,11 +75,13 @@ export function VoiceInterface({
   const [isConnecting, setIsConnecting] = useState(false);
   const [isRecording, setIsRecording]   = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [videoUrl, setVideoUrl]         = useState<string | null>(null);
-  const [videoLoading, setVideoLoading] = useState(false);
+  const [videoUrl, setVideoUrl]             = useState<string | null>(null);
+  const [videoLoading, setVideoLoading]     = useState(false);
   const [lastResponseMs, setLastResponseMs] = useState<number | null>(null);
-  const videoRef       = useRef<HTMLVideoElement>(null);
-  const isRecordingRef = useRef(false);
+  const [videoGenSeconds, setVideoGenSeconds] = useState<string>("");
+  const [showVideoModal, setShowVideoModal]   = useState(false);
+  const isRecordingRef   = useRef(false);
+  const videoGenStartRef = useRef<number>(0);
 
   // Latency tracing refs
   const turnStartRef         = useRef<number>(0);
@@ -170,6 +172,7 @@ export function VoiceInterface({
 
       if (message.type === "transcript") {
         const now = Date.now();
+        videoGenStartRef.current    = now;
         turnStartRef.current        = now;
         firstTokenLoggedRef.current = false;
         firstAudioLoggedRef.current = false;
@@ -182,6 +185,8 @@ export function VoiceInterface({
       }
 
       if (message.type === "video_ready") {
+        const elapsed = ((Date.now() - videoGenStartRef.current) / 1000).toFixed(1);
+        setVideoGenSeconds(elapsed);
         setVideoUrl(message.url);
         setVideoLoading(false);
       }
@@ -253,6 +258,9 @@ export function VoiceInterface({
     isRecordingRef.current = true;
     setIsRecording(true);
     setStage("recording");
+    setVideoUrl(null);
+    setVideoGenSeconds("");
+    setShowVideoModal(false);
     try {
       await recorder.start();
     } catch (e) {
@@ -283,34 +291,20 @@ export function VoiceInterface({
 
         {/* Portrait avatar */}
         <div className="relative w-full max-w-[260px] overflow-hidden rounded-2xl shadow-card-hover" style={{ aspectRatio: '3/4' }}>
-          {/* D-ID response video */}
-          {videoUrl && (
-            <video
-              ref={videoRef}
-              src={videoUrl}
-              className="h-full w-full object-cover"
-              autoPlay
-              playsInline
-              muted={false}
-              onEnded={() => setVideoUrl(null)}
-              onError={(e) => console.error("[VIDEO] playback error:", e)}
-            />
-          )}
-
-          {/* Idle loop video */}
-          {!videoUrl && idleVideoUrl && (
+          {/* Idle loop video — muted, silent, looping */}
+          {idleVideoUrl && (
             <video
               src={idleVideoUrl}
               className="h-full w-full object-cover"
-              autoPlay
-              loop
+              autoPlay={true}
+              loop={true}
               playsInline
-              muted
+              muted={true}
             />
           )}
 
           {/* Static avatar photo */}
-          {!videoUrl && !idleVideoUrl && avatarUrl && (
+          {!idleVideoUrl && avatarUrl && (
             <img
               src={avatarUrl}
               alt={personaName ?? "Persona"}
@@ -320,8 +314,8 @@ export function VoiceInterface({
           )}
 
           {/* Letter / spinner placeholder */}
-          {!videoUrl && !idleVideoUrl && !avatarUrl && (
-            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-cream to-elevated">
+          {!idleVideoUrl && !avatarUrl && (
+            <div className="flex h-full w-full items-center justify-center" style={{ backgroundColor: '#FAFAF9' }}>
               {videoLoading ? (
                 <svg className="h-8 w-8 animate-spin text-green" viewBox="0 0 24 24" fill="none">
                   <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2.5" />
@@ -449,7 +443,52 @@ export function VoiceInterface({
           hasVoice={Boolean(personaId)}
           storyCount={storyCount}
         />
+
+        {/* Watch replay button */}
+        {videoUrl && (
+          <div className="border-t border-border px-4 py-3">
+            <button
+              onClick={() => setShowVideoModal(true)}
+              className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 font-mono text-[11px] text-textdim transition-colors hover:border-border-hi hover:text-text"
+            >
+              <span>▶</span>
+              <span>Avatar response ready · {videoGenSeconds}s to generate</span>
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* Video modal */}
+      {showVideoModal && videoUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          onClick={() => setShowVideoModal(false)}
+        >
+          <div
+            className="mx-4 w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <span className="font-sans text-sm font-medium text-gray-700">Avatar Response</span>
+              <button
+                onClick={() => setShowVideoModal(false)}
+                className="text-xl leading-none text-gray-400 hover:text-gray-600"
+              >×</button>
+            </div>
+            <video
+              src={videoUrl}
+              autoPlay
+              controls
+              playsInline
+              className="w-full rounded-xl"
+              onEnded={() => setShowVideoModal(false)}
+            />
+            <p className="mt-2 text-center font-mono text-xs text-gray-400">
+              Generated in {videoGenSeconds}s · Powered by D-ID
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

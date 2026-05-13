@@ -70,7 +70,15 @@ export function LandingPage() {
 
             {/* Persona bubble */}
             <div className="float-b self-start max-w-[90%]">
-              <p className="mb-1 font-mono text-[10px] text-muted">Grandpa Joe</p>
+              <div className="mb-1 flex items-center gap-1.5">
+                <div
+                  className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full font-mono text-[10px] font-semibold"
+                  style={{ backgroundColor: '#F0EDE8', color: '#18181B' }}
+                >
+                  GJ
+                </div>
+                <span className="font-mono text-[10px] text-muted">Grandpa Joe</span>
+              </div>
               <div className="rounded-2xl rounded-bl-sm bg-surface border border-border px-4 py-3 shadow-card-hover">
                 <p className="font-sans text-sm text-text leading-relaxed">
                   I remember it like yesterday — 1987, downtown Chicago. Started at the warehouse at 6am…
