@@ -37,6 +37,4 @@ export type ServerMessage =
   | { type: "sentence_end" }
   | ({ type: "latency_summary" } & Omit<LatencySnapshot, "timestamp">)
   | { type: "error"; message: string }
-  | { type: "pong" }
-  | { type: "simli_session_token"; token: string }
-  | { type: "simli_session_error"; message: string };
+  | { type: "pong" };

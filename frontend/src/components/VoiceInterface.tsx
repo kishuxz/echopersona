@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useAudioRecorder } from "../hooks/useAudioRecorder";
-import { useSimliAvatar } from "../hooks/useSimliAvatar";
 import { useWebSocket } from "../hooks/useWebSocket";
 import { buildWsUrl } from "../lib/api";
 import type { LatencySnapshot, TranscriptItem } from "../types";
@@ -10,7 +9,6 @@ interface VoiceInterfaceProps {
   sessionId: string;
   personaId?: string;
   personaName?: string;
-  simli_face_id?: string | null;
   idleVideoUrl?: string | null;
   onLatencyUpdate: (latency: LatencySnapshot) => void;
 }
@@ -54,37 +52,24 @@ function PipelineBar({ stage }: { stage: Stage }) {
 }
 
 // ── Main component ─────────────────────────────────────────────────────────
-export function VoiceInterface({ sessionId, personaId, personaName, simli_face_id, idleVideoUrl, onLatencyUpdate }: VoiceInterfaceProps) {
+export function VoiceInterface({ sessionId, personaId, personaName, idleVideoUrl, onLatencyUpdate }: VoiceInterfaceProps) {
   const { connect, sendJson, sendBinary } = useWebSocket();
-  const simliAvatar = useSimliAvatar();
 
-  const [items, setItems]             = useState<TranscriptItem[]>([]);
-  const [stage, setStage]             = useState<Stage>("idle");
-  const [connected, setConnected]     = useState(false);
+  const [items, setItems]               = useState<TranscriptItem[]>([]);
+  const [stage, setStage]               = useState<Stage>("idle");
+  const [connected, setConnected]       = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
+  const [isRecording, setIsRecording]   = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [videoUrl, setVideoUrl]       = useState<string | null>(null);
+  const [videoUrl, setVideoUrl]         = useState<string | null>(null);
   const [videoLoading, setVideoLoading] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoRef       = useRef<HTMLVideoElement>(null);
   const isRecordingRef = useRef(false);
 
   // Latency tracing refs — reset each turn
   const turnStartRef         = useRef<number>(0);
   const firstTokenLoggedRef  = useRef<boolean>(false);
   const firstAudioLoggedRef  = useRef<boolean>(false);
-
-  useEffect(() => {
-    if (videoUrl && videoRef.current) {
-      videoRef.current.play().catch((err) => {
-        console.warn("[VIDEO] autoplay blocked, attempting muted play:", err);
-        if (videoRef.current) {
-          videoRef.current.muted = true;
-          videoRef.current.play().catch(() => {});
-        }
-      });
-    }
-  }, [videoUrl]);
 
   // Playback — lazy AudioContext, per-sentence chunk buffer, gapless scheduler
   const playbackCtxRef    = useRef<AudioContext | null>(null);
@@ -121,33 +106,6 @@ export function VoiceInterface({ sessionId, personaId, personaName, simli_face_i
       source.start(startAt);
       nextPlayAtRef.current = startAt + audioBuffer.duration;
       console.log("[AUDIO] sentence scheduled, duration:", audioBuffer.duration.toFixed(2), "s");
-
-      // Forward PCM to Simli for lip-sync (only when Simli session is live)
-      if (simliAvatar.isConnected) {
-        const rawSamples = audioBuffer.getChannelData(0);
-        const srcRate    = audioBuffer.sampleRate;
-        const dstRate    = 16000;
-        let samples: Float32Array;
-        if (srcRate === dstRate) {
-          samples = rawSamples;
-        } else {
-          const ratio  = srcRate / dstRate;
-          const outLen = Math.floor(rawSamples.length / ratio);
-          samples = new Float32Array(outLen);
-          for (let i = 0; i < outLen; i++) {
-            const pos  = i * ratio;
-            const lo   = Math.floor(pos);
-            const hi   = Math.min(lo + 1, rawSamples.length - 1);
-            const frac = pos - lo;
-            samples[i] = rawSamples[lo] * (1 - frac) + rawSamples[hi] * frac;
-          }
-        }
-        const pcm16 = new Int16Array(samples.length);
-        for (let i = 0; i < samples.length; i++) {
-          pcm16[i] = Math.max(-32768, Math.min(32767, samples[i] * 32768));
-        }
-        simliAvatar.sendAudioChunk(pcm16.buffer);
-      }
     } catch (e) {
       console.error("[AUDIO] decodeAudioData failed:", e);
     }
@@ -181,10 +139,6 @@ export function VoiceInterface({ sessionId, personaId, personaName, simli_face_i
       setIsConnecting(false);
       setIsProcessing(false);
       setIsRecording(false);
-      // Request a Simli session token if this persona has a face configured
-      if (personaId && simli_face_id) {
-        sendJson({ type: "simli_session_request" });
-      }
     };
 
     ws.onclose = (e) => {
@@ -200,20 +154,9 @@ export function VoiceInterface({ sessionId, personaId, personaName, simli_face_i
       const message = JSON.parse(event.data);
       console.log("[WS] message received:", message.type, Object.keys(message));
 
-      if (message.type === "simli_session_token") {
-        console.log("[SIMLI] received session token — starting WebRTC");
-        simliAvatar.startSession(message.token).catch((e) => {
-          console.error("[SIMLI] startSession failed:", e);
-        });
-      }
-
-      if (message.type === "simli_session_error") {
-        console.warn("[SIMLI] session error:", message.message);
-      }
-
       if (message.type === "transcript") {
         const now = Date.now();
-        turnStartRef.current       = now;
+        turnStartRef.current        = now;
         firstTokenLoggedRef.current = false;
         firstAudioLoggedRef.current = false;
         console.log(`[${now}] STT transcript received: "${message.text}" | stt_latency=${message.latency_ms}ms`);
@@ -263,8 +206,6 @@ export function VoiceInterface({ sessionId, personaId, personaName, simli_face_i
         console.log("[AUDIO] audio_end — flushing final sentence");
         playbackLockRef.current = playbackLockRef.current.then(() => playSentence());
         await playbackLockRef.current;
-        // Signal Simli that all audio for this turn is sent
-        simliAvatar.sendDone();
         setIsProcessing(false);
         setIsRecording(false);
         setStage("idle");
@@ -315,23 +256,9 @@ export function VoiceInterface({ sessionId, personaId, personaName, simli_face_i
   console.log("[STATE] isRecording:", isRecording, "isProcessing:", isProcessing, "connected:", connected);
 
   // ── Derived UI state ──────────────────────────────────────────────────
-  const micBorderColor = isProcessing
-    ? "#00aaff"
-    : isRecording
-    ? "#00ff88"
-    : "#1e1e1e";
-
-  const micBgColor = isProcessing
-    ? "rgba(0,170,255,0.05)"
-    : isRecording
-    ? "rgba(0,255,136,0.08)"
-    : "#111111";
-
-  const micIconColor = isProcessing
-    ? "#00aaff"
-    : isRecording
-    ? "#00ff88"
-    : "#444444";
+  const micBorderColor = isProcessing ? "#00aaff" : isRecording ? "#00ff88" : "#1e1e1e";
+  const micBgColor     = isProcessing ? "rgba(0,170,255,0.05)" : isRecording ? "rgba(0,255,136,0.08)" : "#111111";
+  const micIconColor   = isProcessing ? "#00aaff" : isRecording ? "#00ff88" : "#444444";
 
   return (
     <div className="flex flex-col gap-4 lg:flex-row">
@@ -339,24 +266,11 @@ export function VoiceInterface({ sessionId, personaId, personaName, simli_face_i
       {/* ── Voice control panel ── */}
       <div className="flex min-h-[280px] flex-col items-center gap-5 rounded-lg border border-border bg-surface p-6 lg:w-64 lg:flex-shrink-0">
 
-        {/* Avatar / video display */}
+        {/* Avatar / video display — priority: response video > idle loop > placeholder */}
         <div className="flex flex-col items-center gap-2">
-          {/*
-            Simli video is always in the DOM so the ref stays valid when
-            pc.ontrack fires. It's hidden until WebRTC negotiation completes
-            and Simli sends "START". Muted because local ElevenLabs audio
-            is the playback source — Simli provides the lip-synced image only.
-          */}
-          <video
-            ref={simliAvatar.videoRef}
-            className={`h-32 w-32 rounded-full border-2 border-green object-cover${simliAvatar.isConnected ? "" : " hidden"}`}
-            autoPlay
-            playsInline
-            muted
-          />
 
-          {/* D-ID response video — shown when video_ready arrives; returns to idle on end */}
-          {!simliAvatar.isConnected && videoUrl && (
+          {/* 1. D-ID response video — shown when video_ready arrives; returns to idle on end */}
+          {videoUrl && (
             <video
               ref={videoRef}
               src={videoUrl}
@@ -369,8 +283,8 @@ export function VoiceInterface({ sessionId, personaId, personaName, simli_face_i
             />
           )}
 
-          {/* Idle loop — plays while waiting for a response video */}
-          {!simliAvatar.isConnected && !videoUrl && idleVideoUrl && (
+          {/* 2. Idle loop — plays while waiting for a response video */}
+          {!videoUrl && idleVideoUrl && (
             <video
               src={idleVideoUrl}
               className="h-32 w-32 rounded-full border-2 border-green object-cover"
@@ -381,8 +295,8 @@ export function VoiceInterface({ sessionId, personaId, personaName, simli_face_i
             />
           )}
 
-          {/* Letter / spinner placeholder — shown when neither avatar is active */}
-          {!simliAvatar.isConnected && !videoUrl && !idleVideoUrl && (
+          {/* 3. Letter / spinner placeholder */}
+          {!videoUrl && !idleVideoUrl && (
             <div
               className="flex h-32 w-32 items-center justify-center rounded-full border-2 bg-surface"
               style={{ borderColor: connected ? "#00ff88" : "#1e1e1e" }}
@@ -400,7 +314,7 @@ export function VoiceInterface({ sessionId, personaId, personaName, simli_face_i
             </div>
           )}
 
-          {videoLoading && !videoUrl && !idleVideoUrl && !simliAvatar.isConnected && connected && (
+          {videoLoading && !videoUrl && !idleVideoUrl && connected && (
             <p className="font-mono text-[9px] uppercase tracking-widest text-textdim">
               generating video…
             </p>
@@ -460,7 +374,6 @@ export function VoiceInterface({ sessionId, personaId, personaName, simli_face_i
 
             {/* Mic button with pulse ring */}
             <div className="relative flex items-center justify-center">
-              {/* Pulse ring (recording only) */}
               {isRecording && (
                 <div
                   className="absolute h-24 w-24 rounded-full border border-green"
@@ -477,7 +390,7 @@ export function VoiceInterface({ sessionId, personaId, personaName, simli_face_i
                 disabled={isProcessing}
                 className="relative z-10 flex h-20 w-20 items-center justify-center rounded-full border-2 transition-all duration-150"
                 style={{
-                  borderColor:    micBorderColor,
+                  borderColor:     micBorderColor,
                   backgroundColor: micBgColor,
                   cursor: isProcessing ? "not-allowed" : "pointer",
                   boxShadow: isRecording
@@ -488,13 +401,11 @@ export function VoiceInterface({ sessionId, personaId, personaName, simli_face_i
                 }}
               >
                 {isProcessing ? (
-                  /* Spinner */
                   <svg className="h-6 w-6 animate-spin" viewBox="0 0 24 24" fill="none">
                     <circle className="opacity-20" cx="12" cy="12" r="10" stroke="#00aaff" strokeWidth="3" />
                     <path className="opacity-80" fill="#00aaff" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
                 ) : (
-                  /* Mic SVG */
                   <svg
                     viewBox="0 0 24 24"
                     fill="none"

@@ -43,7 +43,6 @@ export default function App() {
               <VoiceInterface
                 sessionId={sessionId}
                 personaId={persona?.id}
-                simli_face_id={persona?.simli_face_id}
                 idleVideoUrl={persona?.idle_video_url}
                 onLatencyUpdate={addSnapshot}
               />
