@@ -16,7 +16,7 @@ from services.latency import LatencyTimer
 from services.llm import stream_llm
 from services.chunker import extract_complete_sentence, is_sentence_complete
 from services.rag import PERSONAS, RAG_INDICES, PersonaRAG, build_system_prompt
-from services.stt import stream_stt
+from services import stt
 from services.tts import prewarm_elevenlabs_ws, stream_tts, stream_tts_prewarmed, tts_audio_chunks
 from services.tts_cartesia import stream_tts_cartesia, tts_audio_chunks_cartesia
 
@@ -83,261 +83,268 @@ async def _run_turn(websocket: WebSocket, session_id: str, audio_queue: asyncio.
 
 async def _run_turn_inner(websocket: WebSocket, session_id: str, audio_queue: asyncio.Queue[bytes | None], release_time_ref: list[float]) -> None:
     timer = LatencyTimer()
-    async for transcript in stream_stt(audio_queue):
-        if not transcript.get("is_final"):
-            continue
 
-        user_text = transcript["text"]
-        # release_time_ref[0] is set just before None enters the queue (~200ms ago)
-        t_release = release_time_ref[0]
-        if t_release > 0:
-            timer.started_at = t_release  # anchor total_ms to mic-release too
-        timer.stt_ms = timer.elapsed_ms()
-        print(f"[PIPELINE] STT done: {timer.stt_ms:.0f}ms | text={user_text!r}")
-        await websocket.send_json(
-            {
-                "type": "transcript",
-                "text": user_text,
-                "is_final": True,
-                "latency_ms": round(timer.stt_ms, 1),
-            }
-        )
+    # Collect all PCM frames from the queue (None signals end)
+    pcm_chunks: list[bytes] = []
+    while True:
+        chunk = await audio_queue.get()
+        if chunk is None:
+            break
+        pcm_chunks.append(chunk)
 
-        persona_id = websocket.query_params.get("persona_id")
-        persona = PERSONAS.get(persona_id or "")
+    user_text = await stt.transcribe_audio(b"".join(pcm_chunks))
+    if not user_text:
+        print("[STT] no transcript — skipping turn")
+        return
 
-        # FAISS encode + search is CPU-bound; run in thread executor so it doesn't
-        # block the event loop, and gather concurrently with the history fetch.
-        loop = asyncio.get_running_loop()
+    t_release = release_time_ref[0]
+    if t_release > 0:
+        timer.started_at = t_release  # anchor total_ms to mic-release too
+    timer.stt_ms = timer.elapsed_ms()
+    print(f"[PIPELINE] STT done: {timer.stt_ms:.0f}ms | text={user_text!r}")
+    await websocket.send_json(
+        {
+            "type": "transcript",
+            "text": user_text,
+            "is_final": True,
+            "latency_ms": round(timer.stt_ms, 1),
+        }
+    )
 
-        async def _fetch_history():
-            return [turn.model_dump() for turn in SESSION_HISTORY.get(session_id, [])]
+    persona_id = websocket.query_params.get("persona_id")
+    persona = PERSONAS.get(persona_id or "")
 
-        async def _no_rag():
-            return []
+    # FAISS encode + search is CPU-bound; run in thread executor so it doesn't
+    # block the event loop, and gather concurrently with the history fetch.
+    loop = asyncio.get_running_loop()
 
-        retrieved, history = await asyncio.gather(
-            loop.run_in_executor(None, lambda: RAG_INDICES[persona_id].retrieve(user_text, top_k=1))
-            if persona_id in RAG_INDICES else _no_rag(),
-            _fetch_history(),
-        )
-        system_prompt = build_system_prompt(persona, retrieved)
-        if persona:
-            print(f"[PIPELINE] persona='{persona.name}' | context chunks: {len(retrieved)}")
-        else:
-            print(f"[PIPELINE] persona=<none — using default> | persona_id={persona_id!r}")
-        print(f"[RAG] retrieved {len(retrieved)} chunks")
-        if retrieved:
-            print(f"[RAG] chunk 1: {retrieved[0][:100]}")
-        else:
-            print(f"[RAG] EMPTY — persona_id={persona_id!r} in_index={persona_id in RAG_INDICES}")
-        print(f"[PROMPT] full system prompt ({len(system_prompt)} chars):\n{system_prompt}\n---END PROMPT---")
+    async def _fetch_history():
+        return [turn.model_dump() for turn in SESSION_HISTORY.get(session_id, [])]
 
-        llm_started_at = time.perf_counter()
-        first_token_sent = False
-        response_text = ""
-        voice_id = persona.voice_id if persona else None
+    async def _no_rag():
+        return []
 
-        # Check in-memory cache before hitting Groq (60s TTL)
-        cache_key = hashlib.md5(user_text.lower().strip().encode()).hexdigest()
-        _cache_entry = _RESPONSE_CACHE.get(cache_key)
-        cache_hit = _cache_entry is not None and time.time() < _cache_entry[1]
+    retrieved, history = await asyncio.gather(
+        loop.run_in_executor(None, lambda: RAG_INDICES[persona_id].retrieve(user_text, top_k=1))
+        if persona_id in RAG_INDICES else _no_rag(),
+        _fetch_history(),
+    )
+    system_prompt = build_system_prompt(persona, retrieved)
+    if persona:
+        print(f"[PIPELINE] persona='{persona.name}' | context chunks: {len(retrieved)}")
+    else:
+        print(f"[PIPELINE] persona=<none — using default> | persona_id={persona_id!r}")
+    print(f"[RAG] retrieved {len(retrieved)} chunks")
+    if retrieved:
+        print(f"[RAG] chunk 1: {retrieved[0][:100]}")
+    else:
+        print(f"[RAG] EMPTY — persona_id={persona_id!r} in_index={persona_id in RAG_INDICES}")
+    print(f"[PROMPT] full system prompt ({len(system_prompt)} chars):\n{system_prompt}\n---END PROMPT---")
 
-        def mark_first_audio() -> None:
-            if timer.tts_first_audio_ms == 0:
-                timer.tts_first_audio_ms = timer.elapsed_ms()
-                print(f"[PIPELINE] TTS first audio: {timer.tts_first_audio_ms:.0f}ms")
+    llm_started_at = time.perf_counter()
+    first_token_sent = False
+    response_text = ""
+    voice_id = persona.voice_id if persona else None
 
-        # TTS pipeline:
-        # - Sentence 1 is streamed directly to ElevenLabs → websocket as chunks arrive
-        #   (preserves fast first-audio; mark_first_audio fires on first ElevenLabs byte)
-        # - Sentences 2+ are prefetched concurrently while sentence 1 is streaming,
-        #   then sent immediately after sentence 1 finishes — eliminating the 400ms
-        #   ElevenLabs round-trip gap between sequential sentences.
-        tts_queue: asyncio.Queue[str | None] = asyncio.Queue()
-        tts_error: list[BaseException] = []
+    # Check in-memory cache before hitting Groq (60s TTL)
+    cache_key = hashlib.md5(user_text.lower().strip().encode()).hexdigest()
+    _cache_entry = _RESPONSE_CACHE.get(cache_key)
+    cache_hit = _cache_entry is not None and time.time() < _cache_entry[1]
 
-        async def tts_worker() -> None:
-            try:
-                first_text = await tts_queue.get()
-                if first_text is None:
-                    return
+    def mark_first_audio() -> None:
+        if timer.tts_first_audio_ms == 0:
+            timer.tts_first_audio_ms = timer.elapsed_ms()
+            print(f"[PIPELINE] TTS first audio: {timer.tts_first_audio_ms:.0f}ms")
 
-                # While sentence 1 streams, collect and prefetch subsequent sentences
-                prefetch: list[asyncio.Task[list[bytes]]] = []
+    # TTS pipeline:
+    # - Sentence 1 is streamed directly to ElevenLabs → websocket as chunks arrive
+    #   (preserves fast first-audio; mark_first_audio fires on first ElevenLabs byte)
+    # - Sentences 2+ are prefetched concurrently while sentence 1 is streaming,
+    #   then sent immediately after sentence 1 finishes — eliminating the 400ms
+    #   ElevenLabs round-trip gap between sequential sentences.
+    tts_queue: asyncio.Queue[str | None] = asyncio.Queue()
+    tts_error: list[BaseException] = []
 
-                async def _collect_pending() -> None:
-                    while True:
-                        text = await tts_queue.get()
-                        if text is None:
-                            break
-                        prefetch.append(asyncio.create_task(_collect_tts_chunks(text, voice_id)))
+    async def tts_worker() -> None:
+        try:
+            first_text = await tts_queue.get()
+            if first_text is None:
+                return
 
-                collector = asyncio.create_task(_collect_pending())
+            # While sentence 1 streams, collect and prefetch subsequent sentences
+            prefetch: list[asyncio.Task[list[bytes]]] = []
 
-                # Stream sentence 1 directly — fires mark_first_audio on first TTS byte
-                await _stream_tts(first_text, websocket, mark_first_audio, voice_id, send_end=False)
+            async def _collect_pending() -> None:
+                while True:
+                    text = await tts_queue.get()
+                    if text is None:
+                        break
+                    prefetch.append(asyncio.create_task(_collect_tts_chunks(text, voice_id)))
+
+            collector = asyncio.create_task(_collect_pending())
+
+            # Stream sentence 1 directly — fires mark_first_audio on first TTS byte
+            await _stream_tts(first_text, websocket, mark_first_audio, voice_id, send_end=False)
+            await websocket.send_json({"type": "sentence_end"})
+
+            # All remaining sentences collected; send pre-fetched audio in order
+            await collector
+            for task in prefetch:
+                audio_bytes = await task
+                for chunk in audio_bytes:
+                    await websocket.send_json(
+                        {"type": "audio_chunk", "data": base64.b64encode(chunk).decode()}
+                    )
                 await websocket.send_json({"type": "sentence_end"})
 
-                # All remaining sentences collected; send pre-fetched audio in order
-                await collector
-                for task in prefetch:
-                    audio_bytes = await task
-                    for chunk in audio_bytes:
-                        await websocket.send_json(
-                            {"type": "audio_chunk", "data": base64.b64encode(chunk).decode()}
-                        )
-                    await websocket.send_json({"type": "sentence_end"})
+        except BaseException as exc:
+            tts_error.append(exc)
 
-            except BaseException as exc:
-                tts_error.append(exc)
+    tts_task = asyncio.create_task(tts_worker())
 
-        tts_task = asyncio.create_task(tts_worker())
-
-        # Stream LLM tokens; flush complete sentences to TTS as they arrive.
-        # is_sentence_complete() detects end-of-buffer (no trailing space needed),
-        # so the first sentence flushes as soon as its final punctuation token arrives.
-        sentence_buf = ""
-        first_chunk_flushed = False
-        first_token_time = 0.0
-        time_flush_done = False
-        try:
-            if cache_hit:
-                print("[LLM] cache hit, skipping Groq")
-                timer.llm_first_token_ms = 1.0
-                cached_text = _cache_entry[0]
-                await websocket.send_json({"type": "llm_token", "token": cached_text, "latency_ms": 1.0})
-                for sentence in re.split(r'(?<=[.!?])\s+', cached_text):
-                    s = sentence.strip()
-                    if len(s) >= 15:
-                        await tts_queue.put(s)
-                response_text = cached_text
-            else:
-                # Latency floor: ~620-640ms warm on Groq free tier due to network RTT.
-                # To break 600ms: set USE_VLLM=true in .env (local vLLM, 5-30ms TTFT).
-                # Architecture is correct — bottleneck is API network, not code.
-                async for token in stream_llm(user_text, system_prompt, history):
-                    response_text += token
-                    sentence_buf += token
-                    if not first_token_sent:
-                        first_token_sent = True
-                        first_token_time = time.perf_counter()
-                        timer.llm_first_token_ms = (first_token_time - llm_started_at) * 1000
-                        print(f"[PIPELINE] LLM first token: {timer.llm_first_token_ms:.0f}ms")
-                        print(f"[FLUSH-DEBUG] first token arrived")
-                    await websocket.send_json(
-                        {
-                            "type": "llm_token",
-                            "token": token,
-                            "latency_ms": round(timer.llm_first_token_ms or timer.elapsed_ms(), 1),
-                        }
-                    )
-                    # Paragraph break → flush immediately
-                    if '\n' in token:
-                        chunk = sentence_buf.replace('\n', ' ').strip()
-                        sentence_buf = ""
-                        if len(chunk) >= 15:
-                            print(f"[CHUNKER] newline flush: {len(chunk)} chars: '{chunk[:40]}'")
-                            await tts_queue.put(chunk)
-                            first_chunk_flushed = True
-                        continue
-                    # Sentence boundary detected at end of buffer (no trailing space needed)
-                    if is_sentence_complete(sentence_buf):
-                        sentence, sentence_buf = extract_complete_sentence(sentence_buf)
-                        if sentence:
-                            elapsed_since_first = (time.perf_counter() - first_token_time) * 1000
-                            print(f"[CHUNKER] sentence flush: {len(sentence)} chars, "
-                                  f"{elapsed_since_first:.0f}ms after first token: '{sentence[:40]}'")
-                            if not first_chunk_flushed:
-                                print(f"[FLUSH-DEBUG] first flush at {elapsed_since_first:.0f}ms, "
-                                      f"{len(sentence)} chars: '{sentence[:50]}'")
-                                print(f"[FLUSH] first flush at {len(sentence)} chars, "
-                                      f"{elapsed_since_first:.0f}ms after LLM start")
-                            await tts_queue.put(sentence)
-                            first_chunk_flushed = True
-                    # First-chunk safety: flush at _FIRST_FLUSH_CHARS to minimise ElevenLabs TTFA
-                    elif not first_chunk_flushed and len(sentence_buf) > _FIRST_FLUSH_CHARS:
-                        chunk = sentence_buf.strip()
-                        elapsed_since_first = (time.perf_counter() - first_token_time) * 1000
-                        print(f"[CHUNKER] first-chunk safety flush: {len(chunk)} chars, "
-                              f"{elapsed_since_first:.0f}ms after first token: '{chunk[:40]}'")
-                        print(f"[FLUSH-DEBUG] first flush at {elapsed_since_first:.0f}ms, "
-                              f"{len(chunk)} chars: '{chunk[:50]}'")
-                        print(f"[FLUSH] first flush at {len(chunk)} chars, "
-                              f"{elapsed_since_first:.0f}ms after LLM start")
+    # Stream LLM tokens; flush complete sentences to TTS as they arrive.
+    # is_sentence_complete() detects end-of-buffer (no trailing space needed),
+    # so the first sentence flushes as soon as its final punctuation token arrives.
+    sentence_buf = ""
+    first_chunk_flushed = False
+    first_token_time = 0.0
+    time_flush_done = False
+    try:
+        if cache_hit:
+            print("[LLM] cache hit, skipping Groq")
+            timer.llm_first_token_ms = 1.0
+            cached_text = _cache_entry[0]
+            await websocket.send_json({"type": "llm_token", "token": cached_text, "latency_ms": 1.0})
+            for sentence in re.split(r'(?<=[.!?])\s+', cached_text):
+                s = sentence.strip()
+                if len(s) >= 15:
+                    await tts_queue.put(s)
+            response_text = cached_text
+        else:
+            # Latency floor: ~620-640ms warm on Groq free tier due to network RTT.
+            # To break 600ms: set USE_VLLM=true in .env (local vLLM, 5-30ms TTFT).
+            # Architecture is correct — bottleneck is API network, not code.
+            async for token in stream_llm(user_text, system_prompt, history):
+                response_text += token
+                sentence_buf += token
+                if not first_token_sent:
+                    first_token_sent = True
+                    first_token_time = time.perf_counter()
+                    timer.llm_first_token_ms = (first_token_time - llm_started_at) * 1000
+                    print(f"[PIPELINE] LLM first token: {timer.llm_first_token_ms:.0f}ms")
+                    print(f"[FLUSH-DEBUG] first token arrived")
+                await websocket.send_json(
+                    {
+                        "type": "llm_token",
+                        "token": token,
+                        "latency_ms": round(timer.llm_first_token_ms or timer.elapsed_ms(), 1),
+                    }
+                )
+                # Paragraph break → flush immediately
+                if '\n' in token:
+                    chunk = sentence_buf.replace('\n', ' ').strip()
+                    sentence_buf = ""
+                    if len(chunk) >= 15:
+                        print(f"[CHUNKER] newline flush: {len(chunk)} chars: '{chunk[:40]}'")
                         await tts_queue.put(chunk)
-                        sentence_buf = ""
                         first_chunk_flushed = True
-                    # Subsequent safety: cap at _SUBSEQUENT_FLUSH_CHARS to avoid long unbounded chunks
-                    elif first_chunk_flushed and len(sentence_buf) > _SUBSEQUENT_FLUSH_CHARS:
-                        chunk = sentence_buf.strip()
-                        print(f"[CHUNKER] safety flush: {len(chunk)} chars: '{chunk[:40]}'")
-                        await tts_queue.put(chunk)
-                        sentence_buf = ""
-                    # Time-based flush: no sentence boundary for 1.5s → send what we have
-                    if (not time_flush_done and first_token_sent
-                            and time.perf_counter() - first_token_time > 1.5
-                            and sentence_buf.strip()):
-                        print(f"[CHUNKER] time-based flush: {len(sentence_buf)} chars")
-                        await tts_queue.put(sentence_buf.strip())
-                        sentence_buf = ""
-                        time_flush_done = True
-                # Store successful response in cache (60s TTL)
-                if response_text.strip():
-                    _RESPONSE_CACHE[cache_key] = (response_text.strip(), time.time() + 60)
-        except Exception as e:
-            print(f"[LLM ERROR] {e}")
-            await tts_queue.put(None)
-            await tts_task
-            raise
-
-        # Flush trailing text (last sentence may lack a trailing space)
-        if sentence_buf.strip():
-            await tts_queue.put(sentence_buf.strip())
+                    continue
+                # Sentence boundary detected at end of buffer (no trailing space needed)
+                if is_sentence_complete(sentence_buf):
+                    sentence, sentence_buf = extract_complete_sentence(sentence_buf)
+                    if sentence:
+                        elapsed_since_first = (time.perf_counter() - first_token_time) * 1000
+                        print(f"[CHUNKER] sentence flush: {len(sentence)} chars, "
+                              f"{elapsed_since_first:.0f}ms after first token: '{sentence[:40]}'")
+                        if not first_chunk_flushed:
+                            print(f"[FLUSH-DEBUG] first flush at {elapsed_since_first:.0f}ms, "
+                                  f"{len(sentence)} chars: '{sentence[:50]}'")
+                            print(f"[FLUSH] first flush at {len(sentence)} chars, "
+                                  f"{elapsed_since_first:.0f}ms after LLM start")
+                        await tts_queue.put(sentence)
+                        first_chunk_flushed = True
+                # First-chunk safety: flush at _FIRST_FLUSH_CHARS to minimise ElevenLabs TTFA
+                elif not first_chunk_flushed and len(sentence_buf) > _FIRST_FLUSH_CHARS:
+                    chunk = sentence_buf.strip()
+                    elapsed_since_first = (time.perf_counter() - first_token_time) * 1000
+                    print(f"[CHUNKER] first-chunk safety flush: {len(chunk)} chars, "
+                          f"{elapsed_since_first:.0f}ms after first token: '{chunk[:40]}'")
+                    print(f"[FLUSH-DEBUG] first flush at {elapsed_since_first:.0f}ms, "
+                          f"{len(chunk)} chars: '{chunk[:50]}'")
+                    print(f"[FLUSH] first flush at {len(chunk)} chars, "
+                          f"{elapsed_since_first:.0f}ms after LLM start")
+                    await tts_queue.put(chunk)
+                    sentence_buf = ""
+                    first_chunk_flushed = True
+                # Subsequent safety: cap at _SUBSEQUENT_FLUSH_CHARS to avoid long unbounded chunks
+                elif first_chunk_flushed and len(sentence_buf) > _SUBSEQUENT_FLUSH_CHARS:
+                    chunk = sentence_buf.strip()
+                    print(f"[CHUNKER] safety flush: {len(chunk)} chars: '{chunk[:40]}'")
+                    await tts_queue.put(chunk)
+                    sentence_buf = ""
+                # Time-based flush: no sentence boundary for 1.5s → send what we have
+                if (not time_flush_done and first_token_sent
+                        and time.perf_counter() - first_token_time > 1.5
+                        and sentence_buf.strip()):
+                    print(f"[CHUNKER] time-based flush: {len(sentence_buf)} chars")
+                    await tts_queue.put(sentence_buf.strip())
+                    sentence_buf = ""
+                    time_flush_done = True
+            # Store successful response in cache (60s TTL)
+            if response_text.strip():
+                _RESPONSE_CACHE[cache_key] = (response_text.strip(), time.time() + 60)
+    except Exception as e:
+        print(f"[LLM ERROR] {e}")
         await tts_queue.put(None)
         await tts_task
+        raise
 
-        if tts_error:
-            raise tts_error[0]
+    # Flush trailing text (last sentence may lack a trailing space)
+    if sentence_buf.strip():
+        await tts_queue.put(sentence_buf.strip())
+    await tts_queue.put(None)
+    await tts_task
 
-        await websocket.send_json({"type": "audio_end"})
-        print("[WS] audio_end sent to client")
+    if tts_error:
+        raise tts_error[0]
 
-        # D-ID: generate talking-head video in background after audio is sent
-        if (
-            persona
-            and persona.did_avatar_url
-            and settings.did_api_key
-            and response_text.strip()
-        ):
-            _did_task = asyncio.create_task(
-                _generate_and_send_video(
-                    websocket=websocket,
-                    response_text=response_text.strip(),
-                    voice_id=voice_id,
-                    source_url=persona.did_avatar_url,
-                )
+    await websocket.send_json({"type": "audio_end"})
+    print("[WS] audio_end sent to client")
+
+    # D-ID: generate talking-head video in background after audio is sent
+    if (
+        persona
+        and persona.did_avatar_url
+        and settings.did_api_key
+        and response_text.strip()
+    ):
+        _did_task = asyncio.create_task(
+            _generate_and_send_video(
+                websocket=websocket,
+                response_text=response_text.strip(),
+                voice_id=voice_id,
+                source_url=persona.did_avatar_url,
             )
-            _background_tasks.add(_did_task)
-            _did_task.add_done_callback(_background_tasks.discard)
-
-        SESSION_HISTORY.setdefault(session_id, []).extend(
-            [
-                ConversationTurn(role="user", content=user_text),
-                ConversationTurn(role="assistant", content=response_text.strip()),
-            ]
         )
-        SESSION_HISTORY[session_id] = SESSION_HISTORY[session_id][-6:]
+        _background_tasks.add(_did_task)
+        _did_task.add_done_callback(_background_tasks.discard)
 
-        summary = timer.summary()
-        print(
-            f"[LATENCY] STT: {summary['stt_ms']}ms | "
-            f"LLM first token: {summary['llm_first_token_ms']}ms | "
-            f"TTS first audio: {summary['tts_first_audio_ms']}ms | "
-            f"Total: {summary['total_ms']}ms"
-        )
-        await websocket.send_json({"type": "latency_summary", **summary})
-        return
+    SESSION_HISTORY.setdefault(session_id, []).extend(
+        [
+            ConversationTurn(role="user", content=user_text),
+            ConversationTurn(role="assistant", content=response_text.strip()),
+        ]
+    )
+    SESSION_HISTORY[session_id] = SESSION_HISTORY[session_id][-6:]
+
+    summary = timer.summary()
+    print(
+        f"[LATENCY] STT: {summary['stt_ms']}ms | "
+        f"LLM first token: {summary['llm_first_token_ms']}ms | "
+        f"TTS first audio: {summary['tts_first_audio_ms']}ms | "
+        f"Total: {summary['total_ms']}ms"
+    )
+    await websocket.send_json({"type": "latency_summary", **summary})
 
 
 async def _run_text_turn(websocket: WebSocket, session_id: str, user_text: str) -> None:
