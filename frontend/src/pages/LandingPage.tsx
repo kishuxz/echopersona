@@ -141,14 +141,13 @@ export function LandingPage() {
       {/* Stats */}
       <section className="border-y border-border bg-surface py-12 shadow-card">
         <div className="mx-auto max-w-4xl px-8">
-          <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
+          <div className="grid grid-cols-3 gap-8">
             {[
               { value: '~1.5s',          label: 'Response latency' },
-              { value: '50+',            label: 'Concurrent users' },
               { value: '2 min',          label: 'Voice cloning' },
               { value: 'RAG-powered',    label: 'Memory retrieval' },
             ].map(({ value, label }, i) => (
-              <div key={label} className={`text-center ${i < 3 ? 'md:border-r md:border-border' : ''}`}>
+              <div key={label} className={`text-center ${i < 2 ? 'border-r border-border' : ''}`}>
                 <p className="font-mono text-3xl font-bold text-text">{value}</p>
                 <p className="mt-1.5 font-sans text-sm text-textdim">{label}</p>
               </div>
