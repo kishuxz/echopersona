@@ -90,6 +90,8 @@ export function VoiceInterface({ sessionId, personaId, personaName, simli_face_i
   const playbackCtxRef    = useRef<AudioContext | null>(null);
   const sentenceChunksRef = useRef<Uint8Array[]>([]);
   const nextPlayAtRef     = useRef<number>(0);
+  // Serialise playSentence calls so s2 chunks can't be decoded before s1 finishes
+  const playbackLockRef   = useRef<Promise<void>>(Promise.resolve());
 
   function receiveChunk(base64data: string) {
     const binary = atob(base64data);
@@ -220,6 +222,7 @@ export function VoiceInterface({ sessionId, personaId, personaName, simli_face_i
         setItems((current) => [...current, { role: "user", text: message.text }]);
         sentenceChunksRef.current = [];
         nextPlayAtRef.current     = 0;
+        playbackLockRef.current   = Promise.resolve();
       }
 
       if (message.type === "video_ready") {
@@ -252,12 +255,14 @@ export function VoiceInterface({ sessionId, personaId, personaName, simli_face_i
 
       if (message.type === "sentence_end") {
         console.log("[AUDIO] sentence_end — scheduling sentence playback");
-        await playSentence();
+        playbackLockRef.current = playbackLockRef.current.then(() => playSentence());
+        await playbackLockRef.current;
       }
 
       if (message.type === "audio_end") {
         console.log("[AUDIO] audio_end — flushing final sentence");
-        await playSentence();
+        playbackLockRef.current = playbackLockRef.current.then(() => playSentence());
+        await playbackLockRef.current;
         // Signal Simli that all audio for this turn is sent
         simliAvatar.sendDone();
         setIsProcessing(false);
