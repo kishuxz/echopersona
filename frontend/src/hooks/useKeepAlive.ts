@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
+import { DEFAULT_API_BASE, KEEP_ALIVE_INTERVAL_MS } from '../constants'
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
-const INTERVAL_MS = 10 * 60 * 1000  // 10 minutes
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? DEFAULT_API_BASE
 
 /**
  * Pings /health every 10 minutes to prevent Render free tier from sleeping.
@@ -11,7 +11,7 @@ export function useKeepAlive() {
   useEffect(() => {
     const interval = setInterval(() => {
       fetch(`${API_BASE}/health`).catch(() => {})
-    }, INTERVAL_MS)
+    }, KEEP_ALIVE_INTERVAL_MS)
     return () => clearInterval(interval)
   }, [])
 }

@@ -1,9 +1,11 @@
-import uuid
+import logging
 
 import numpy as np
 
 from config import settings
 from models.persona import Persona, PersonaCreate
+
+logger = logging.getLogger(__name__)
 
 
 class PersonaRAG:
@@ -81,16 +83,6 @@ PERSONAS: dict[str, Persona] = {}
 RAG_INDICES: dict[str, PersonaRAG] = {}
 
 
-def create_persona(payload: PersonaCreate) -> Persona:
-    persona_id = str(uuid.uuid4())
-    persona = Persona(id=persona_id, **payload.model_dump())
-    rag = PersonaRAG()
-    rag.build_index(payload.stories)
-    PERSONAS[persona_id] = persona
-    RAG_INDICES[persona_id] = rag
-    return persona
-
-
 def build_system_prompt(persona: Persona | None, retrieved_context: list[str]) -> str:
     if persona is None:
         return (
@@ -115,5 +107,5 @@ def build_system_prompt(persona: Persona | None, retrieved_context: list[str]) -
         f"\nYOUR MEMORIES:\n{context_block}"
         f"{extras}"
     )
-    print(f"[PROMPT] length: {len(prompt)} chars")
+    logger.debug("system prompt length: %d chars", len(prompt))
     return prompt

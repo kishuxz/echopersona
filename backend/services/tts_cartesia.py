@@ -1,7 +1,10 @@
 import base64
+import logging
 from collections.abc import AsyncGenerator
 
 from config import settings
+
+logger = logging.getLogger(__name__)
 
 # Default Cartesia voice — "Barbershop Man" (neutral, warm).
 # Override with CARTESIA_VOICE_ID in .env.
@@ -57,4 +60,4 @@ async def stream_tts_cartesia(
         )
     if send_end:
         await websocket.send_json({"type": "audio_end"})
-        print("[WS] audio_end sent to client")
+        logger.debug("audio_end sent to client")

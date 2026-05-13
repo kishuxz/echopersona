@@ -1,7 +1,10 @@
 import asyncio
+import logging
 from collections.abc import AsyncGenerator
 
 from config import settings
+
+logger = logging.getLogger(__name__)
 
 
 DEFAULT_SYSTEM_PROMPT = (
@@ -75,13 +78,13 @@ async def stream_llm(
                     top_p=0.9,
                     stream=True,
                 )
-                print(f"[LLM] using model: {model}")
+                logger.info("LLM using model: %s", model)
                 break
             except RateLimitError:
-                print(f"[LLM] {model} rate limited, trying next")
+                logger.warning("LLM model %s rate limited, trying next", model)
                 continue
             except BadRequestError as e:
-                print(f"[LLM] {model} bad request ({e}), trying next")
+                logger.warning("LLM model %s bad request (%s), trying next", model, e)
                 continue
         else:
             raise RuntimeError("All LLM models unavailable (rate limited or decommissioned)")

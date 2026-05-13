@@ -1,7 +1,8 @@
+import { DEFAULT_API_BASE, DEFAULT_WS_BASE } from '../constants'
 import { supabase } from './supabase'
 import type { Persona, PersonaCreate } from '../types'
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? DEFAULT_API_BASE
 
 async function getAuthHeaders(): Promise<HeadersInit> {
   const {
@@ -103,6 +104,6 @@ export async function buildWsUrl(
     data: { session },
   } = await supabase.auth.getSession()
   const token = session?.access_token ?? ''
-  const base = import.meta.env.VITE_WS_BASE_URL ?? 'ws://localhost:8000'
+  const base = import.meta.env.VITE_WS_BASE_URL ?? DEFAULT_WS_BASE
   return `${base}/ws/${sessionId}?persona_id=${personaId}&token=${encodeURIComponent(token)}`
 }

@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { CONNECT_DELAY_MS, DEFAULT_WS_BASE, RECONNECT_DELAY_MS, WS_CLIENT_MSG, WS_SERVER_MSG } from "../constants";
 import { useAudioRecorder } from "../hooks/useAudioRecorder";
 import { useWebSocket } from "../hooks/useWebSocket";
 import { buildWsUrl } from "../lib/api";
@@ -131,7 +132,7 @@ export function VoiceInterface({
     try {
       wsUrl = personaId
         ? await buildWsUrl(sessionId, personaId)
-        : `${import.meta.env.VITE_WS_BASE_URL ?? 'ws://localhost:8000'}/ws/${sessionId}`;
+        : `${import.meta.env.VITE_WS_BASE_URL ?? DEFAULT_WS_BASE}/ws/${sessionId}`;
     } catch (e) {
       console.error("[WS] failed to build URL:", e);
       setIsConnecting(false);
@@ -142,7 +143,6 @@ export function VoiceInterface({
     if (!ws) { setIsConnecting(false); return; }
 
     ws.onopen = () => {
-      console.log("[WS] connected");
       setConnected(true);
       setIsConnecting(false);
       setIsProcessing(false);
@@ -150,7 +150,6 @@ export function VoiceInterface({
     };
 
     ws.onclose = (e) => {
-      console.log("[WS] closed", e.code, e.reason);
       setConnected(false);
       setIsConnecting(false);
       setIsProcessing(false);
@@ -159,18 +158,17 @@ export function VoiceInterface({
 
       // Auto-retry once on unexpected close during initial connection
       if (retryCount === 0 && e.code !== 1000) {
-        console.log("[WS] retrying in 1s...");
         setTimeout(() => {
           setIsConnecting(true);
           doConnect(1);
-        }, 1000);
+        }, RECONNECT_DELAY_MS);
       }
     };
 
     ws.onmessage = async (event) => {
       const message = JSON.parse(event.data);
 
-      if (message.type === "transcript") {
+      if (message.type === WS_SERVER_MSG.TRANSCRIPT) {
         const now = Date.now();
         videoGenStartRef.current    = now;
         turnStartRef.current        = now;
@@ -184,14 +182,14 @@ export function VoiceInterface({
         playbackLockRef.current   = Promise.resolve();
       }
 
-      if (message.type === "video_ready") {
+      if (message.type === WS_SERVER_MSG.VIDEO_READY) {
         const elapsed = ((Date.now() - videoGenStartRef.current) / 1000).toFixed(1);
         setVideoGenSeconds(elapsed);
         setVideoUrl(message.url);
         setVideoLoading(false);
       }
 
-      if (message.type === "llm_token") {
+      if (message.type === WS_SERVER_MSG.LLM_TOKEN) {
         if (!firstTokenLoggedRef.current) {
           firstTokenLoggedRef.current = true;
         }
@@ -204,19 +202,19 @@ export function VoiceInterface({
         });
       }
 
-      if (message.type === "audio_chunk") {
+      if (message.type === WS_SERVER_MSG.AUDIO_CHUNK) {
         if (!firstAudioLoggedRef.current) {
           firstAudioLoggedRef.current = true;
         }
         receiveChunk(message.data);
       }
 
-      if (message.type === "sentence_end") {
+      if (message.type === WS_SERVER_MSG.SENTENCE_END) {
         playbackLockRef.current = playbackLockRef.current.then(() => playSentence());
         await playbackLockRef.current;
       }
 
-      if (message.type === "audio_end") {
+      if (message.type === WS_SERVER_MSG.AUDIO_END) {
         playbackLockRef.current = playbackLockRef.current.then(() => playSentence());
         await playbackLockRef.current;
         setIsProcessing(false);
@@ -224,12 +222,12 @@ export function VoiceInterface({
         setStage("idle");
       }
 
-      if (message.type === "error") {
+      if (message.type === WS_SERVER_MSG.ERROR) {
         console.error("[WS] server error:", message.message);
         setIsProcessing(false);
       }
 
-      if (message.type === "latency_summary") {
+      if (message.type === WS_SERVER_MSG.LATENCY_SUMMARY) {
         setLastResponseMs(message.total_ms);
         setStage("idle");
         onLatencyUpdate({ timestamp: Date.now(), ...message });
@@ -246,8 +244,7 @@ export function VoiceInterface({
     sentenceChunksRef.current = [];
     nextPlayAtRef.current     = 0;
 
-    // 500ms delay before first connect to avoid race on page load
-    await new Promise((r) => setTimeout(r, 500));
+    await new Promise((r) => setTimeout(r, CONNECT_DELAY_MS));
     doConnect(0);
   };
 
@@ -277,7 +274,7 @@ export function VoiceInterface({
     setIsRecording(false);
     setIsProcessing(true);
     recorder.stop();
-    sendJson({ type: "audio_end" });
+    sendJson({ type: WS_CLIENT_MSG.AUDIO_END });
     setStage("STT");
   };
 

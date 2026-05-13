@@ -1,8 +1,9 @@
 import asyncio
 import base64
 import contextlib
-import json
 import hashlib
+import json
+import logging
 import re
 import time
 
@@ -17,8 +18,25 @@ from services.llm import stream_llm
 from services.chunker import extract_complete_sentence, is_sentence_complete
 from services.rag import PERSONAS, RAG_INDICES, PersonaRAG, build_system_prompt
 from services import stt
-from services.tts import prewarm_elevenlabs_ws, stream_tts, stream_tts_prewarmed, tts_audio_chunks
+from services.tts import stream_tts, tts_audio_chunks
 from services.tts_cartesia import stream_tts_cartesia, tts_audio_chunks_cartesia
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+SESSION_HISTORY: dict[str, list[ConversationTurn]] = {}
+
+# In-memory response cache: md5(normalized_question) -> (response_text, expires_at)
+_RESPONSE_CACHE: dict[str, tuple[str, float]] = {}
+
+# Chunker flush thresholds (chars). First flush is aggressive to minimise ElevenLabs TTFA;
+# subsequent chunks use a relaxed cap so TTS sentences are a reasonable length.
+_FIRST_FLUSH_CHARS = 25
+_SUBSEQUENT_FLUSH_CHARS = 50
+_MIN_TTS_CHARS = 15
+_TIME_FLUSH_S = 1.5
+_CACHE_TTL_S = 60
+_MAX_HISTORY_TURNS = 6
 
 _background_tasks: set[asyncio.Task] = set()
 
@@ -42,18 +60,6 @@ async def _collect_tts_chunks(text: str, voice_id: str | None) -> list[bytes]:
     return chunks
 
 
-logger = __import__("logging").getLogger(__name__)
-
-router = APIRouter()
-SESSION_HISTORY: dict[str, list[ConversationTurn]] = {}
-# In-memory response cache: md5(normalized_question) -> (response_text, expires_at)
-_RESPONSE_CACHE: dict[str, tuple[str, float]] = {}
-# Chunker flush thresholds (chars). First flush is aggressive to minimise ElevenLabs TTFA;
-# subsequent chunks use a relaxed cap so TTS sentences are a reasonable length.
-_FIRST_FLUSH_CHARS = 25
-_SUBSEQUENT_FLUSH_CHARS = 50
-
-
 async def _generate_and_send_video(
     websocket: WebSocket,
     response_text: str,
@@ -69,19 +75,27 @@ async def _generate_and_send_video(
         logger.error("D-ID video generation failed: %s", exc)
 
 
-async def _run_turn(websocket: WebSocket, session_id: str, audio_queue: asyncio.Queue[bytes | None], release_time_ref: list[float]) -> None:
+async def _run_turn(
+    websocket: WebSocket,
+    session_id: str,
+    audio_queue: asyncio.Queue[bytes | None],
+    release_time_ref: list[float],
+) -> None:
     try:
         await _run_turn_inner(websocket, session_id, audio_queue, release_time_ref)
     except Exception as e:
-        import traceback
-        print(f"[ERROR] _run_turn crashed: {e}")
-        traceback.print_exc()
+        logger.exception("Turn processing crashed: %s", e)
         with contextlib.suppress(Exception):
             await websocket.send_json({"type": "error", "message": str(e)})
             await websocket.send_json({"type": "audio_end"})
 
 
-async def _run_turn_inner(websocket: WebSocket, session_id: str, audio_queue: asyncio.Queue[bytes | None], release_time_ref: list[float]) -> None:
+async def _run_turn_inner(
+    websocket: WebSocket,
+    session_id: str,
+    audio_queue: asyncio.Queue[bytes | None],
+    release_time_ref: list[float],
+) -> None:
     timer = LatencyTimer()
 
     # Collect all PCM frames from the queue (None signals end)
@@ -94,14 +108,14 @@ async def _run_turn_inner(websocket: WebSocket, session_id: str, audio_queue: as
 
     user_text = await stt.transcribe_audio(b"".join(pcm_chunks))
     if not user_text:
-        print("[STT] no transcript — skipping turn")
+        logger.warning("STT returned empty transcript, skipping turn")
         return
 
     t_release = release_time_ref[0]
     if t_release > 0:
         timer.started_at = t_release  # anchor total_ms to mic-release too
     timer.stt_ms = timer.elapsed_ms()
-    print(f"[PIPELINE] STT done: {timer.stt_ms:.0f}ms | text={user_text!r}")
+    logger.info("STT done: %.0fms | %r", timer.stt_ms, user_text)
     await websocket.send_json(
         {
             "type": "transcript",
@@ -131,22 +145,17 @@ async def _run_turn_inner(websocket: WebSocket, session_id: str, audio_queue: as
     )
     system_prompt = build_system_prompt(persona, retrieved)
     if persona:
-        print(f"[PIPELINE] persona='{persona.name}' | context chunks: {len(retrieved)}")
+        logger.debug("persona=%r | RAG chunks=%d", persona.name, len(retrieved))
     else:
-        print(f"[PIPELINE] persona=<none — using default> | persona_id={persona_id!r}")
-    print(f"[RAG] retrieved {len(retrieved)} chunks")
-    if retrieved:
-        print(f"[RAG] chunk 1: {retrieved[0][:100]}")
-    else:
-        print(f"[RAG] EMPTY — persona_id={persona_id!r} in_index={persona_id in RAG_INDICES}")
-    print(f"[PROMPT] full system prompt ({len(system_prompt)} chars):\n{system_prompt}\n---END PROMPT---")
+        logger.debug("no persona loaded, using default | persona_id=%r", persona_id)
+    logger.debug("RAG retrieved %d chunks", len(retrieved))
 
     llm_started_at = time.perf_counter()
     first_token_sent = False
     response_text = ""
     voice_id = persona.voice_id if persona else None
 
-    # Check in-memory cache before hitting Groq (60s TTL)
+    # Check in-memory cache before hitting Groq
     cache_key = hashlib.md5(user_text.lower().strip().encode()).hexdigest()
     _cache_entry = _RESPONSE_CACHE.get(cache_key)
     cache_hit = _cache_entry is not None and time.time() < _cache_entry[1]
@@ -154,7 +163,7 @@ async def _run_turn_inner(websocket: WebSocket, session_id: str, audio_queue: as
     def mark_first_audio() -> None:
         if timer.tts_first_audio_ms == 0:
             timer.tts_first_audio_ms = timer.elapsed_ms()
-            print(f"[PIPELINE] TTS first audio: {timer.tts_first_audio_ms:.0f}ms")
+            logger.info("TTS first audio: %.0fms", timer.tts_first_audio_ms)
 
     # TTS pipeline:
     # - Sentence 1 is streamed directly to ElevenLabs → websocket as chunks arrive
@@ -211,13 +220,13 @@ async def _run_turn_inner(websocket: WebSocket, session_id: str, audio_queue: as
     time_flush_done = False
     try:
         if cache_hit:
-            print("[LLM] cache hit, skipping Groq")
+            logger.info("LLM cache hit, skipping API call")
             timer.llm_first_token_ms = 1.0
             cached_text = _cache_entry[0]
             await websocket.send_json({"type": "llm_token", "token": cached_text, "latency_ms": 1.0})
             for sentence in re.split(r'(?<=[.!?])\s+', cached_text):
                 s = sentence.strip()
-                if len(s) >= 15:
+                if len(s) >= _MIN_TTS_CHARS:
                     await tts_queue.put(s)
             response_text = cached_text
             if persona and persona.did_avatar_url and settings.did_api_key and cached_text.strip():
@@ -231,7 +240,7 @@ async def _run_turn_inner(websocket: WebSocket, session_id: str, audio_queue: as
                 )
                 _background_tasks.add(_did_task)
                 _did_task.add_done_callback(_background_tasks.discard)
-                print(f"[D-ID] fired with full cached response ({len(cached_text.strip())} chars)")
+                logger.info("D-ID video queued for cached response (%d chars)", len(cached_text.strip()))
         else:
             # Latency floor: ~620-640ms warm on Groq free tier due to network RTT.
             # To break 600ms: set USE_VLLM=true in .env (local vLLM, 5-30ms TTFT).
@@ -243,8 +252,7 @@ async def _run_turn_inner(websocket: WebSocket, session_id: str, audio_queue: as
                     first_token_sent = True
                     first_token_time = time.perf_counter()
                     timer.llm_first_token_ms = (first_token_time - llm_started_at) * 1000
-                    print(f"[PIPELINE] LLM first token: {timer.llm_first_token_ms:.0f}ms")
-                    print(f"[FLUSH-DEBUG] first token arrived")
+                    logger.info("LLM first token: %.0fms", timer.llm_first_token_ms)
                 await websocket.send_json(
                     {
                         "type": "llm_token",
@@ -256,8 +264,8 @@ async def _run_turn_inner(websocket: WebSocket, session_id: str, audio_queue: as
                 if '\n' in token:
                     chunk = sentence_buf.replace('\n', ' ').strip()
                     sentence_buf = ""
-                    if len(chunk) >= 15:
-                        print(f"[CHUNKER] newline flush: {len(chunk)} chars: '{chunk[:40]}'")
+                    if len(chunk) >= _MIN_TTS_CHARS:
+                        logger.debug("CHUNKER newline flush: %d chars", len(chunk))
                         await tts_queue.put(chunk)
                         first_chunk_flushed = True
                     continue
@@ -266,45 +274,40 @@ async def _run_turn_inner(websocket: WebSocket, session_id: str, audio_queue: as
                     sentence, sentence_buf = extract_complete_sentence(sentence_buf)
                     if sentence:
                         elapsed_since_first = (time.perf_counter() - first_token_time) * 1000
-                        print(f"[CHUNKER] sentence flush: {len(sentence)} chars, "
-                              f"{elapsed_since_first:.0f}ms after first token: '{sentence[:40]}'")
-                        if not first_chunk_flushed:
-                            print(f"[FLUSH-DEBUG] first flush at {elapsed_since_first:.0f}ms, "
-                                  f"{len(sentence)} chars: '{sentence[:50]}'")
-                            print(f"[FLUSH] first flush at {len(sentence)} chars, "
-                                  f"{elapsed_since_first:.0f}ms after LLM start")
+                        logger.debug(
+                            "CHUNKER sentence flush: %d chars, %.0fms after first token",
+                            len(sentence), elapsed_since_first,
+                        )
                         await tts_queue.put(sentence)
                         first_chunk_flushed = True
                 # First-chunk safety: flush at _FIRST_FLUSH_CHARS to minimise ElevenLabs TTFA
                 elif not first_chunk_flushed and len(sentence_buf) > _FIRST_FLUSH_CHARS:
                     chunk = sentence_buf.strip()
                     elapsed_since_first = (time.perf_counter() - first_token_time) * 1000
-                    print(f"[CHUNKER] first-chunk safety flush: {len(chunk)} chars, "
-                          f"{elapsed_since_first:.0f}ms after first token: '{chunk[:40]}'")
-                    print(f"[FLUSH-DEBUG] first flush at {elapsed_since_first:.0f}ms, "
-                          f"{len(chunk)} chars: '{chunk[:50]}'")
-                    print(f"[FLUSH] first flush at {len(chunk)} chars, "
-                          f"{elapsed_since_first:.0f}ms after LLM start")
+                    logger.debug(
+                        "CHUNKER first-chunk safety flush: %d chars, %.0fms after first token",
+                        len(chunk), elapsed_since_first,
+                    )
                     await tts_queue.put(chunk)
                     sentence_buf = ""
                     first_chunk_flushed = True
                 # Subsequent safety: cap at _SUBSEQUENT_FLUSH_CHARS to avoid long unbounded chunks
                 elif first_chunk_flushed and len(sentence_buf) > _SUBSEQUENT_FLUSH_CHARS:
                     chunk = sentence_buf.strip()
-                    print(f"[CHUNKER] safety flush: {len(chunk)} chars: '{chunk[:40]}'")
+                    logger.debug("CHUNKER safety flush: %d chars", len(chunk))
                     await tts_queue.put(chunk)
                     sentence_buf = ""
-                # Time-based flush: no sentence boundary for 1.5s → send what we have
+                # Time-based flush: no sentence boundary for _TIME_FLUSH_S → send what we have
                 if (not time_flush_done and first_token_sent
-                        and time.perf_counter() - first_token_time > 1.5
+                        and time.perf_counter() - first_token_time > _TIME_FLUSH_S
                         and sentence_buf.strip()):
-                    print(f"[CHUNKER] time-based flush: {len(sentence_buf)} chars")
+                    logger.debug("CHUNKER time-based flush: %d chars", len(sentence_buf))
                     await tts_queue.put(sentence_buf.strip())
                     sentence_buf = ""
                     time_flush_done = True
-            # Store successful response in cache (60s TTL)
+            # Store successful response in cache
             if response_text.strip():
-                _RESPONSE_CACHE[cache_key] = (response_text.strip(), time.time() + 60)
+                _RESPONSE_CACHE[cache_key] = (response_text.strip(), time.time() + _CACHE_TTL_S)
             # Fire D-ID with the complete response once LLM finishes
             if persona and persona.did_avatar_url and settings.did_api_key and response_text.strip():
                 _did_task = asyncio.create_task(
@@ -317,9 +320,9 @@ async def _run_turn_inner(websocket: WebSocket, session_id: str, audio_queue: as
                 )
                 _background_tasks.add(_did_task)
                 _did_task.add_done_callback(_background_tasks.discard)
-                print(f"[D-ID] fired with full response ({len(response_text.strip())} chars)")
+                logger.info("D-ID video queued for response (%d chars)", len(response_text.strip()))
     except Exception as e:
-        print(f"[LLM ERROR] {e}")
+        logger.error("LLM streaming failed: %s", e)
         await tts_queue.put(None)
         await tts_task
         raise
@@ -334,7 +337,7 @@ async def _run_turn_inner(websocket: WebSocket, session_id: str, audio_queue: as
         raise tts_error[0]
 
     await websocket.send_json({"type": "audio_end"})
-    print("[WS] audio_end sent to client")
+    logger.debug("audio_end sent to client")
 
     SESSION_HISTORY.setdefault(session_id, []).extend(
         [
@@ -342,14 +345,13 @@ async def _run_turn_inner(websocket: WebSocket, session_id: str, audio_queue: as
             ConversationTurn(role="assistant", content=response_text.strip()),
         ]
     )
-    SESSION_HISTORY[session_id] = SESSION_HISTORY[session_id][-6:]
+    SESSION_HISTORY[session_id] = SESSION_HISTORY[session_id][-_MAX_HISTORY_TURNS:]
 
     summary = timer.summary()
-    print(
-        f"[LATENCY] STT: {summary['stt_ms']}ms | "
-        f"LLM first token: {summary['llm_first_token_ms']}ms | "
-        f"TTS first audio: {summary['tts_first_audio_ms']}ms | "
-        f"Total: {summary['total_ms']}ms"
+    logger.info(
+        "Latency — STT: %sms | LLM first token: %sms | TTS first audio: %sms | Total: %sms",
+        summary["stt_ms"], summary["llm_first_token_ms"],
+        summary["tts_first_audio_ms"], summary["total_ms"],
     )
     await websocket.send_json({"type": "latency_summary", **summary})
 
@@ -375,12 +377,7 @@ async def _run_text_turn(websocket: WebSocket, session_id: str, user_text: str) 
             _fetch_history(),
         )
         system_prompt = build_system_prompt(persona, retrieved)
-        print(f"[RAG] retrieved {len(retrieved)} chunks")
-        if retrieved:
-            print(f"[RAG] chunk 1: {retrieved[0][:100]}")
-        else:
-            print(f"[RAG] EMPTY — persona_id={persona_id!r} in_index={persona_id in RAG_INDICES}")
-        print(f"[PROMPT] full system prompt ({len(system_prompt)} chars):\n{system_prompt}\n---END PROMPT---")
+        logger.debug("RAG retrieved %d chunks", len(retrieved))
         voice_id = persona.voice_id if persona else None
 
         await websocket.send_json({"type": "transcript", "text": user_text, "is_final": True, "latency_ms": 0})
@@ -389,7 +386,7 @@ async def _run_text_turn(websocket: WebSocket, session_id: str, user_text: str) 
         def mark_first_audio() -> None:
             if timer.tts_first_audio_ms == 0:
                 timer.tts_first_audio_ms = timer.elapsed_ms()
-                print(f"[PIPELINE] TTS first audio: {timer.tts_first_audio_ms:.0f}ms")
+                logger.info("TTS first audio: %.0fms", timer.tts_first_audio_ms)
 
         tts_queue: asyncio.Queue[str | None] = asyncio.Queue()
         tts_error: list[BaseException] = []
@@ -437,13 +434,13 @@ async def _run_text_turn(websocket: WebSocket, session_id: str, user_text: str) 
 
         try:
             if cache_hit:
-                print("[LLM] cache hit, skipping Groq")
+                logger.info("LLM cache hit, skipping API call")
                 timer.llm_first_token_ms = 1.0
                 cached_text = _cache_entry[0]
                 await websocket.send_json({"type": "llm_token", "token": cached_text, "latency_ms": 1.0})
                 for sentence in re.split(r'(?<=[.!?])\s+', cached_text):
                     s = sentence.strip()
-                    if len(s) >= 15:
+                    if len(s) >= _MIN_TTS_CHARS:
                         await tts_queue.put(s)
                 response_text = cached_text
                 if persona and persona.did_avatar_url and settings.did_api_key and cached_text.strip():
@@ -457,7 +454,7 @@ async def _run_text_turn(websocket: WebSocket, session_id: str, user_text: str) 
                     )
                     _background_tasks.add(_did_task)
                     _did_task.add_done_callback(_background_tasks.discard)
-                    print(f"[D-ID] fired with full cached response ({len(cached_text.strip())} chars)")
+                    logger.info("D-ID video queued for cached response (%d chars)", len(cached_text.strip()))
             else:
                 async for token in stream_llm(user_text, system_prompt, history):
                     response_text += token
@@ -466,43 +463,42 @@ async def _run_text_turn(websocket: WebSocket, session_id: str, user_text: str) 
                         first_token_sent = True
                         first_token_time = time.perf_counter()
                         timer.llm_first_token_ms = (first_token_time - llm_started_at) * 1000
-                        print(f"[PIPELINE] LLM first token: {timer.llm_first_token_ms:.0f}ms")
+                        logger.info("LLM first token: %.0fms", timer.llm_first_token_ms)
                     await websocket.send_json({"type": "llm_token", "token": token, "latency_ms": round(timer.llm_first_token_ms or timer.elapsed_ms(), 1)})
                     if '\n' in token:
                         chunk = sentence_buf.replace('\n', ' ').strip()
                         sentence_buf = ""
-                        if len(chunk) >= 15:
-                            print(f"[CHUNKER] newline flush: {len(chunk)} chars: '{chunk[:40]}'")
+                        if len(chunk) >= _MIN_TTS_CHARS:
+                            logger.debug("CHUNKER newline flush: %d chars", len(chunk))
                             await tts_queue.put(chunk)
                             first_chunk_flushed = True
                         continue
                     if is_sentence_complete(sentence_buf):
                         sentence, sentence_buf = extract_complete_sentence(sentence_buf)
                         if sentence:
-                            print(f"[CHUNKER] sentence flush: {len(sentence)} chars: '{sentence[:40]}'")
+                            logger.debug("CHUNKER sentence flush: %d chars", len(sentence))
                             await tts_queue.put(sentence)
                             first_chunk_flushed = True
                     elif not first_chunk_flushed and len(sentence_buf) > _FIRST_FLUSH_CHARS:
                         chunk = sentence_buf.strip()
-                        print(f"[CHUNKER] first-chunk safety flush: {len(chunk)} chars: '{chunk[:40]}'")
+                        logger.debug("CHUNKER first-chunk safety flush: %d chars", len(chunk))
                         await tts_queue.put(chunk)
                         sentence_buf = ""
                         first_chunk_flushed = True
                     elif first_chunk_flushed and len(sentence_buf) > _SUBSEQUENT_FLUSH_CHARS:
                         chunk = sentence_buf.strip()
-                        print(f"[CHUNKER] safety flush: {len(chunk)} chars: '{chunk[:40]}'")
+                        logger.debug("CHUNKER safety flush: %d chars", len(chunk))
                         await tts_queue.put(chunk)
                         sentence_buf = ""
                     if (not time_flush_done and first_token_sent
-                            and time.perf_counter() - first_token_time > 1.5
+                            and time.perf_counter() - first_token_time > _TIME_FLUSH_S
                             and sentence_buf.strip()):
-                        print(f"[CHUNKER] time-based flush: {len(sentence_buf)} chars")
+                        logger.debug("CHUNKER time-based flush: %d chars", len(sentence_buf))
                         await tts_queue.put(sentence_buf.strip())
                         sentence_buf = ""
                         time_flush_done = True
                 if response_text.strip():
-                    _RESPONSE_CACHE[cache_key] = (response_text.strip(), time.time() + 60)
-                # Fire D-ID with the complete response once LLM finishes
+                    _RESPONSE_CACHE[cache_key] = (response_text.strip(), time.time() + _CACHE_TTL_S)
                 if persona and persona.did_avatar_url and settings.did_api_key and response_text.strip():
                     _did_task = asyncio.create_task(
                         _generate_and_send_video(
@@ -514,9 +510,9 @@ async def _run_text_turn(websocket: WebSocket, session_id: str, user_text: str) 
                     )
                     _background_tasks.add(_did_task)
                     _did_task.add_done_callback(_background_tasks.discard)
-                    print(f"[D-ID] fired with full response ({len(response_text.strip())} chars)")
+                    logger.info("D-ID video queued for response (%d chars)", len(response_text.strip()))
         except Exception as e:
-            print(f"[LLM ERROR] {e}")
+            logger.error("LLM streaming failed: %s", e)
             await tts_queue.put(None)
             await tts_task
             raise
@@ -535,13 +531,16 @@ async def _run_text_turn(websocket: WebSocket, session_id: str, user_text: str) 
             ConversationTurn(role="user", content=user_text),
             ConversationTurn(role="assistant", content=response_text.strip()),
         ])
-        SESSION_HISTORY[session_id] = SESSION_HISTORY[session_id][-6:]
+        SESSION_HISTORY[session_id] = SESSION_HISTORY[session_id][-_MAX_HISTORY_TURNS:]
         summary = timer.summary()
-        print(f"[LATENCY] STT: {summary['stt_ms']}ms | LLM first token: {summary['llm_first_token_ms']}ms | TTS first audio: {summary['tts_first_audio_ms']}ms | Total: {summary['total_ms']}ms")
+        logger.info(
+            "Latency — STT: %sms | LLM first token: %sms | TTS first audio: %sms | Total: %sms",
+            summary["stt_ms"], summary["llm_first_token_ms"],
+            summary["tts_first_audio_ms"], summary["total_ms"],
+        )
         await websocket.send_json({"type": "latency_summary", **summary})
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Text turn processing failed: %s", e)
         with contextlib.suppress(Exception):
             await websocket.send_json({"type": "error", "message": str(e)})
             await websocket.send_json({"type": "audio_end"})
@@ -571,13 +570,13 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str) -> None:
                 return
             PERSONAS[persona_id] = persona
             if persona_id not in RAG_INDICES:
-                loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
                 rag = PersonaRAG()
                 await loop.run_in_executor(None, rag.build_index, persona.stories)
                 RAG_INDICES[persona_id] = rag
 
     await websocket.accept()
-    print("[WS] connection opened")
+    logger.info("Connection opened: session=%s", session_id)
     audio_queue: asyncio.Queue[bytes | None] = asyncio.Queue()
     release_time_ref: list[float] = [0.0]
     turn_task: asyncio.Task | None = None  # created lazily on first audio frame
@@ -593,7 +592,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str) -> None:
             # Binary frame — raw Int16 PCM audio, forward directly to STT queue
             raw = data.get("bytes")
             if raw:
-                print(f"[WS] binary frame: {len(raw)} bytes")
+                logger.debug("Binary frame: %d bytes", len(raw))
                 if turn_task is None or turn_task.done():
                     turn_task = asyncio.create_task(
                         _run_turn(websocket, session_id, audio_queue, release_time_ref)
@@ -616,7 +615,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str) -> None:
                 if user_text:
                     await _run_text_turn(websocket, session_id, user_text)
             elif msg_type == "audio_end":
-                print("[WS] audio_end received")
+                logger.debug("audio_end received")
                 release_time_ref[0] = time.perf_counter()  # start timer at mic release
                 await audio_queue.put(None)
                 if turn_task:
@@ -629,9 +628,9 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str) -> None:
                 p = PERSONAS.get(pid)
                 if p and p.simli_face_id:
                     from services import simli as simli_svc
-                    token = await simli_svc.create_session(p.simli_face_id)
-                    if token:
-                        await websocket.send_json({"type": "simli_session_token", "token": token})
+                    simli_token = await simli_svc.create_session(p.simli_face_id)
+                    if simli_token:
+                        await websocket.send_json({"type": "simli_session_token", "token": simli_token})
                     else:
                         await websocket.send_json({"type": "simli_session_error", "message": "Simli session creation failed"})
                 else:
@@ -641,9 +640,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str) -> None:
     except WebSocketDisconnect:
         pass
     except Exception as exc:
-        import traceback
-        print(f"[WS] unexpected error: {type(exc).__name__}: {exc}")
-        traceback.print_exc()
+        logger.exception("Unexpected WebSocket error: %s", exc)
         with contextlib.suppress(Exception):
             await websocket.send_json({"type": "error", "message": str(exc)})
     finally:

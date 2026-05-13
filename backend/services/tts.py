@@ -1,10 +1,13 @@
 import asyncio
 import base64
 import json
+import logging
 import time
 from collections.abc import AsyncGenerator
 
 from config import settings
+
+logger = logging.getLogger(__name__)
 
 _EL_WS_URL = (
     "wss://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
@@ -45,7 +48,7 @@ async def prewarm_elevenlabs_ws(voice_id: str | None = None):
         "generation_config": {"chunk_length_schedule": [50]},
     }))
     ms = (time.perf_counter() - t0) * 1000
-    print(f"[TTS-PREWARM] WS open + BOS sent in {ms:.0f}ms")
+    logger.debug("ElevenLabs WS prewarm complete: %.0fms", ms)
     return el_ws
 
 
@@ -87,7 +90,7 @@ async def stream_tts_prewarmed(
         await websocket.send_json({"type": "audio_chunk", "data": base64.b64encode(chunk).decode()})
     if send_end:
         await websocket.send_json({"type": "audio_end"})
-        print("[WS] audio_end sent to client")
+        logger.debug("audio_end sent to client")
 
 
 async def _mock_audio_chunks(text: str) -> AsyncGenerator[bytes, None]:
@@ -123,10 +126,10 @@ async def tts_audio_chunks(text: str, voice_id: str | None = None) -> AsyncGener
             if chunk:
                 yield chunk
     except Exception as e:
-        print(f"[TTS] stream error: {e}")
+        logger.error("TTS stream error: %s", e)
         raise
     finally:
-        print("[TTS] stream complete")
+        logger.debug("TTS stream complete")
 
 
 async def stream_tts(text: str, websocket, first_audio_cb=None, voice_id: str | None = None, send_end: bool = False) -> None:
@@ -144,7 +147,7 @@ async def stream_tts(text: str, websocket, first_audio_cb=None, voice_id: str | 
         )
     if send_end:
         await websocket.send_json({"type": "audio_end"})
-        print("[WS] audio_end sent to client")
+        logger.debug("audio_end sent to client")
 
 
 async def clone_voice(persona_id: str, audio_files) -> str:
@@ -170,5 +173,5 @@ async def clone_voice(persona_id: str, audio_files) -> str:
         body = e.body or {}
         detail = body.get("detail", {}) if isinstance(body, dict) else {}
         code = detail.get("code", "") if isinstance(detail, dict) else ""
-        print(f"[CLONE] ElevenLabs API error (code={code}): {detail} — falling back to default voice")
+        logger.error("ElevenLabs voice clone failed (code=%s): %s — falling back to default voice", code, detail)
         return settings.elevenlabs_voice_id

@@ -36,7 +36,6 @@ export function useSimliAvatar(): UseSimliAvatarReturn {
     pc.ontrack = (event) => {
       if (videoRef.current && event.streams[0]) {
         videoRef.current.srcObject = event.streams[0];
-        console.log("[SIMLI] track received:", event.track.kind);
       }
     };
 
@@ -62,7 +61,6 @@ export function useSimliAvatar(): UseSimliAvatarReturn {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      console.log("[SIMLI] WS open — sending SDP offer");
       ws.send(JSON.stringify({ type: "offer", sdp: pc.localDescription!.sdp }));
     };
 
@@ -71,7 +69,6 @@ export function useSimliAvatar(): UseSimliAvatarReturn {
 
       // "START" signals the avatar is ready to receive audio
       if (raw === "START") {
-        console.log("[SIMLI] avatar ready");
         isConnectedRef.current = true;
         setIsConnected(true);
         return;
@@ -83,7 +80,6 @@ export function useSimliAvatar(): UseSimliAvatarReturn {
           await pc.setRemoteDescription(
             new RTCSessionDescription({ type: "answer", sdp: msg.sdp })
           );
-          console.log("[SIMLI] remote description set");
         } else if (msg.type === "candidate" && msg.candidate) {
           await pc.addIceCandidate(
             new RTCIceCandidate({
@@ -100,7 +96,6 @@ export function useSimliAvatar(): UseSimliAvatarReturn {
 
     ws.onerror = (e) => console.error("[SIMLI] WS error:", e);
     ws.onclose = () => {
-      console.log("[SIMLI] WS closed");
       isConnectedRef.current = false;
       setIsConnected(false);
     };
@@ -117,7 +112,6 @@ export function useSimliAvatar(): UseSimliAvatarReturn {
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send("DONE");
-      console.log("[SIMLI] sent DONE");
     }
   }, []);
 
@@ -125,7 +119,6 @@ export function useSimliAvatar(): UseSimliAvatarReturn {
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send("SKIP");
-      console.log("[SIMLI] sent SKIP");
     }
   }, []);
 
