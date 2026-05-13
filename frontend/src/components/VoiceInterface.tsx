@@ -79,7 +79,7 @@ export function VoiceInterface({
   const [videoLoading, setVideoLoading]     = useState(false);
   const [lastResponseMs, setLastResponseMs] = useState<number | null>(null);
   const [videoGenSeconds, setVideoGenSeconds] = useState<string>("");
-  const [showVideoModal, setShowVideoModal]   = useState(false);
+  const [playingVideo, setPlayingVideo]       = useState(false);
   const isRecordingRef   = useRef(false);
   const videoGenStartRef = useRef<number>(0);
 
@@ -260,7 +260,7 @@ export function VoiceInterface({
     setStage("recording");
     setVideoUrl(null);
     setVideoGenSeconds("");
-    setShowVideoModal(false);
+    setPlayingVideo(false);
     try {
       await recorder.start();
     } catch (e) {
@@ -291,20 +291,19 @@ export function VoiceInterface({
 
         {/* Portrait avatar */}
         <div className="relative w-full max-w-[260px] overflow-hidden rounded-2xl shadow-card-hover" style={{ aspectRatio: '3/4' }}>
-          {/* Idle loop video — muted, silent, looping */}
-          {idleVideoUrl && (
+          {/* D-ID response video — plays in portrait when replay is clicked */}
+          {playingVideo && videoUrl && (
             <video
-              src={idleVideoUrl}
-              className="h-full w-full object-cover"
-              autoPlay={true}
-              loop={true}
+              src={videoUrl}
+              autoPlay
               playsInline
-              muted={true}
+              className="h-full w-full object-cover"
+              onEnded={() => { setPlayingVideo(false); setVideoUrl(null); setVideoGenSeconds(""); }}
             />
           )}
 
           {/* Static avatar photo */}
-          {!idleVideoUrl && avatarUrl && (
+          {!playingVideo && avatarUrl && (
             <img
               src={avatarUrl}
               alt={personaName ?? "Persona"}
@@ -314,7 +313,7 @@ export function VoiceInterface({
           )}
 
           {/* Letter / spinner placeholder */}
-          {!idleVideoUrl && !avatarUrl && (
+          {!playingVideo && !avatarUrl && (
             <div className="flex h-full w-full items-center justify-center" style={{ backgroundColor: '#FAFAF9' }}>
               {videoLoading ? (
                 <svg className="h-8 w-8 animate-spin text-green" viewBox="0 0 24 24" fill="none">
@@ -445,10 +444,10 @@ export function VoiceInterface({
         />
 
         {/* Watch replay button */}
-        {videoUrl && (
+        {videoUrl && !playingVideo && (
           <div className="border-t border-border px-4 py-3">
             <button
-              onClick={() => setShowVideoModal(true)}
+              onClick={() => setPlayingVideo(true)}
               className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 font-mono text-[11px] text-textdim transition-colors hover:border-border-hi hover:text-text"
             >
               <span>▶</span>
@@ -457,38 +456,6 @@ export function VoiceInterface({
           </div>
         )}
       </div>
-
-      {/* Video modal */}
-      {showVideoModal && videoUrl && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-          onClick={() => setShowVideoModal(false)}
-        >
-          <div
-            className="mx-4 w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-3 flex items-center justify-between">
-              <span className="font-sans text-sm font-medium text-gray-700">Avatar Response</span>
-              <button
-                onClick={() => setShowVideoModal(false)}
-                className="text-xl leading-none text-gray-400 hover:text-gray-600"
-              >×</button>
-            </div>
-            <video
-              src={videoUrl}
-              autoPlay
-              controls
-              playsInline
-              className="w-full rounded-xl"
-              onEnded={() => setShowVideoModal(false)}
-            />
-            <p className="mt-2 text-center font-mono text-xs text-gray-400">
-              Generated in {videoGenSeconds}s · Powered by D-ID
-            </p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -209,7 +209,6 @@ async def _run_turn_inner(websocket: WebSocket, session_id: str, audio_queue: as
     first_chunk_flushed = False
     first_token_time = 0.0
     time_flush_done = False
-    first_did_fired = False
     try:
         if cache_hit:
             print("[LLM] cache hit, skipping Groq")
@@ -222,19 +221,17 @@ async def _run_turn_inner(websocket: WebSocket, session_id: str, audio_queue: as
                     await tts_queue.put(s)
             response_text = cached_text
             if persona and persona.did_avatar_url and settings.did_api_key and cached_text.strip():
-                _m = re.search(r'[.!?]', cached_text)
-                _first_sent = cached_text[:_m.end()].strip() if _m else cached_text.strip()
                 _did_task = asyncio.create_task(
                     _generate_and_send_video(
                         websocket=websocket,
-                        response_text=_first_sent,
+                        response_text=cached_text.strip(),
                         voice_id=voice_id,
                         source_url=persona.did_avatar_url,
                     )
                 )
                 _background_tasks.add(_did_task)
                 _did_task.add_done_callback(_background_tasks.discard)
-            first_did_fired = True
+                print(f"[D-ID] fired with full cached response ({len(cached_text.strip())} chars)")
         else:
             # Latency floor: ~620-640ms warm on Groq free tier due to network RTT.
             # To break 600ms: set USE_VLLM=true in .env (local vLLM, 5-30ms TTFT).
@@ -255,23 +252,6 @@ async def _run_turn_inner(websocket: WebSocket, session_id: str, audio_queue: as
                         "latency_ms": round(timer.llm_first_token_ms or timer.elapsed_ms(), 1),
                     }
                 )
-                # Fire D-ID as soon as the first complete sentence is assembled
-                if not first_did_fired and is_sentence_complete(response_text):
-                    _m = re.search(r'[.!?]', response_text)
-                    _first_sent = response_text[:_m.end()].strip() if _m else response_text.strip()
-                    if persona and persona.did_avatar_url and settings.did_api_key and _first_sent:
-                        _did_task = asyncio.create_task(
-                            _generate_and_send_video(
-                                websocket=websocket,
-                                response_text=_first_sent,
-                                voice_id=voice_id,
-                                source_url=persona.did_avatar_url,
-                            )
-                        )
-                        _background_tasks.add(_did_task)
-                        _did_task.add_done_callback(_background_tasks.discard)
-                        print(f"[D-ID] fired at first sentence ({len(_first_sent)} chars)")
-                    first_did_fired = True
                 # Paragraph break → flush immediately
                 if '\n' in token:
                     chunk = sentence_buf.replace('\n', ' ').strip()
@@ -325,6 +305,19 @@ async def _run_turn_inner(websocket: WebSocket, session_id: str, audio_queue: as
             # Store successful response in cache (60s TTL)
             if response_text.strip():
                 _RESPONSE_CACHE[cache_key] = (response_text.strip(), time.time() + 60)
+            # Fire D-ID with the complete response once LLM finishes
+            if persona and persona.did_avatar_url and settings.did_api_key and response_text.strip():
+                _did_task = asyncio.create_task(
+                    _generate_and_send_video(
+                        websocket=websocket,
+                        response_text=response_text.strip(),
+                        voice_id=voice_id,
+                        source_url=persona.did_avatar_url,
+                    )
+                )
+                _background_tasks.add(_did_task)
+                _did_task.add_done_callback(_background_tasks.discard)
+                print(f"[D-ID] fired with full response ({len(response_text.strip())} chars)")
     except Exception as e:
         print(f"[LLM ERROR] {e}")
         await tts_queue.put(None)
@@ -434,7 +427,6 @@ async def _run_text_turn(websocket: WebSocket, session_id: str, user_text: str) 
         first_chunk_flushed = False
         first_token_time = 0.0
         time_flush_done = False
-        first_did_fired = False
         llm_started_at = time.perf_counter()
         first_token_sent = False
         response_text = ""
@@ -455,19 +447,17 @@ async def _run_text_turn(websocket: WebSocket, session_id: str, user_text: str) 
                         await tts_queue.put(s)
                 response_text = cached_text
                 if persona and persona.did_avatar_url and settings.did_api_key and cached_text.strip():
-                    _m = re.search(r'[.!?]', cached_text)
-                    _first_sent = cached_text[:_m.end()].strip() if _m else cached_text.strip()
                     _did_task = asyncio.create_task(
                         _generate_and_send_video(
                             websocket=websocket,
-                            response_text=_first_sent,
+                            response_text=cached_text.strip(),
                             voice_id=voice_id,
                             source_url=persona.did_avatar_url,
                         )
                     )
                     _background_tasks.add(_did_task)
                     _did_task.add_done_callback(_background_tasks.discard)
-                first_did_fired = True
+                    print(f"[D-ID] fired with full cached response ({len(cached_text.strip())} chars)")
             else:
                 async for token in stream_llm(user_text, system_prompt, history):
                     response_text += token
@@ -478,22 +468,6 @@ async def _run_text_turn(websocket: WebSocket, session_id: str, user_text: str) 
                         timer.llm_first_token_ms = (first_token_time - llm_started_at) * 1000
                         print(f"[PIPELINE] LLM first token: {timer.llm_first_token_ms:.0f}ms")
                     await websocket.send_json({"type": "llm_token", "token": token, "latency_ms": round(timer.llm_first_token_ms or timer.elapsed_ms(), 1)})
-                    if not first_did_fired and is_sentence_complete(response_text):
-                        _m = re.search(r'[.!?]', response_text)
-                        _first_sent = response_text[:_m.end()].strip() if _m else response_text.strip()
-                        if persona and persona.did_avatar_url and settings.did_api_key and _first_sent:
-                            _did_task = asyncio.create_task(
-                                _generate_and_send_video(
-                                    websocket=websocket,
-                                    response_text=_first_sent,
-                                    voice_id=voice_id,
-                                    source_url=persona.did_avatar_url,
-                                )
-                            )
-                            _background_tasks.add(_did_task)
-                            _did_task.add_done_callback(_background_tasks.discard)
-                            print(f"[D-ID] fired at first sentence ({len(_first_sent)} chars)")
-                        first_did_fired = True
                     if '\n' in token:
                         chunk = sentence_buf.replace('\n', ' ').strip()
                         sentence_buf = ""
@@ -528,6 +502,19 @@ async def _run_text_turn(websocket: WebSocket, session_id: str, user_text: str) 
                         time_flush_done = True
                 if response_text.strip():
                     _RESPONSE_CACHE[cache_key] = (response_text.strip(), time.time() + 60)
+                # Fire D-ID with the complete response once LLM finishes
+                if persona and persona.did_avatar_url and settings.did_api_key and response_text.strip():
+                    _did_task = asyncio.create_task(
+                        _generate_and_send_video(
+                            websocket=websocket,
+                            response_text=response_text.strip(),
+                            voice_id=voice_id,
+                            source_url=persona.did_avatar_url,
+                        )
+                    )
+                    _background_tasks.add(_did_task)
+                    _did_task.add_done_callback(_background_tasks.discard)
+                    print(f"[D-ID] fired with full response ({len(response_text.strip())} chars)")
         except Exception as e:
             print(f"[LLM ERROR] {e}")
             await tts_queue.put(None)
