@@ -1,3 +1,4 @@
+import { Pencil } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PersonaUpload } from '../components/PersonaUpload'
@@ -124,6 +125,7 @@ export function Dashboard() {
                 key={p.id}
                 persona={p}
                 onTalk={() => navigate(`/dashboard/persona/${p.id}`)}
+                onEdit={() => navigate(`/dashboard/persona/${p.id}/edit`)}
                 onDelete={() => handleDelete(p.id)}
               />
             ))}
@@ -161,10 +163,12 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
 function PersonaCard({
   persona,
   onTalk,
+  onEdit,
   onDelete,
 }: {
   persona: Persona
   onTalk: () => void
+  onEdit: () => void
   onDelete: () => void
 }) {
   const [deleteHovered, setDeleteHovered] = useState(false)
@@ -286,13 +290,22 @@ function PersonaCard({
         </div>
       )}
 
-      {/* Talk Now — full width bottom bar */}
-      <button
-        className="w-full bg-accent py-3 font-sans text-sm font-medium text-white transition-opacity hover:opacity-90"
-        onClick={onTalk}
-      >
-        Talk Now
-      </button>
+      {/* Action bar — Talk Now + Edit */}
+      <div className="flex">
+        <button
+          className="flex-1 bg-accent py-3 font-sans text-sm font-medium text-white transition-opacity hover:opacity-90"
+          onClick={onTalk}
+        >
+          Talk Now
+        </button>
+        <button
+          className="flex items-center gap-1 border-l border-white/20 bg-accent px-4 py-3 font-sans text-sm font-medium text-white/80 transition-all hover:bg-accent/80 hover:text-white"
+          onClick={(e) => { e.stopPropagation(); onEdit(); }}
+          title="Edit persona"
+        >
+          <Pencil size={13} />
+        </button>
+      </div>
     </div>
   )
 }

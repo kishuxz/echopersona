@@ -1,11 +1,12 @@
 import { Camera, Mic, Plus, Trash2, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { createPersona, saveSimliFaceId, uploadAvatar, uploadVoice } from "../lib/api";
+import { createPersona, saveSimliFaceId, updatePersona, uploadAvatar, uploadVoice } from "../lib/api";
 import type { Persona } from "../types";
 
 interface PersonaUploadProps {
   onPersona: (persona: Persona) => void;
   activePersona?: Persona | null;
+  existingPersona?: Persona;
 }
 
 type FormStep = "profile" | "voice" | "photo" | "done";
@@ -51,7 +52,7 @@ function StepIndicator({ current }: { current: FormStep }) {
   );
 }
 
-export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) {
+export function PersonaUpload({ onPersona, activePersona, existingPersona }: PersonaUploadProps) {
   const [name, setName] = useState("Demo Persona");
   const [stories, setStories] = useState(["They love explaining technical systems clearly and briefly."]);
   const [traits, setTraits] = useState("warm, direct, technical");
@@ -99,6 +100,15 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
     setAvatarFile(file);
   };
 
+  // Pre-fill form fields when editing an existing persona
+  useEffect(() => {
+    if (!existingPersona) return;
+    setName(existingPersona.name);
+    setStories(existingPersona.stories.length ? existingPersona.stories : [""]);
+    setTraits(existingPersona.personality_traits.join(", "));
+    setStyle(existingPersona.speaking_style);
+  }, [existingPersona?.id]);
+
   useEffect(() => {
     if (!isRecording) { setRecordingDuration(0); return; }
     const interval = setInterval(() => setRecordingDuration(d => d + 1), 1000);
@@ -110,6 +120,14 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
       streamRef.current?.getTracks().forEach(t => t.stop());
     };
   }, []);
+
+  // Attach camera stream after cameraMode=true renders the video element
+  useEffect(() => {
+    if (cameraMode && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [cameraMode]);
 
   const formatDuration = (s: number) =>
     `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
@@ -189,11 +207,8 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
         video: { facingMode: "user", width: 640, height: 640 },
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-      }
       setCameraMode(true);
+      // Stream is attached to the video element via useEffect once cameraMode=true renders it
     } catch {
       setCameraError("Camera access denied. Please upload a photo instead.");
     }
@@ -239,12 +254,15 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
     setBusy(true);
     setError(null);
     try {
-      let persona = await createPersona({
+      const formData = {
         name,
         stories,
         personality_traits: traits.split(",").map((t) => t.trim()).filter(Boolean),
         speaking_style: style,
-      });
+      };
+      let persona = existingPersona
+        ? await updatePersona(existingPersona.id, formData)
+        : await createPersona(formData);
 
       if (voiceFiles.length) {
         setVoiceStatus("cloning");
@@ -277,7 +295,7 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
       onPersona(persona);
       setShowForm(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to create persona");
+      setError(e instanceof Error ? e.message : existingPersona ? "Failed to update persona" : "Failed to create persona");
     } finally {
       setBusy(false);
     }
@@ -314,7 +332,7 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <span className="font-sans text-[10px] font-medium uppercase tracking-[0.2em] text-muted">
-          New Persona
+          {existingPersona ? "Edit Persona" : "New Persona"}
         </span>
         {activePersona && (
           <div className="flex items-center gap-2">
@@ -714,7 +732,7 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
               </span>
             ) : (
               <span className="inline-flex items-center gap-1.5">
-                Bring them to life
+                {existingPersona ? "Update Persona" : "Bring them to life"}
                 <span className="transition-transform duration-200 group-hover:translate-x-1">→</span>
               </span>
             )}

@@ -88,6 +88,17 @@ export async function saveSimliFaceId(personaId: string, faceId: string): Promis
   return res.json()
 }
 
+export async function updatePersona(personaId: string, updates: Partial<PersonaCreate>): Promise<Persona> {
+  const headers = await getAuthHeaders()
+  const res = await fetch(`${API_BASE}/persona/${personaId}`, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify(updates),
+  })
+  if (!res.ok) throw new Error('Failed to update persona')
+  return res.json()
+}
+
 export async function deletePersona(personaId: string): Promise<void> {
   const headers = await getAuthHeaders()
   await fetch(`${API_BASE}/persona/${personaId}`, {

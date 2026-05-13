@@ -7,6 +7,7 @@ from config import settings
 from middleware.auth import get_current_user
 from models.persona import Persona, PersonaCreate
 from services import did, persona_store
+from services.db import get_db
 from services.rag import PERSONAS, RAG_INDICES, PersonaRAG
 from services.tts import clone_voice
 
@@ -117,6 +118,31 @@ async def set_simli_face(
     persona.simli_face_id = payload.face_id
     PERSONAS[persona_id] = persona
     return persona
+
+
+class PersonaUpdate(BaseModel):
+    name: str | None = None
+    stories: list[str] | None = None
+    personality_traits: list[str] | None = None
+    speaking_style: str | None = None
+
+
+@router.patch("/{persona_id}", response_model=Persona)
+async def update_persona(
+    persona_id: str,
+    payload: PersonaUpdate,
+    user_id: str = Depends(get_current_user),
+) -> Persona:
+    persona = await persona_store.get_persona(persona_id, user_id)
+    if not persona:
+        raise HTTPException(status_code=404, detail="Persona not found")
+    updates = payload.model_dump(exclude_none=True)
+    if updates:
+        db = get_db()
+        db.table("personas").update(updates).eq("id", persona_id).eq("user_id", user_id).execute()
+        PERSONAS.pop(persona_id, None)
+        RAG_INDICES.pop(persona_id, None)
+    return await persona_store.get_persona(persona_id, user_id)
 
 
 @router.delete("/{persona_id}")

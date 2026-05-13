@@ -2,6 +2,7 @@ import asyncio
 import base64
 import json
 import logging
+import mimetypes
 import time
 from collections.abc import AsyncGenerator
 
@@ -158,10 +159,20 @@ async def clone_voice(persona_id: str, audio_files) -> str:
     from elevenlabs.core.api_error import ApiError
 
     client = AsyncElevenLabs(api_key=settings.elevenlabs_api_key)
-    file_tuples = [
-        (f.filename or "sample.mp3", await f.read(), f.content_type or "audio/mpeg")
-        for f in audio_files
-    ]
+    file_tuples = []
+    for f in audio_files:
+        audio_bytes = await f.read()
+        content_type = f.content_type or "audio/mpeg"
+        if content_type == "application/octet-stream":
+            guessed, _ = mimetypes.guess_type(f.filename or "audio.mp3")
+            content_type = guessed or "audio/mpeg"
+        filename = f.filename or "sample.mp3"
+        logger.info(
+            "[VOICE] cloning file: name=%s size=%d content_type=%s",
+            filename, len(audio_bytes), content_type,
+        )
+        file_tuples.append((filename, audio_bytes, content_type))
+
     try:
         voice = await client.voices.add(
             name=f"EchoPersona_{persona_id[:8]}",
@@ -173,5 +184,5 @@ async def clone_voice(persona_id: str, audio_files) -> str:
         body = e.body or {}
         detail = body.get("detail", {}) if isinstance(body, dict) else {}
         code = detail.get("code", "") if isinstance(detail, dict) else ""
-        logger.error("ElevenLabs voice clone failed (code=%s): %s — falling back to default voice", code, detail)
-        return settings.elevenlabs_voice_id
+        logger.error("[VOICE] ElevenLabs IVC error (code=%s): %s", code, detail)
+        raise RuntimeError(f"Voice cloning failed: {code or detail}")
