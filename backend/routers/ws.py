@@ -39,7 +39,7 @@ _CACHE_TTL_S = 60
 _MAX_HISTORY_TURNS = 6
 
 _background_tasks: set[asyncio.Task] = set()
-_tts_semaphore = asyncio.Semaphore(2)
+_tts_semaphore = asyncio.Semaphore(1)
 
 
 def _stream_tts(text, websocket, first_audio_cb, voice_id, send_end=False):
