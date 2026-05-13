@@ -9,7 +9,7 @@ from config import settings
 _EL_WS_URL = (
     "wss://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
     "/stream-input"
-    "?model_id=eleven_flash_v2_5"
+    "?model_id=eleven_turbo_v2_5"
     "&output_format=mp3_22050_32"
     "&optimize_streaming_latency=4"
 )
@@ -110,7 +110,7 @@ async def tts_audio_chunks(text: str, voice_id: str | None = None) -> AsyncGener
         async for chunk in client.text_to_speech.convert_as_stream(
             voice_id=voice_id or settings.elevenlabs_voice_id,
             text=text,
-            model_id="eleven_flash_v2_5",
+            model_id="eleven_turbo_v2_5",
             output_format="mp3_22050_32",
             optimize_streaming_latency=4,
             voice_settings=VoiceSettings(

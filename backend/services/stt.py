@@ -21,10 +21,13 @@ async def transcribe_audio(audio_bytes: bytes, sample_rate: int = 16000) -> str 
         "language": "en-US",
         "smart_format": "true",
         "punctuate": "true",
+        "encoding": "linear16",
+        "sample_rate": sample_rate,
+        "channels": 1,
     }
     headers = {
         "Authorization": f"Token {settings.deepgram_api_key}",
-        "Content-Type": f"audio/raw;encoding=linear16;sample_rate={sample_rate};channels=1",
+        "Content-Type": "audio/raw",
     }
 
     try:
