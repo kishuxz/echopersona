@@ -70,6 +70,7 @@ async def _generate_and_send_video(
 ) -> None:
     """Background task: generate D-ID talking-head video from text, push video_ready to client."""
     try:
+        logger.info("[D-ID] firing with source_url=%s voice_id=%s", source_url, voice_id)
         video_url = await did.generate_talking_head(response_text, voice_id, source_url)
         if video_url:
             await websocket.send_json({"type": "video_ready", "url": video_url})
