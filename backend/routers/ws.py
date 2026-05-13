@@ -39,6 +39,7 @@ _CACHE_TTL_S = 60
 _MAX_HISTORY_TURNS = 6
 
 _background_tasks: set[asyncio.Task] = set()
+_tts_semaphore = asyncio.Semaphore(2)
 
 
 def _stream_tts(text, websocket, first_audio_cb, voice_id, send_end=False):
@@ -50,14 +51,15 @@ def _stream_tts(text, websocket, first_audio_cb, voice_id, send_end=False):
 
 async def _collect_tts_chunks(text: str, voice_id: str | None) -> list[bytes]:
     """Collect all audio chunks for a sentence (used for prefetch)."""
-    chunks: list[bytes] = []
-    if settings.tts_provider == "cartesia":
-        async for chunk in tts_audio_chunks_cartesia(text, voice_id):
-            chunks.append(chunk)
-    else:
-        async for chunk in tts_audio_chunks(text, voice_id):
-            chunks.append(chunk)
-    return chunks
+    async with _tts_semaphore:
+        chunks: list[bytes] = []
+        try:
+            async for chunk in tts_audio_chunks_cartesia(text, voice_id):
+                chunks.append(chunk)
+        except Exception:
+            async for chunk in tts_audio_chunks(text, voice_id):
+                chunks.append(chunk)
+        return chunks
 
 
 async def _generate_and_send_video(
