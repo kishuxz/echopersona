@@ -226,39 +226,23 @@ export function LandingPage() {
             Built on Groq, ElevenLabs, and RAG — the fastest stack available
           </p>
 
-          <div className="flex flex-col items-center gap-4 md:flex-row md:items-stretch md:justify-center">
+          <div className="flex flex-col items-center gap-4 md:flex-row md:items-center md:justify-center">
             {[
               { label: 'Hear you',  time: '~240ms', sub: 'Speech recognition' },
               { label: 'Thinks',   time: '~340ms', sub: 'LLM + memory recall' },
               { label: 'Responds', time: '~1s',    sub: 'Voice synthesis' },
             ].map(({ label, time, sub }, i) => (
-              <div key={label} className="flex flex-col items-center gap-2 flex-1">
-                {i > 0 && (
-                  <div className="hidden md:flex absolute items-center">
-                    <span className="text-white/20 text-xl">→</span>
-                  </div>
-                )}
-                <div className="w-full max-w-[180px] rounded-xl border border-white/10 bg-white/5 p-5 text-center">
+              <>
+                <div key={label} className="w-full max-w-[180px] rounded-xl border border-white/10 bg-white/5 p-5 text-center">
                   <p className="font-sans text-xs uppercase tracking-widest text-white/40 mb-1">{sub}</p>
                   <p className="font-fraunces text-xl font-semibold text-white">{label}</p>
                   <p className="mt-2 font-mono text-lg text-green">{time}</p>
                 </div>
                 {i < 2 && (
-                  <div className="hidden md:block text-white/20 text-2xl absolute" style={{ transform: 'translateX(196px)' }}>→</div>
+                  <span key={`arrow-${i}`} className="text-2xl font-mono text-green/60 hidden md:block">→</span>
                 )}
-              </div>
+              </>
             ))}
-          </div>
-
-          {/* Arrow connectors */}
-          <div className="mt-6 hidden md:flex items-center justify-center gap-4">
-            <div className="flex items-center gap-2 text-white/20 font-mono text-xs">
-              <span>240ms</span>
-              <span>→</span>
-              <span>+340ms</span>
-              <span>→</span>
-              <span>+1s total</span>
-            </div>
           </div>
         </div>
       </section>
