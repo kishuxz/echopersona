@@ -15,5 +15,6 @@ class Persona(PersonaCreate):
     user_id: str
     voice_id: str | None = None
     did_avatar_url: str | None = None
+    idle_video_url: str | None = None
     simli_face_id: str | None = None
     created_at: datetime | None = None

@@ -23,6 +23,7 @@ export interface Persona extends PersonaCreate {
   user_id: string;
   voice_id?: string | null;
   did_avatar_url?: string | null;
+  idle_video_url?: string | null;
   simli_face_id?: string | null;
   created_at?: string;
 }

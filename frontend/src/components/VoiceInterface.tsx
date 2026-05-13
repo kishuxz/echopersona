@@ -11,6 +11,7 @@ interface VoiceInterfaceProps {
   personaId?: string;
   personaName?: string;
   simli_face_id?: string | null;
+  idleVideoUrl?: string | null;
   onLatencyUpdate: (latency: LatencySnapshot) => void;
 }
 
@@ -53,7 +54,7 @@ function PipelineBar({ stage }: { stage: Stage }) {
 }
 
 // ── Main component ─────────────────────────────────────────────────────────
-export function VoiceInterface({ sessionId, personaId, personaName, simli_face_id, onLatencyUpdate }: VoiceInterfaceProps) {
+export function VoiceInterface({ sessionId, personaId, personaName, simli_face_id, idleVideoUrl, onLatencyUpdate }: VoiceInterfaceProps) {
   const { connect, sendJson, sendBinary } = useWebSocket();
   const simliAvatar = useSimliAvatar();
 
@@ -349,7 +350,7 @@ export function VoiceInterface({ sessionId, personaId, personaName, simli_face_i
             muted
           />
 
-          {/* D-ID pre-rendered video — shown only when Simli is not live */}
+          {/* D-ID response video — shown when video_ready arrives; returns to idle on end */}
           {!simliAvatar.isConnected && videoUrl && (
             <video
               ref={videoRef}
@@ -358,12 +359,25 @@ export function VoiceInterface({ sessionId, personaId, personaName, simli_face_i
               autoPlay
               playsInline
               muted={false}
+              onEnded={() => setVideoUrl(null)}
               onError={(e) => console.error("[VIDEO] playback error:", e)}
             />
           )}
 
+          {/* Idle loop — plays while waiting for a response video */}
+          {!simliAvatar.isConnected && !videoUrl && idleVideoUrl && (
+            <video
+              src={idleVideoUrl}
+              className="h-32 w-32 rounded-full border-2 border-green object-cover"
+              autoPlay
+              loop
+              playsInline
+              muted
+            />
+          )}
+
           {/* Letter / spinner placeholder — shown when neither avatar is active */}
-          {!simliAvatar.isConnected && !videoUrl && (
+          {!simliAvatar.isConnected && !videoUrl && !idleVideoUrl && (
             <div
               className="flex h-32 w-32 items-center justify-center rounded-full border-2 bg-surface"
               style={{ borderColor: connected ? "#00ff88" : "#1e1e1e" }}
@@ -381,7 +395,7 @@ export function VoiceInterface({ sessionId, personaId, personaName, simli_face_i
             </div>
           )}
 
-          {videoLoading && !videoUrl && !simliAvatar.isConnected && connected && (
+          {videoLoading && !videoUrl && !idleVideoUrl && !simliAvatar.isConnected && connected && (
             <p className="font-mono text-[9px] uppercase tracking-widest text-textdim">
               generating video…
             </p>
