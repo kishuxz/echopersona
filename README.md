@@ -136,6 +136,23 @@ npm run dev          # → http://localhost:5173
 
 ---
 
+## Deployment
+
+EchoPersona is deployed on a Hostinger VPS (Ubuntu 24, 2 vCPU, 8GB RAM)
+at [kishoreai.online](https://kishoreai.online).
+
+Stack:
+- Docker Compose orchestrates backend (FastAPI), frontend (nginx), and Redis
+- nginx reverse proxy handles SSL termination and routes /ws/, /api/, and /audio/
+- SSL via Let's Encrypt
+- Backend serves the real-time WebSocket pipeline
+- Static frontend assets served by nginx with cache headers
+
+The VPS deployment handles the full production stack with zero managed
+infrastructure — no cloud functions, no managed databases beyond Supabase.
+
+---
+
 ## Environment Variables
 
 Copy `.env.example` to `.env`. Minimum required for live mode:
