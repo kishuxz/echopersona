@@ -62,9 +62,9 @@ export function LandingPage() {
             {/* Portrait card */}
             <div className="relative w-full overflow-hidden rounded-2xl shadow-card-hover" style={{ height: '320px' }}>
               <img
-                src="https://images.unsplash.com/photo-1566616213894-2d4e1baee5d8?w=300&q=80"
+                src="https://api.dicebear.com/7.x/personas/svg?seed=GrandpaJoe&backgroundColor=b6e3f4&hair=shortCurly&eyes=happy&mouth=smile"
+                className="w-full h-[320px] object-cover rounded-2xl"
                 alt="Grandpa Joe"
-                className="h-full w-full object-cover"
               />
               {/* Live badge */}
               <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-black/40 px-2.5 py-1 backdrop-blur-sm">
@@ -94,12 +94,11 @@ export function LandingPage() {
               {/* Persona bubble */}
               <div className="float-b self-start max-w-[90%]">
                 <div className="mb-1 flex items-center gap-1.5">
-                  <div
-                    className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full font-mono text-[10px] font-semibold"
-                    style={{ backgroundColor: '#F0EDE8', color: '#18181B' }}
-                  >
-                    GJ
-                  </div>
+                  <img
+                    src="https://api.dicebear.com/7.x/personas/svg?seed=GrandpaJoe&backgroundColor=b6e3f4"
+                    className="w-7 h-7 rounded-full"
+                    alt="GJ"
+                  />
                   <span className="font-mono text-[10px] text-muted">Grandpa Joe</span>
                 </div>
                 <div className="rounded-2xl rounded-bl-sm border border-border bg-surface px-4 py-3 shadow-card-hover">
