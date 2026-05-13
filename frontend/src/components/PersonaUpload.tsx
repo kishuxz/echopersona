@@ -8,6 +8,49 @@ interface PersonaUploadProps {
   activePersona?: Persona | null;
 }
 
+type FormStep = "profile" | "voice" | "photo" | "done";
+
+const STEPS: { key: FormStep; label: string }[] = [
+  { key: "profile", label: "Profile" },
+  { key: "voice",   label: "Voice"   },
+  { key: "photo",   label: "Photo"   },
+  { key: "done",    label: "Done"    },
+];
+
+function StepIndicator({ current }: { current: FormStep }) {
+  const currentIdx = STEPS.findIndex((s) => s.key === current);
+  return (
+    <div className="flex items-center gap-0 mb-6">
+      {STEPS.map((s, i) => {
+        const done    = i < currentIdx;
+        const active  = i === currentIdx;
+        return (
+          <div key={s.key} className="flex flex-1 flex-col items-center gap-1">
+            <div className="flex w-full items-center">
+              {i > 0 && <div className={`flex-1 h-px ${done ? "bg-green" : "bg-border"}`} />}
+              <div
+                className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border-2 text-[10px] font-medium transition-all duration-200 ${
+                  done
+                    ? "border-green bg-green text-white"
+                    : active
+                    ? "border-accent bg-accent text-white"
+                    : "border-border bg-surface text-muted"
+                }`}
+              >
+                {done ? "✓" : i + 1}
+              </div>
+              {i < STEPS.length - 1 && <div className={`flex-1 h-px ${done ? "bg-green" : "bg-border"}`} />}
+            </div>
+            <span className={`font-sans text-[9px] uppercase tracking-widest ${active ? "text-text" : "text-muted"}`}>
+              {s.label}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) {
   const [name, setName] = useState("Demo Persona");
   const [stories, setStories] = useState(["They love explaining technical systems clearly and briefly."]);
@@ -43,19 +86,25 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
+  // Derive current step for the indicator
+  const currentStep: FormStep = (() => {
+    if (!showForm) return "done";
+    if (voiceFiles.length > 0 || voiceStatus === "cloned") return "photo";
+    if (name.trim().length > 2 && stories.some(s => s.trim().length > 0)) return "voice";
+    return "profile";
+  })();
+
   const updateAvatarFile = (file: File | null) => {
     avatarFileRef.current = file;
     setAvatarFile(file);
   };
 
-  // Recording duration timer — resets when recording stops
   useEffect(() => {
     if (!isRecording) { setRecordingDuration(0); return; }
     const interval = setInterval(() => setRecordingDuration(d => d + 1), 1000);
     return () => clearInterval(interval);
   }, [isRecording]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       streamRef.current?.getTracks().forEach(t => t.stop());
@@ -168,7 +217,6 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
     canvasRef.current.toBlob((blob) => {
       if (!blob) return;
       const file = new File([blob], `avatar-${Date.now()}.jpg`, { type: "image/jpeg" });
-      console.log('[AVATAR] setAvatarFile called with:', file.name, file.size);
       updateAvatarFile(file);
       setAvatarPreview(snapshotUrl);
     }, "image/jpeg", 0.9);
@@ -210,7 +258,6 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
       }
 
       const fileToUpload = avatarFileRef.current ?? avatarFile;
-      console.log('[BUILD] avatarFile:', avatarFile?.name ?? null, '| ref:', avatarFileRef.current?.name ?? null);
       if (fileToUpload) {
         try {
           persona = await uploadAvatar(persona.id, fileToUpload);
@@ -267,7 +314,7 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <span className="font-sans text-[10px] font-medium uppercase tracking-[0.2em] text-muted">
-          Persona
+          New Persona
         </span>
         {activePersona && (
           <div className="flex items-center gap-2">
@@ -305,6 +352,9 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
 
       {showForm && (
         <div className="flex flex-col gap-4 p-4">
+
+          {/* Step indicator */}
+          <StepIndicator current={currentStep} />
 
           {/* 01 Name */}
           <div>
@@ -346,6 +396,9 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
           <div>
             {sectionNum("04")}
             <label className={labelCls}>Memory stories</label>
+            <p className="mb-2 font-sans text-[10px] text-muted">
+              The more memories you share, the more alive they feel
+            </p>
             <div className="flex flex-col gap-2">
               {stories.map((story, i) => (
                 <div key={i} className="relative">
@@ -381,6 +434,9 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
           <div>
             {sectionNum("05")}
             <label className={labelCls}>Voice samples (optional)</label>
+            <p className="mb-2 font-sans text-[10px] text-muted">
+              30 seconds of audio is enough to capture a voice forever
+            </p>
 
             {/* Tab switcher */}
             <div className="mb-2 flex gap-1 rounded-lg border border-border p-0.5">
@@ -560,7 +616,7 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
                     <img
                       src={capturedImage}
                       alt="Captured"
-                      className="h-32 w-32 rounded-full border-2 border-green/50 object-cover"
+                      className="h-28 w-28 rounded-full border-2 border-green/50 object-cover"
                     />
                     <div className="flex items-center gap-3">
                       <button
@@ -598,7 +654,7 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
                     <img
                       src={avatarPreview}
                       alt="Avatar preview"
-                      className="h-20 w-20 rounded-full object-cover"
+                      className="h-24 w-24 rounded-full border-2 border-green/30 object-cover shadow-card"
                     />
                   ) : (
                     <>
@@ -612,7 +668,6 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
                     className="hidden"
                     onChange={(e) => {
                       const f = e.target.files?.[0] ?? null;
-                      console.log('[AVATAR] setAvatarFile called with:', f?.name, f?.size);
                       updateAvatarFile(f);
                       if (f) setAvatarPreview(URL.createObjectURL(f));
                       else setAvatarPreview(null);
@@ -644,7 +699,7 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
           {error && <p className="font-sans text-sm text-red">{error}</p>}
 
           <button
-            className="mt-1 w-full rounded-lg py-3 font-sans text-sm font-medium text-white transition-opacity disabled:opacity-40"
+            className="group mt-1 w-full rounded-xl py-3 font-sans text-sm font-medium text-white transition-all disabled:opacity-40"
             style={{ background: busy ? "#52525B" : "#18181B" }}
             onClick={submit}
             disabled={busy}
@@ -658,7 +713,10 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
                 Building persona…
               </span>
             ) : (
-              "Build Persona"
+              <span className="inline-flex items-center gap-1.5">
+                Bring them to life
+                <span className="transition-transform duration-200 group-hover:translate-x-1">→</span>
+              </span>
             )}
           </button>
         </div>

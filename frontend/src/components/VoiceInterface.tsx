@@ -9,11 +9,13 @@ interface VoiceInterfaceProps {
   sessionId: string;
   personaId?: string;
   personaName?: string;
+  personaTraits?: string[];
+  storyCount?: number;
   idleVideoUrl?: string | null;
+  avatarUrl?: string | null;
   onLatencyUpdate: (latency: LatencySnapshot) => void;
 }
 
-// ── Pipeline stage display ─────────────────────────────────────────────────
 type Stage = "idle" | "recording" | "STT" | "LLM" | "TTS";
 const STAGES: { key: Stage; label: string }[] = [
   { key: "STT",  label: "STT" },
@@ -25,7 +27,7 @@ const STAGES: { key: Stage; label: string }[] = [
 function PipelineBar({ stage }: { stage: Stage }) {
   const activeIndex = STAGES.findIndex((s) => s.key === stage);
   return (
-    <div className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-widest">
+    <div className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-widest text-muted">
       {STAGES.map((s, i) => {
         const isActive   = s.key === stage;
         const isDone     = activeIndex > i && stage !== "idle";
@@ -34,9 +36,7 @@ function PipelineBar({ stage }: { stage: Stage }) {
         return (
           <div key={s.key} className="flex items-center gap-1.5">
             {i > 0 && (
-              <span className={`transition-colors duration-300 ${
-                isComplete || isActive ? "text-green/40" : "text-muted/30"
-              }`}>→</span>
+              <span className={`transition-colors duration-300 ${isComplete || isActive ? "text-green/40" : "text-muted/30"}`}>→</span>
             )}
             <span className={`flex items-center gap-0.5 transition-colors duration-200 ${
               isActive ? "text-green" : isComplete ? "text-muted" : "text-muted/40"
@@ -57,8 +57,16 @@ function PipelineBar({ stage }: { stage: Stage }) {
   );
 }
 
-// ── Main component ─────────────────────────────────────────────────────────
-export function VoiceInterface({ sessionId, personaId, personaName, idleVideoUrl, onLatencyUpdate }: VoiceInterfaceProps) {
+export function VoiceInterface({
+  sessionId,
+  personaId,
+  personaName,
+  personaTraits = [],
+  storyCount = 0,
+  idleVideoUrl,
+  avatarUrl,
+  onLatencyUpdate,
+}: VoiceInterfaceProps) {
   const { connect, sendJson, sendBinary } = useWebSocket();
 
   const [items, setItems]               = useState<TranscriptItem[]>([]);
@@ -69,19 +77,19 @@ export function VoiceInterface({ sessionId, personaId, personaName, idleVideoUrl
   const [isProcessing, setIsProcessing] = useState(false);
   const [videoUrl, setVideoUrl]         = useState<string | null>(null);
   const [videoLoading, setVideoLoading] = useState(false);
+  const [lastResponseMs, setLastResponseMs] = useState<number | null>(null);
   const videoRef       = useRef<HTMLVideoElement>(null);
   const isRecordingRef = useRef(false);
 
-  // Latency tracing refs — reset each turn
+  // Latency tracing refs
   const turnStartRef         = useRef<number>(0);
   const firstTokenLoggedRef  = useRef<boolean>(false);
   const firstAudioLoggedRef  = useRef<boolean>(false);
 
-  // Playback — lazy AudioContext, per-sentence chunk buffer, gapless scheduler
+  // Playback
   const playbackCtxRef    = useRef<AudioContext | null>(null);
   const sentenceChunksRef = useRef<Uint8Array[]>([]);
   const nextPlayAtRef     = useRef<number>(0);
-  // Serialise playSentence calls so s2 chunks can't be decoded before s1 finishes
   const playbackLockRef   = useRef<Promise<void>>(Promise.resolve());
 
   function receiveChunk(base64data: string) {
@@ -111,21 +119,12 @@ export function VoiceInterface({ sessionId, personaId, personaName, idleVideoUrl
       const startAt = Math.max(nextPlayAtRef.current, ctx.currentTime);
       source.start(startAt);
       nextPlayAtRef.current = startAt + audioBuffer.duration;
-      console.log("[AUDIO] sentence scheduled, duration:", audioBuffer.duration.toFixed(2), "s");
     } catch (e) {
       console.error("[AUDIO] decodeAudioData failed:", e);
     }
   }
 
-  const handleConnect = async () => {
-    if (isConnecting) return;
-    setIsConnecting(true);
-    setIsProcessing(false);
-    setIsRecording(false);
-    isRecordingRef.current    = false;
-    sentenceChunksRef.current = [];
-    nextPlayAtRef.current     = 0;
-
+  const doConnect = async (retryCount = 0) => {
     let wsUrl: string;
     try {
       wsUrl = personaId
@@ -136,6 +135,7 @@ export function VoiceInterface({ sessionId, personaId, personaName, idleVideoUrl
       setIsConnecting(false);
       return;
     }
+
     const ws = connect(wsUrl);
     if (!ws) { setIsConnecting(false); return; }
 
@@ -154,18 +154,25 @@ export function VoiceInterface({ sessionId, personaId, personaName, idleVideoUrl
       setIsProcessing(false);
       setIsRecording(false);
       isRecordingRef.current = false;
+
+      // Auto-retry once on unexpected close during initial connection
+      if (retryCount === 0 && e.code !== 1000) {
+        console.log("[WS] retrying in 1s...");
+        setTimeout(() => {
+          setIsConnecting(true);
+          doConnect(1);
+        }, 1000);
+      }
     };
 
     ws.onmessage = async (event) => {
       const message = JSON.parse(event.data);
-      console.log("[WS] message received:", message.type, Object.keys(message));
 
       if (message.type === "transcript") {
         const now = Date.now();
         turnStartRef.current        = now;
         firstTokenLoggedRef.current = false;
         firstAudioLoggedRef.current = false;
-        console.log(`[${now}] STT transcript received: "${message.text}" | stt_latency=${message.latency_ms}ms`);
         setStage("LLM");
         setVideoLoading(true);
         setItems((current) => [...current, { role: "user", text: message.text }]);
@@ -175,7 +182,6 @@ export function VoiceInterface({ sessionId, personaId, personaName, idleVideoUrl
       }
 
       if (message.type === "video_ready") {
-        console.log("[VIDEO] video_ready:", message.url);
         setVideoUrl(message.url);
         setVideoLoading(false);
       }
@@ -183,7 +189,6 @@ export function VoiceInterface({ sessionId, personaId, personaName, idleVideoUrl
       if (message.type === "llm_token") {
         if (!firstTokenLoggedRef.current) {
           firstTokenLoggedRef.current = true;
-          console.log(`[${Date.now()}] First LLM token | since transcript: ${Date.now() - turnStartRef.current}ms`);
         }
         setStage("TTS");
         setItems((current) => {
@@ -197,19 +202,16 @@ export function VoiceInterface({ sessionId, personaId, personaName, idleVideoUrl
       if (message.type === "audio_chunk") {
         if (!firstAudioLoggedRef.current) {
           firstAudioLoggedRef.current = true;
-          console.log(`[${Date.now()}] First audio chunk | since transcript: ${Date.now() - turnStartRef.current}ms`);
         }
         receiveChunk(message.data);
       }
 
       if (message.type === "sentence_end") {
-        console.log("[AUDIO] sentence_end — scheduling sentence playback");
         playbackLockRef.current = playbackLockRef.current.then(() => playSentence());
         await playbackLockRef.current;
       }
 
       if (message.type === "audio_end") {
-        console.log("[AUDIO] audio_end — flushing final sentence");
         playbackLockRef.current = playbackLockRef.current.then(() => playSentence());
         await playbackLockRef.current;
         setIsProcessing(false);
@@ -223,13 +225,25 @@ export function VoiceInterface({ sessionId, personaId, personaName, idleVideoUrl
       }
 
       if (message.type === "latency_summary") {
-        console.log(
-          `[${Date.now()}] Latency summary | STT=${message.stt_ms}ms | LLM=${message.llm_first_token_ms}ms | TTS=${message.tts_first_audio_ms}ms | Total=${message.total_ms}ms`,
-        );
+        setLastResponseMs(message.total_ms);
         setStage("idle");
         onLatencyUpdate({ timestamp: Date.now(), ...message });
       }
     };
+  };
+
+  const handleConnect = async () => {
+    if (isConnecting) return;
+    setIsConnecting(true);
+    setIsProcessing(false);
+    setIsRecording(false);
+    isRecordingRef.current    = false;
+    sentenceChunksRef.current = [];
+    nextPlayAtRef.current     = 0;
+
+    // 500ms delay before first connect to avoid race on page load
+    await new Promise((r) => setTimeout(r, 500));
+    doConnect(0);
   };
 
   const recorder = useAudioRecorder((pcm) => sendBinary(pcm));
@@ -259,187 +273,182 @@ export function VoiceInterface({ sessionId, personaId, personaName, idleVideoUrl
     setStage("STT");
   };
 
-  console.log("[STATE] isRecording:", isRecording, "isProcessing:", isProcessing, "connected:", connected);
-
-  // ── Derived UI state ──────────────────────────────────────────────────
-  const micBg    = isProcessing ? "#2563EB" : isRecording ? "#16A34A" : "#18181B";
-  const micScale = isRecording ? "scale-105" : "";
+  const micBg = isProcessing ? "#2563EB" : isRecording ? "#16A34A" : "#18181B";
 
   return (
-    <div className="flex flex-col gap-4 lg:flex-row">
+    <div className="flex flex-col gap-0 overflow-hidden rounded-2xl border border-border bg-surface shadow-card lg:flex-row" style={{ minHeight: '520px' }}>
 
-      {/* ── Voice control panel ── */}
-      <div className="flex min-h-[340px] flex-col items-center gap-5 rounded-xl border border-border bg-surface p-6 shadow-card lg:w-64 lg:flex-shrink-0">
+      {/* ── LEFT PANEL — Avatar + Controls (40%) ── */}
+      <div className="flex flex-col items-center gap-5 border-b border-border bg-elevated p-6 lg:w-[40%] lg:border-b-0 lg:border-r">
 
-        {/* Avatar / video display */}
-        <div className="flex flex-col items-center gap-2">
-          <div className={`rounded-full ${
-            isRecording ? "avatar-speaking" : connected ? "avatar-idle" : "avatar-disconnected"
-          }`}>
-            {/* 1. D-ID response video */}
-            {videoUrl && (
-              <video
-                ref={videoRef}
-                src={videoUrl}
-                className="h-40 w-40 rounded-full object-cover"
-                autoPlay
-                playsInline
-                muted={false}
-                onEnded={() => setVideoUrl(null)}
-                onError={(e) => console.error("[VIDEO] playback error:", e)}
+        {/* Portrait avatar */}
+        <div className="relative w-full max-w-[260px] overflow-hidden rounded-2xl shadow-card-hover" style={{ aspectRatio: '3/4' }}>
+          {/* D-ID response video */}
+          {videoUrl && (
+            <video
+              ref={videoRef}
+              src={videoUrl}
+              className="h-full w-full object-cover"
+              autoPlay
+              playsInline
+              muted={false}
+              onEnded={() => setVideoUrl(null)}
+              onError={(e) => console.error("[VIDEO] playback error:", e)}
+            />
+          )}
+
+          {/* Idle loop video */}
+          {!videoUrl && idleVideoUrl && (
+            <video
+              src={idleVideoUrl}
+              className="h-full w-full object-cover"
+              autoPlay
+              loop
+              playsInline
+              muted
+            />
+          )}
+
+          {/* Static avatar photo */}
+          {!videoUrl && !idleVideoUrl && avatarUrl && (
+            <img
+              src={avatarUrl}
+              alt={personaName ?? "Persona"}
+              className="h-full w-full object-cover"
+              style={{ filter: 'blur(0px)' }}
+            />
+          )}
+
+          {/* Letter / spinner placeholder */}
+          {!videoUrl && !idleVideoUrl && !avatarUrl && (
+            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-cream to-elevated">
+              {videoLoading ? (
+                <svg className="h-8 w-8 animate-spin text-green" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2.5" />
+                  <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              ) : (
+                <span className="font-fraunces text-6xl font-semibold text-text/20">
+                  {personaName?.[0]?.toUpperCase() ?? "?"}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Live indicator overlay */}
+          {connected && (
+            <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-black/40 px-2.5 py-1 backdrop-blur-sm">
+              <span
+                className="h-1.5 w-1.5 rounded-full bg-green"
+                style={{ animation: "blink 1s step-end infinite" }}
               />
-            )}
-
-            {/* 2. Idle loop */}
-            {!videoUrl && idleVideoUrl && (
-              <video
-                src={idleVideoUrl}
-                className="h-40 w-40 rounded-full object-cover"
-                autoPlay
-                loop
-                playsInline
-                muted
-              />
-            )}
-
-            {/* 3. Letter / spinner placeholder */}
-            {!videoUrl && !idleVideoUrl && (
-              <div className="flex h-40 w-40 items-center justify-center rounded-full bg-elevated">
-                {videoLoading ? (
-                  <svg className="h-7 w-7 animate-spin text-green" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2.5" />
-                    <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                ) : (
-                  <span className="font-fraunces text-3xl font-semibold text-muted">
-                    {personaName?.[0]?.toUpperCase() ?? "?"}
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-
-          {videoLoading && !videoUrl && !idleVideoUrl && connected && (
-            <p className="font-sans text-[10px] text-muted">
-              generating video…
-            </p>
+              <span className="font-sans text-[10px] font-medium text-white">Live</span>
+            </div>
           )}
         </div>
 
-        {/* Connection status */}
-        <div className="flex w-full items-center justify-between border-t border-border pt-3">
-          <span className="font-sans text-[10px] uppercase tracking-[0.2em] text-muted">Status</span>
-          <div className="flex items-center gap-1.5">
-            <span
-              className="h-1.5 w-1.5 rounded-full"
-              style={{
-                background: connected ? "#16A34A" : "#D4D4D8",
-                animation: connected ? "blink 1s step-end infinite" : "none",
-              }}
-            />
-            <span
-              className="font-sans text-[10px] font-medium"
-              style={{ color: connected ? "#16A34A" : "#A1A1AA" }}
-            >
-              {connected ? "Live" : "Offline"}
-            </span>
-          </div>
-        </div>
-
-        {/* Mic button area */}
-        {!connected ? (
-          <button
-            className="w-full rounded-lg bg-accent py-3 font-sans text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-            onClick={handleConnect}
-            disabled={isConnecting}
-          >
-            {isConnecting ? (
-              <span className="flex items-center justify-center gap-2">
-                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                  <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                Connecting…
-              </span>
-            ) : (
-              "Start Session"
-            )}
-          </button>
-        ) : (
-          <>
-            {/* Instruction text */}
-            <p className="font-sans text-[11px] text-muted transition-colors">
-              {isProcessing ? "Processing…" : isRecording ? "Listening…" : "Hold to speak"}
-            </p>
-
-            {/* Mic button with pulse ring */}
-            <div className="relative flex items-center justify-center">
-              {isRecording && (
-                <div
-                  className="absolute h-28 w-28 rounded-full border border-green/30"
-                  style={{ animation: "ping-ring 1.2s ease-out infinite" }}
-                />
-              )}
-
-              <button
-                onMouseDown={handleMicMouseDown}
-                onMouseUp={handleMicMouseUp}
-                onMouseLeave={handleMicMouseUp}
-                onTouchStart={(e) => { e.preventDefault(); handleMicMouseDown(); }}
-                onTouchEnd={(e)   => { e.preventDefault(); handleMicMouseUp(); }}
-                disabled={isProcessing}
-                className={`relative z-10 flex h-24 w-24 items-center justify-center rounded-full transition-all duration-150 ${micScale}`}
-                style={{
-                  backgroundColor: micBg,
-                  cursor: isProcessing ? "not-allowed" : "pointer",
-                }}
-              >
-                {isProcessing ? (
-                  <svg className="h-7 w-7 animate-spin text-white" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                    <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                ) : (
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="white"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="h-8 w-8"
-                  >
-                    <rect x="9" y="2" width="6" height="12" rx="3" />
-                    <path d="M5 10a7 7 0 0014 0" />
-                    <line x1="12" y1="19" x2="12" y2="23" />
-                    <line x1="8"  y1="23" x2="16" y2="23" />
-                  </svg>
-                )}
-              </button>
-            </div>
-
-            {/* Waveform (recording) */}
-            {isRecording && (
-              <div className="flex items-center gap-0.5">
-                {Array.from({ length: 18 }).map((_, i) => (
-                  <span
-                    key={i}
-                    className="wave-bar"
-                    style={{ animationDelay: `${i * 45}ms` }}
-                  />
+        {/* Persona name + traits */}
+        {personaName && (
+          <div className="w-full max-w-[260px] text-center">
+            <h3 className="font-fraunces text-xl font-semibold text-text">{personaName}</h3>
+            {personaTraits.length > 0 && (
+              <div className="mt-2 flex flex-wrap justify-center gap-1.5">
+                {personaTraits.slice(0, 3).map((t) => (
+                  <span key={t} className="rounded-full bg-cream px-2.5 py-0.5 font-sans text-[10px] text-textdim">
+                    {t}
+                  </span>
                 ))}
               </div>
             )}
-
-            {/* Pipeline bar */}
-            <PipelineBar stage={stage} />
-          </>
+          </div>
         )}
+
+        {/* Controls */}
+        <div className="flex w-full max-w-[260px] flex-col items-center gap-4">
+          {!connected ? (
+            <button
+              className="w-full rounded-xl bg-accent py-3 font-sans text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+              onClick={handleConnect}
+              disabled={isConnecting}
+            >
+              {isConnecting ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                    <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Connecting…
+                </span>
+              ) : (
+                "Start Session"
+              )}
+            </button>
+          ) : (
+            <>
+              <p className="font-sans text-[11px] text-muted">
+                {isProcessing ? "Processing…" : isRecording ? "Listening…" : "Hold to speak"}
+              </p>
+
+              {/* Mic button */}
+              <div className="relative flex items-center justify-center">
+                {isRecording && (
+                  <div
+                    className="absolute h-28 w-28 rounded-full border border-green/30"
+                    style={{ animation: "ping-ring 1.2s ease-out infinite" }}
+                  />
+                )}
+                <button
+                  onMouseDown={handleMicMouseDown}
+                  onMouseUp={handleMicMouseUp}
+                  onMouseLeave={handleMicMouseUp}
+                  onTouchStart={(e) => { e.preventDefault(); handleMicMouseDown(); }}
+                  onTouchEnd={(e)   => { e.preventDefault(); handleMicMouseUp(); }}
+                  disabled={isProcessing}
+                  className={`relative z-10 flex h-20 w-20 items-center justify-center rounded-full transition-all duration-150 ${isRecording ? "scale-105" : ""}`}
+                  style={{ backgroundColor: micBg, cursor: isProcessing ? "not-allowed" : "pointer" }}
+                >
+                  {isProcessing ? (
+                    <svg className="h-6 w-6 animate-spin text-white" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                      <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7">
+                      <rect x="9" y="2" width="6" height="12" rx="3" />
+                      <path d="M5 10a7 7 0 0014 0" />
+                      <line x1="12" y1="19" x2="12" y2="23" />
+                      <line x1="8"  y1="23" x2="16" y2="23" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+
+              {/* Waveform */}
+              {isRecording && (
+                <div className="flex items-center gap-0.5">
+                  {Array.from({ length: 14 }).map((_, i) => (
+                    <span key={i} className="wave-bar" style={{ animationDelay: `${i * 45}ms` }} />
+                  ))}
+                </div>
+              )}
+
+              {/* Pipeline status */}
+              <PipelineBar stage={stage} />
+            </>
+          )}
+        </div>
       </div>
 
-      {/* ── Conversation log ── */}
-      <div className="min-h-[340px] flex-1">
-        <ConversationLog items={items} draft="" />
+      {/* ── RIGHT PANEL — Conversation (60%) ── */}
+      <div className="flex flex-1 flex-col lg:w-[60%]">
+        <ConversationLog
+          items={items}
+          draft=""
+          personaName={personaName}
+          lastResponseMs={lastResponseMs}
+          hasVoice={Boolean(personaId)}
+          storyCount={storyCount}
+        />
       </div>
     </div>
   );

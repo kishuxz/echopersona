@@ -21,6 +21,7 @@ export default {
         textdim:     "#52525B",
         textfaint:   "#A1A1AA",
         yellow:      "#D97706",
+        ink:         "#0F0F0E",
       },
       fontFamily: {
         fraunces: ["Fraunces", "Georgia", "serif"],
@@ -54,6 +55,18 @@ export default {
           "0%":   { opacity: "0" },
           "100%": { opacity: "1" },
         },
+        "float-a": {
+          "0%, 100%": { transform: "translateY(0px)" },
+          "50%":      { transform: "translateY(-10px)" },
+        },
+        "float-b": {
+          "0%, 100%": { transform: "translateY(0px)" },
+          "50%":      { transform: "translateY(8px)" },
+        },
+        shimmer: {
+          "0%":   { backgroundPosition: "-200% center" },
+          "100%": { backgroundPosition: "200% center" },
+        },
       },
       animation: {
         "ping-ring":       "ping-ring 1.2s ease-out infinite",
@@ -62,6 +75,8 @@ export default {
         "avatar-idle":     "avatar-idle 3s ease-in-out infinite",
         "avatar-speaking": "avatar-speaking 0.9s ease-in-out infinite",
         "fade-in":         "fade-in 0.2s ease-out both",
+        "float-a":         "float-a 4s ease-in-out infinite",
+        "float-b":         "float-b 5s ease-in-out 0.8s infinite",
       },
       boxShadow: {
         "card":      "0 1px 2px rgba(0,0,0,0.05)",

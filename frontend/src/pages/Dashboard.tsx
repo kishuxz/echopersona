@@ -37,19 +37,35 @@ export function Dashboard() {
     navigate('/login')
   }
 
+  const firstName = user?.email?.split('@')[0]?.split('.')[0] ?? ''
+  const displayName = firstName.charAt(0).toUpperCase() + firstName.slice(1)
+
   return (
     <div className="min-h-screen bg-bg text-text">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border bg-surface px-8 py-4 shadow-card">
         <div>
-          <h1 className="font-fraunces text-xl font-semibold text-text">
-            EchoPersona
-          </h1>
-          <p className="font-sans text-xs text-muted">{user?.email}</p>
+          <div className="flex items-center gap-4">
+            <button
+              className="font-sans text-sm text-muted transition-colors hover:text-text"
+              onClick={() => navigate('/')}
+            >
+              ← Home
+            </button>
+            <span className="text-border">|</span>
+            <h1 className="font-fraunces text-xl font-semibold text-text">
+              EchoPersona
+            </h1>
+          </div>
+          {displayName && (
+            <p className="mt-0.5 font-fraunces text-sm italic text-textdim">
+              Welcome back, {displayName}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-4">
           <button
-            className="rounded-lg bg-accent px-4 py-2 font-sans text-sm font-medium text-white transition-opacity hover:opacity-90"
+            className="btn-shimmer rounded-lg px-4 py-2 font-sans text-sm font-medium text-white"
             onClick={() => setShowCreate(true)}
           >
             + New Persona
@@ -65,8 +81,8 @@ export function Dashboard() {
 
       <div className="mx-auto max-w-6xl px-8 py-8">
         {showCreate && (
-          <div className="mb-8">
-            <div className="mb-3 flex items-center justify-between">
+          <div className="mb-10">
+            <div className="mb-4 flex items-center justify-between">
               <h2 className="font-fraunces text-lg font-semibold text-text">
                 Create Persona
               </h2>
@@ -77,7 +93,7 @@ export function Dashboard() {
                 cancel
               </button>
             </div>
-            <div className="max-w-md">
+            <div className="max-w-lg">
               <PersonaUpload onPersona={handlePersonaCreated} />
             </div>
           </div>
@@ -100,17 +116,9 @@ export function Dashboard() {
             <span className="font-sans text-sm text-textdim">Loading personas…</span>
           </div>
         ) : personas.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border bg-surface py-16 text-center shadow-card">
-            <p className="font-sans text-sm text-textdim">No personas yet.</p>
-            <button
-              className="mt-4 font-sans text-sm text-green underline"
-              onClick={() => setShowCreate(true)}
-            >
-              Create your first persona →
-            </button>
-          </div>
+          <EmptyState onCreate={() => setShowCreate(true)} />
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {personas.map((p) => (
               <PersonaCard
                 key={p.id}
@@ -126,6 +134,30 @@ export function Dashboard() {
   )
 }
 
+function EmptyState({ onCreate }: { onCreate: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-surface py-20 text-center shadow-card">
+      {/* Chat bubbles illustration */}
+      <svg width="64" height="48" viewBox="0 0 64 48" fill="none" className="mb-6 text-border">
+        <rect x="0" y="8" width="36" height="24" rx="10" fill="currentColor" />
+        <path d="M10 32 L6 40 L18 32" fill="currentColor" />
+        <rect x="20" y="0" width="44" height="24" rx="10" fill="#E4E4E7" />
+        <path d="M54 24 L58 32 L46 24" fill="#E4E4E7" />
+      </svg>
+      <h3 className="font-fraunces text-xl font-semibold text-text">No one to talk to yet</h3>
+      <p className="mt-2 max-w-xs font-sans text-sm text-textdim">
+        Create a persona from someone's voice, stories, and memories
+      </p>
+      <button
+        className="mt-6 rounded-lg bg-accent px-6 py-2.5 font-sans text-sm font-medium text-white transition-opacity hover:opacity-90"
+        onClick={onCreate}
+      >
+        Create your first persona →
+      </button>
+    </div>
+  )
+}
+
 function PersonaCard({
   persona,
   onTalk,
@@ -135,6 +167,8 @@ function PersonaCard({
   onTalk: () => void
   onDelete: () => void
 }) {
+  const [deleteHovered, setDeleteHovered] = useState(false)
+
   const initials = persona.name
     .split(' ')
     .map((w) => w[0])
@@ -142,65 +176,123 @@ function PersonaCard({
     .slice(0, 2)
     .toUpperCase()
 
-  const createdDate = persona.created_at
-    ? new Date(persona.created_at).toLocaleDateString()
-    : ''
+  const hasPhoto = Boolean(persona.did_avatar_url)
 
   return (
-    <div className="card-hover flex flex-col gap-4 rounded-xl border border-border bg-surface p-5 shadow-card">
-      <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-cream font-sans text-sm font-semibold text-text">
-          {initials}
-        </div>
-        <div className="min-w-0">
-          <p className="font-sans text-sm font-semibold text-text">{persona.name}</p>
-          {createdDate && (
-            <p className="mt-0.5 font-mono text-[10px] text-muted">{createdDate}</p>
-          )}
-        </div>
-      </div>
+    <div
+      className="group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-card transition-all duration-200 hover:scale-[1.02] hover:shadow-card-hover"
+      style={{ minHeight: '220px' }}
+    >
+      {/* Card background — photo or gradient */}
+      {hasPhoto ? (
+        <div className="relative flex-1">
+          <img
+            src={persona.did_avatar_url!}
+            alt={persona.name}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+          {/* Gradient overlay for text readability */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
 
-      <div className="flex flex-wrap gap-1.5">
-        {persona.personality_traits.slice(0, 3).map((t) => (
-          <span
-            key={t}
-            className="rounded-full bg-cream px-2.5 py-0.5 font-sans text-[11px] text-textdim"
+          {/* Content over photo */}
+          <div className="relative flex h-full flex-col justify-end p-5" style={{ minHeight: '220px' }}>
+            {/* Delete button — top right, hover only */}
+            <button
+              className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full bg-black/40 text-white/70 opacity-0 transition-all duration-150 hover:bg-red/80 hover:text-white group-hover:opacity-100"
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              title="Delete persona"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6l-1 14H6L5 6" />
+                <path d="M10 11v6M14 11v6" />
+                <path d="M9 6V4h6v2" />
+              </svg>
+            </button>
+
+            {/* Traits */}
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {persona.personality_traits.slice(0, 3).map((t) => (
+                <span
+                  key={t}
+                  className="rounded-full bg-white/20 px-2.5 py-0.5 font-sans text-[10px] text-white/90 backdrop-blur-sm"
+                >
+                  {t}
+                </span>
+              ))}
+            </div>
+
+            <h3 className="font-fraunces text-2xl font-semibold text-white">{persona.name}</h3>
+
+            <div className="mt-1.5 flex items-center gap-2">
+              {persona.voice_id && (
+                <span className="rounded-full bg-green/80 px-2.5 py-0.5 font-sans text-[10px] text-white">
+                  Voice Cloned
+                </span>
+              )}
+              <span className="font-sans text-[10px] text-white/60">
+                {persona.stories.length} {persona.stories.length === 1 ? 'memory' : 'memories'}
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="relative flex flex-1 flex-col" style={{ minHeight: '220px' }}>
+          {/* Warm gradient placeholder */}
+          <div className="flex flex-1 items-center justify-center bg-gradient-to-br from-cream via-elevated to-surface">
+            <span className="font-fraunces text-5xl font-semibold text-text/20">{initials}</span>
+          </div>
+
+          {/* Delete button — top right, hover only */}
+          <button
+            className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full bg-elevated text-muted opacity-0 transition-all duration-150 hover:bg-red/10 hover:text-red group-hover:opacity-100"
+            onMouseEnter={() => setDeleteHovered(true)}
+            onMouseLeave={() => setDeleteHovered(false)}
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            title="Delete persona"
           >
-            {t}
-          </span>
-        ))}
-      </div>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6l-1 14H6L5 6" />
+              <path d="M10 11v6M14 11v6" />
+              <path d="M9 6V4h6v2" />
+            </svg>
+          </button>
 
-      <div className="flex gap-1.5">
-        <span
-          className={`rounded-full px-2.5 py-0.5 font-sans text-[10px] ${
-            persona.voice_id
-              ? 'bg-green/10 text-green'
-              : 'bg-cream text-muted'
-          }`}
-        >
-          {persona.voice_id ? 'Voice Cloned' : 'Default Voice'}
-        </span>
-        <span className="rounded-full bg-cream px-2.5 py-0.5 font-sans text-[10px] text-muted">
-          {persona.stories.length} {persona.stories.length === 1 ? 'story' : 'stories'}
-        </span>
-      </div>
+          {/* Info area */}
+          <div className="border-t border-border px-5 pb-3 pt-3">
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {persona.personality_traits.slice(0, 3).map((t) => (
+                <span
+                  key={t}
+                  className="rounded-full bg-cream px-2.5 py-0.5 font-sans text-[10px] text-textdim"
+                >
+                  {t}
+                </span>
+              ))}
+            </div>
+            <h3 className="font-fraunces text-xl font-semibold text-text">{persona.name}</h3>
+            <div className="mt-1 flex items-center gap-2">
+              {persona.voice_id && (
+                <span className="rounded-full bg-green/10 px-2.5 py-0.5 font-sans text-[10px] text-green">
+                  Voice Cloned
+                </span>
+              )}
+              <span className="font-sans text-[10px] text-muted">
+                {persona.stories.length} {persona.stories.length === 1 ? 'memory' : 'memories'}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
-      <div className="flex gap-2 border-t border-border pt-3">
-        <button
-          className="flex-1 rounded-lg bg-accent py-2 font-sans text-sm font-medium text-white transition-opacity hover:opacity-90"
-          onClick={onTalk}
-        >
-          Talk Now
-        </button>
-        <button
-          className="rounded-lg border border-border px-3 py-2 font-sans text-sm text-muted transition-colors hover:border-red hover:text-red"
-          onClick={onDelete}
-          title="Delete persona"
-        >
-          Delete
-        </button>
-      </div>
+      {/* Talk Now — full width bottom bar */}
+      <button
+        className="w-full bg-accent py-3 font-sans text-sm font-medium text-white transition-opacity hover:opacity-90"
+        onClick={onTalk}
+      >
+        Talk Now
+      </button>
     </div>
   )
 }

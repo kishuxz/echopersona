@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { LatencyDashboard } from '../components/LatencyDashboard'
 import { VoiceInterface } from '../components/VoiceInterface'
 import { useKeepAlive } from '../hooks/useKeepAlive'
 import { useLatencyTracker } from '../hooks/useLatencyTracker'
@@ -12,7 +11,7 @@ export function PersonaDetail() {
   const { personaId } = useParams<{ personaId: string }>()
   const navigate = useNavigate()
   const sessionId = useMemo(() => crypto.randomUUID(), [])
-  const { snapshots, addSnapshot } = useLatencyTracker()
+  const { addSnapshot } = useLatencyTracker()
   const [persona, setPersona] = useState<Persona | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -68,41 +67,29 @@ export function PersonaDetail() {
           </button>
           <span className="text-border">|</span>
           <div className="flex items-center gap-2">
-            <span className="font-sans text-sm font-semibold text-text">{persona.name}</span>
-            <span className="text-muted">·</span>
-            <span className="font-sans text-sm text-textdim">{persona.speaking_style}</span>
-          </div>
-          <div className="ml-auto flex flex-wrap gap-1.5">
-            {persona.personality_traits.slice(0, 4).map((t) => (
-              <span
-                key={t}
-                className="rounded-full bg-cream px-2.5 py-0.5 font-sans text-[11px] text-textdim"
-              >
-                {t}
-              </span>
-            ))}
+            <span className="font-fraunces text-base font-semibold text-text">{persona.name}</span>
+            {persona.speaking_style && (
+              <>
+                <span className="text-muted">·</span>
+                <span className="font-sans text-sm text-textdim">{persona.speaking_style}</span>
+              </>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Main content */}
-      <div className="mx-auto max-w-[1440px] px-6 py-6 lg:px-10">
-        <div className="flex flex-col gap-6 lg:flex-row lg:gap-8">
-          {/* Left: latency dashboard */}
-          <div className="lg:w-[38%]">
-            <LatencyDashboard snapshots={snapshots} />
-          </div>
-
-          {/* Right: voice interface */}
-          <div className="flex-1">
-            <VoiceInterface
-              sessionId={sessionId}
-              personaId={persona.id}
-              personaName={persona.name}
-              onLatencyUpdate={addSnapshot}
-            />
-          </div>
-        </div>
+      {/* Main content — full width voice interface */}
+      <div className="mx-auto max-w-[1200px] px-6 py-6 lg:px-10">
+        <VoiceInterface
+          sessionId={sessionId}
+          personaId={persona.id}
+          personaName={persona.name}
+          personaTraits={persona.personality_traits}
+          storyCount={persona.stories.length}
+          idleVideoUrl={persona.idle_video_url}
+          avatarUrl={persona.did_avatar_url}
+          onLatencyUpdate={addSnapshot}
+        />
       </div>
     </div>
   )
