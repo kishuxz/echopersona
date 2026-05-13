@@ -43,6 +43,7 @@ export default function App() {
               <VoiceInterface
                 sessionId={sessionId}
                 personaId={persona?.id}
+                simli_face_id={persona?.simli_face_id}
                 onLatencyUpdate={addSnapshot}
               />
             </div>

@@ -1,6 +1,7 @@
 import logging
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from pydantic import BaseModel
 
 from middleware.auth import get_current_user
 from models.persona import Persona, PersonaCreate
@@ -76,6 +77,25 @@ async def upload_avatar(
         persona_id, user_id, file_bytes, content_type
     )
     persona.did_avatar_url = avatar_url
+    PERSONAS[persona_id] = persona
+    return persona
+
+
+class SimliFacePayload(BaseModel):
+    face_id: str
+
+
+@router.post("/{persona_id}/simli-face", response_model=Persona)
+async def set_simli_face(
+    persona_id: str,
+    payload: SimliFacePayload,
+    user_id: str = Depends(get_current_user),
+) -> Persona:
+    persona = await persona_store.get_persona(persona_id, user_id)
+    if not persona:
+        raise HTTPException(status_code=404, detail="Persona not found")
+    await persona_store.update_persona_simli_face_id(persona_id, user_id, payload.face_id)
+    persona.simli_face_id = payload.face_id
     PERSONAS[persona_id] = persona
     return persona
 

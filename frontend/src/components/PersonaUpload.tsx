@@ -1,6 +1,6 @@
 import { Camera, Mic, Plus, Trash2, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { createPersona, uploadAvatar, uploadVoice } from "../lib/api";
+import { createPersona, saveSimliFaceId, uploadAvatar, uploadVoice } from "../lib/api";
 import type { Persona } from "../types";
 
 interface PersonaUploadProps {
@@ -17,6 +17,7 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const avatarFileRef = useRef<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [simliId, setSimliId] = useState("");
   const [busy, setBusy] = useState(false);
   const [voiceStatus, setVoiceStatus] = useState<"idle" | "cloning" | "cloned" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -215,6 +216,14 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
           persona = await uploadAvatar(persona.id, fileToUpload);
         } catch (e) {
           console.error("[AVATAR UPLOAD]", e);
+        }
+      }
+
+      if (simliId.trim()) {
+        try {
+          persona = await saveSimliFaceId(persona.id, simliId.trim());
+        } catch (e) {
+          console.error("[SIMLI FACE]", e);
         }
       }
 
@@ -606,6 +615,20 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
                 )}
               </>
             )}
+          </div>
+
+          {/* Simli Face ID */}
+          <div>
+            <label className={labelCls}>Simli Face ID (optional)</label>
+            <input
+              className={inputCls}
+              placeholder="Paste face ID from app.simli.ai/create"
+              value={simliId}
+              onChange={(e) => setSimliId(e.target.value)}
+            />
+            <p className="mt-1 font-mono text-[10px] text-muted">
+              Create a face at app.simli.ai/create then paste the ID here
+            </p>
           </div>
 
           {error && <p className="font-mono text-[10px] text-red">{error}</p>}

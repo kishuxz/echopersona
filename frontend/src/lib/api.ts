@@ -76,6 +76,17 @@ export async function uploadAvatar(personaId: string, file: File): Promise<Perso
   return res.json()
 }
 
+export async function saveSimliFaceId(personaId: string, faceId: string): Promise<Persona> {
+  const headers = await getAuthHeaders()
+  const res = await fetch(`${API_BASE}/persona/${personaId}/simli-face`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ face_id: faceId }),
+  })
+  if (!res.ok) throw new Error('Failed to save Simli face ID')
+  return res.json()
+}
+
 export async function deletePersona(personaId: string): Promise<void> {
   const headers = await getAuthHeaders()
   await fetch(`${API_BASE}/persona/${personaId}`, {

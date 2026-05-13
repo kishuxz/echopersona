@@ -23,6 +23,7 @@ export interface Persona extends PersonaCreate {
   user_id: string;
   voice_id?: string | null;
   did_avatar_url?: string | null;
+  simli_face_id?: string | null;
   created_at?: string;
 }
 
@@ -35,4 +36,6 @@ export type ServerMessage =
   | { type: "sentence_end" }
   | ({ type: "latency_summary" } & Omit<LatencySnapshot, "timestamp">)
   | { type: "error"; message: string }
-  | { type: "pong" };
+  | { type: "pong" }
+  | { type: "simli_session_token"; token: string }
+  | { type: "simli_session_error"; message: string };

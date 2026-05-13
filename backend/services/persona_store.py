@@ -59,7 +59,7 @@ async def get_persona(persona_id: str, user_id: str) -> Persona | None:
     result = (
         db.table("personas")
         .select(
-            "id, user_id, name, stories, personality_traits, speaking_style, voice_id, did_avatar_url, created_at"
+            "id, user_id, name, stories, personality_traits, speaking_style, voice_id, did_avatar_url, simli_face_id, created_at"
         )
         .eq("id", persona_id)
         .eq("user_id", user_id)
@@ -76,7 +76,7 @@ async def list_personas(user_id: str) -> list[Persona]:
     result = (
         db.table("personas")
         .select(
-            "id, user_id, name, stories, personality_traits, speaking_style, voice_id, did_avatar_url, created_at"
+            "id, user_id, name, stories, personality_traits, speaking_style, voice_id, did_avatar_url, simli_face_id, created_at"
         )
         .eq("user_id", user_id)
         .order("created_at", desc=True)
@@ -95,6 +95,13 @@ async def update_persona_voice(persona_id: str, user_id: str, voice_id: str) -> 
 async def update_persona_avatar(persona_id: str, user_id: str, avatar_url: str) -> None:
     db = get_db()
     db.table("personas").update({"did_avatar_url": avatar_url}).eq("id", persona_id).eq(
+        "user_id", user_id
+    ).execute()
+
+
+async def update_persona_simli_face_id(persona_id: str, user_id: str, face_id: str) -> None:
+    db = get_db()
+    db.table("personas").update({"simli_face_id": face_id}).eq("id", persona_id).eq(
         "user_id", user_id
     ).execute()
 

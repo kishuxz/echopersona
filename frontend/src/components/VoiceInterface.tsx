@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useAudioRecorder } from "../hooks/useAudioRecorder";
+import { useSimliAvatar } from "../hooks/useSimliAvatar";
 import { useWebSocket } from "../hooks/useWebSocket";
 import { buildWsUrl } from "../lib/api";
 import type { LatencySnapshot, TranscriptItem } from "../types";
@@ -9,6 +10,7 @@ interface VoiceInterfaceProps {
   sessionId: string;
   personaId?: string;
   personaName?: string;
+  simli_face_id?: string | null;
   onLatencyUpdate: (latency: LatencySnapshot) => void;
 }
 
@@ -51,8 +53,9 @@ function PipelineBar({ stage }: { stage: Stage }) {
 }
 
 // ── Main component ─────────────────────────────────────────────────────────
-export function VoiceInterface({ sessionId, personaId, personaName, onLatencyUpdate }: VoiceInterfaceProps) {
+export function VoiceInterface({ sessionId, personaId, personaName, simli_face_id, onLatencyUpdate }: VoiceInterfaceProps) {
   const { connect, sendJson, sendBinary } = useWebSocket();
+  const simliAvatar = useSimliAvatar();
 
   const [items, setItems]             = useState<TranscriptItem[]>([]);
   const [stage, setStage]             = useState<Stage>("idle");
@@ -115,6 +118,33 @@ export function VoiceInterface({ sessionId, personaId, personaName, onLatencyUpd
       source.start(startAt);
       nextPlayAtRef.current = startAt + audioBuffer.duration;
       console.log("[AUDIO] sentence scheduled, duration:", audioBuffer.duration.toFixed(2), "s");
+
+      // Forward PCM to Simli for lip-sync (only when Simli session is live)
+      if (simliAvatar.isConnected) {
+        const rawSamples = audioBuffer.getChannelData(0);
+        const srcRate    = audioBuffer.sampleRate;
+        const dstRate    = 16000;
+        let samples: Float32Array;
+        if (srcRate === dstRate) {
+          samples = rawSamples;
+        } else {
+          const ratio  = srcRate / dstRate;
+          const outLen = Math.floor(rawSamples.length / ratio);
+          samples = new Float32Array(outLen);
+          for (let i = 0; i < outLen; i++) {
+            const pos  = i * ratio;
+            const lo   = Math.floor(pos);
+            const hi   = Math.min(lo + 1, rawSamples.length - 1);
+            const frac = pos - lo;
+            samples[i] = rawSamples[lo] * (1 - frac) + rawSamples[hi] * frac;
+          }
+        }
+        const pcm16 = new Int16Array(samples.length);
+        for (let i = 0; i < samples.length; i++) {
+          pcm16[i] = Math.max(-32768, Math.min(32767, samples[i] * 32768));
+        }
+        simliAvatar.sendAudioChunk(pcm16.buffer);
+      }
     } catch (e) {
       console.error("[AUDIO] decodeAudioData failed:", e);
     }
@@ -148,6 +178,10 @@ export function VoiceInterface({ sessionId, personaId, personaName, onLatencyUpd
       setIsConnecting(false);
       setIsProcessing(false);
       setIsRecording(false);
+      // Request a Simli session token if this persona has a face configured
+      if (personaId && simli_face_id) {
+        sendJson({ type: "simli_session_request" });
+      }
     };
 
     ws.onclose = (e) => {
@@ -162,6 +196,17 @@ export function VoiceInterface({ sessionId, personaId, personaName, onLatencyUpd
     ws.onmessage = async (event) => {
       const message = JSON.parse(event.data);
       console.log("[WS] message received:", message.type, Object.keys(message));
+
+      if (message.type === "simli_session_token") {
+        console.log("[SIMLI] received session token — starting WebRTC");
+        simliAvatar.startSession(message.token).catch((e) => {
+          console.error("[SIMLI] startSession failed:", e);
+        });
+      }
+
+      if (message.type === "simli_session_error") {
+        console.warn("[SIMLI] session error:", message.message);
+      }
 
       if (message.type === "transcript") {
         const now = Date.now();
@@ -212,6 +257,8 @@ export function VoiceInterface({ sessionId, personaId, personaName, onLatencyUpd
       if (message.type === "audio_end") {
         console.log("[AUDIO] audio_end — flushing final sentence");
         await playSentence();
+        // Signal Simli that all audio for this turn is sent
+        simliAvatar.sendDone();
         setIsProcessing(false);
         setIsRecording(false);
         setStage("idle");
@@ -288,17 +335,35 @@ export function VoiceInterface({ sessionId, personaId, personaName, onLatencyUpd
 
         {/* Avatar / video display */}
         <div className="flex flex-col items-center gap-2">
-          {videoUrl ? (
+          {/*
+            Simli video is always in the DOM so the ref stays valid when
+            pc.ontrack fires. It's hidden until WebRTC negotiation completes
+            and Simli sends "START". Muted because local ElevenLabs audio
+            is the playback source — Simli provides the lip-synced image only.
+          */}
+          <video
+            ref={simliAvatar.videoRef}
+            className={`h-32 w-32 rounded-full border-2 border-green object-cover${simliAvatar.isConnected ? "" : " hidden"}`}
+            autoPlay
+            playsInline
+            muted
+          />
+
+          {/* D-ID pre-rendered video — shown only when Simli is not live */}
+          {!simliAvatar.isConnected && videoUrl && (
             <video
               ref={videoRef}
-              src={videoUrl ?? undefined}
+              src={videoUrl}
               className="h-32 w-32 rounded-full border-2 border-green object-cover"
               autoPlay
               playsInline
               muted={false}
               onError={(e) => console.error("[VIDEO] playback error:", e)}
             />
-          ) : (
+          )}
+
+          {/* Letter / spinner placeholder — shown when neither avatar is active */}
+          {!simliAvatar.isConnected && !videoUrl && (
             <div
               className="flex h-32 w-32 items-center justify-center rounded-full border-2 bg-surface"
               style={{ borderColor: connected ? "#00ff88" : "#1e1e1e" }}
@@ -315,7 +380,8 @@ export function VoiceInterface({ sessionId, personaId, personaName, onLatencyUpd
               )}
             </div>
           )}
-          {videoLoading && !videoUrl && connected && (
+
+          {videoLoading && !videoUrl && !simliAvatar.isConnected && connected && (
             <p className="font-mono text-[9px] uppercase tracking-widest text-textdim">
               generating video…
             </p>

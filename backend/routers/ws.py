@@ -299,19 +299,7 @@ async def _run_turn_inner(websocket: WebSocket, session_id: str, audio_queue: as
         await tts_task
         raise
 
-    # Flush trailing text (last sentence may lack a trailing space)
-    if sentence_buf.strip():
-        await tts_queue.put(sentence_buf.strip())
-    await tts_queue.put(None)
-    await tts_task
-
-    if tts_error:
-        raise tts_error[0]
-
-    await websocket.send_json({"type": "audio_end"})
-    print("[WS] audio_end sent to client")
-
-    # D-ID: generate talking-head video in background after audio is sent
+    # LLM complete — fire D-ID now so it generates in parallel with TTS playback
     if (
         persona
         and persona.did_avatar_url
@@ -328,6 +316,18 @@ async def _run_turn_inner(websocket: WebSocket, session_id: str, audio_queue: as
         )
         _background_tasks.add(_did_task)
         _did_task.add_done_callback(_background_tasks.discard)
+
+    # Flush trailing text (last sentence may lack a trailing space)
+    if sentence_buf.strip():
+        await tts_queue.put(sentence_buf.strip())
+    await tts_queue.put(None)
+    await tts_task
+
+    if tts_error:
+        raise tts_error[0]
+
+    await websocket.send_json({"type": "audio_end"})
+    print("[WS] audio_end sent to client")
 
     SESSION_HISTORY.setdefault(session_id, []).extend(
         [
@@ -489,18 +489,7 @@ async def _run_text_turn(websocket: WebSocket, session_id: str, user_text: str) 
             await tts_task
             raise
 
-        if sentence_buf.strip():
-            await tts_queue.put(sentence_buf.strip())
-        await tts_queue.put(None)
-        await tts_task
-
-        if tts_error:
-            raise tts_error[0]
-
-        await websocket.send_json({"type": "audio_end"})
-
-        persona_id = websocket.query_params.get("persona_id")
-        persona = PERSONAS.get(persona_id or "")
+        # LLM complete — fire D-ID now so it generates in parallel with TTS playback
         if (
             persona
             and persona.did_avatar_url
@@ -511,12 +500,22 @@ async def _run_text_turn(websocket: WebSocket, session_id: str, user_text: str) 
                 _generate_and_send_video(
                     websocket=websocket,
                     response_text=response_text.strip(),
-                    voice_id=persona.voice_id,
+                    voice_id=voice_id,
                     source_url=persona.did_avatar_url,
                 )
             )
             _background_tasks.add(_did_task)
             _did_task.add_done_callback(_background_tasks.discard)
+
+        if sentence_buf.strip():
+            await tts_queue.put(sentence_buf.strip())
+        await tts_queue.put(None)
+        await tts_task
+
+        if tts_error:
+            raise tts_error[0]
+
+        await websocket.send_json({"type": "audio_end"})
 
         SESSION_HISTORY.setdefault(session_id, []).extend([
             ConversationTurn(role="user", content=user_text),
@@ -611,6 +610,18 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str) -> None:
                 audio_queue = asyncio.Queue()
                 release_time_ref = [0.0]
                 turn_task = None  # next _run_turn created lazily on first audio frame
+            elif msg_type == "simli_session_request":
+                pid = websocket.query_params.get("persona_id", "")
+                p = PERSONAS.get(pid)
+                if p and p.simli_face_id:
+                    from services import simli as simli_svc
+                    token = await simli_svc.create_session(p.simli_face_id)
+                    if token:
+                        await websocket.send_json({"type": "simli_session_token", "token": token})
+                    else:
+                        await websocket.send_json({"type": "simli_session_error", "message": "Simli session creation failed"})
+                else:
+                    await websocket.send_json({"type": "simli_session_error", "message": "No Simli face configured for this persona"})
             else:
                 await websocket.send_json({"type": "error", "message": f"Unknown message type: {msg_type}"})
     except WebSocketDisconnect:

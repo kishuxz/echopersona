@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     did_api_key: str = Field(default="", alias="DID_API_KEY")
     did_default_source_url: str = Field(default="", alias="DID_DEFAULT_SOURCE_URL")
 
+    simli_api_key: str = Field(default="", alias="SIMLI_API_KEY")
+
     vllm_base_url: str = Field(default="", alias="VLLM_BASE_URL")
     use_vllm: bool = Field(default=False, alias="USE_VLLM")
 
