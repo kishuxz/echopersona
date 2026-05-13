@@ -56,31 +56,27 @@ export function LandingPage() {
             </div>
           </div>
 
-          {/* Right — product mockup */}
+          {/* Right — contact card + conversation */}
           <div className="flex-shrink-0 w-full max-w-[300px] hidden sm:flex flex-col items-center gap-4 select-none">
 
-            {/* Portrait card */}
-            <div className="relative w-full overflow-hidden rounded-2xl shadow-card-hover" style={{ height: '320px' }}>
-              <div className="w-full h-[320px] rounded-2xl overflow-hidden flex items-center justify-center bg-[#ffdfbf]">
-                <img
-                  src="https://api.dicebear.com/7.x/adventurer/svg?seed=GrandpaJoe&backgroundColor=ffdfbf&skinColor=f2d3b1&hair=short01&eyes=variant01&eyebrows=variant01&mouth=variant01&features=wrinkles"
-                  className="w-full h-full"
-                  alt="Grandpa Joe"
-                  style={{ objectFit: 'contain' }}
-                />
-              </div>
-              {/* Live badge */}
-              <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-black/40 px-2.5 py-1 backdrop-blur-sm">
-                <span
-                  className="h-1.5 w-1.5 rounded-full bg-green"
-                  style={{ animation: 'blink 1s step-end infinite' }}
-                />
-                <span className="font-sans text-[10px] font-medium text-white">Live</span>
-              </div>
-            </div>
+            {/* Avatar */}
+            <img
+              src="https://api.dicebear.com/7.x/adventurer/svg?seed=GrandpaJoe&backgroundColor=ffdfbf"
+              className="w-44 h-44 rounded-full border-4 border-white shadow-lg mx-auto"
+              alt="Grandpa Joe"
+            />
 
-            {/* Persona name */}
-            <p className="font-fraunces text-base font-semibold text-text">Grandpa Joe</p>
+            {/* Name */}
+            <p className="font-fraunces text-lg font-semibold text-text">Grandpa Joe</p>
+
+            {/* Live badge */}
+            <div className="flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 shadow-card">
+              <span
+                className="h-1.5 w-1.5 rounded-full bg-green"
+                style={{ animation: 'blink 1s step-end infinite' }}
+              />
+              <span className="font-sans text-[11px] text-textdim">Live</span>
+            </div>
 
             {/* Chat bubbles */}
             <div className="flex w-full flex-col gap-3">
