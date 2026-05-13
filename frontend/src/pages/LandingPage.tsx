@@ -28,7 +28,7 @@ export function LandingPage() {
 
       {/* Hero — full viewport */}
       <section className="hero-gradient relative min-h-[calc(100vh-61px)] flex items-center overflow-hidden">
-        <div className="mx-auto max-w-6xl w-full px-8 py-16 flex flex-col lg:flex-row items-center gap-12 lg:gap-8">
+        <div className="mx-auto max-w-6xl w-full px-8 py-16 flex flex-col lg:flex-row items-center lg:items-start gap-12 lg:gap-8">
 
           {/* Left — headline */}
           <div className="flex-1 text-center lg:text-left">
@@ -56,66 +56,69 @@ export function LandingPage() {
             </div>
           </div>
 
-          {/* Right — contact card + conversation */}
-          <div className="flex-shrink-0 w-full max-w-[300px] hidden sm:flex flex-col items-center gap-4 select-none">
+          {/* Right — phone/card mockup */}
+          <div className="flex-shrink-0 hidden sm:block w-[320px] select-none">
+            <div className="rounded-2xl bg-white p-4 shadow-lg">
 
-            {/* Avatar */}
-            <img
-              src="https://api.dicebear.com/7.x/adventurer/svg?seed=GrandpaJoe&backgroundColor=ffdfbf"
-              className="w-44 h-44 rounded-full border-4 border-white shadow-lg mx-auto"
-              alt="Grandpa Joe"
-            />
-
-            {/* Name */}
-            <p className="font-fraunces text-lg font-semibold text-text">Grandpa Joe</p>
-
-            {/* Live badge */}
-            <div className="flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 shadow-card">
-              <span
-                className="h-1.5 w-1.5 rounded-full bg-green"
-                style={{ animation: 'blink 1s step-end infinite' }}
-              />
-              <span className="font-sans text-[11px] text-textdim">Live</span>
-            </div>
-
-            {/* Chat bubbles */}
-            <div className="flex w-full flex-col gap-3">
-              {/* User bubble */}
-              <div className="float-a self-end max-w-[85%]">
-                <div className="rounded-2xl rounded-br-sm bg-accent px-4 py-3 shadow-card-hover">
-                  <p className="font-sans text-sm text-white leading-relaxed">
-                    Tell me about your first job
-                  </p>
-                </div>
-                <p className="mt-1 text-right font-mono text-[10px] text-muted">You</p>
-              </div>
-
-              {/* Persona bubble */}
-              <div className="float-b self-start max-w-[90%]">
-                <div className="mb-1 flex items-center gap-1.5">
-                  <img
-                    src="https://api.dicebear.com/7.x/adventurer/svg?seed=GrandpaJoe&backgroundColor=ffdfbf"
-                    className="w-7 h-7 rounded-full"
-                    alt="GJ"
-                  />
-                  <span className="font-mono text-[10px] text-muted">Grandpa Joe</span>
-                </div>
-                <div className="rounded-2xl rounded-bl-sm border border-border bg-surface px-4 py-3 shadow-card-hover">
-                  <p className="font-sans text-sm text-text leading-relaxed">
-                    I remember it like yesterday — 1987, downtown Chicago. Started at the warehouse at 6am…
-                  </p>
+              {/* Card header: avatar + name + live */}
+              <div className="mb-4 flex items-center gap-3 border-b border-gray-100 pb-3">
+                <img
+                  src="https://api.dicebear.com/7.x/adventurer/svg?seed=GrandpaJoe&backgroundColor=ffdfbf"
+                  className="w-10 h-10 rounded-full"
+                  alt="Grandpa Joe"
+                />
+                <div>
+                  <p className="font-sans text-sm font-semibold text-text">Grandpa Joe</p>
+                  <div className="flex items-center gap-1">
+                    <span
+                      className="inline-block h-1.5 w-1.5 rounded-full bg-green"
+                      style={{ animation: 'blink 1s step-end infinite' }}
+                    />
+                    <span className="font-sans text-xs text-green">Live</span>
+                  </div>
                 </div>
               </div>
 
-              {/* Second user bubble */}
-              <div className="float-a self-end max-w-[80%]" style={{ animationDelay: '1.5s' }}>
-                <div className="rounded-2xl rounded-br-sm bg-accent px-4 py-3 shadow-card-hover">
-                  <p className="font-sans text-sm text-white leading-relaxed">
-                    What did you love most about it?
-                  </p>
+              {/* Chat bubbles */}
+              <div className="flex flex-col gap-3">
+                {/* User bubble */}
+                <div className="float-a self-end max-w-[85%]">
+                  <div className="rounded-2xl rounded-br-sm bg-accent px-4 py-3 shadow-card-hover">
+                    <p className="font-sans text-sm text-white leading-relaxed">
+                      Tell me about your first job
+                    </p>
+                  </div>
+                  <p className="mt-1 text-right font-mono text-[10px] text-muted">You</p>
                 </div>
-                <p className="mt-1 text-right font-mono text-[10px] text-muted">You</p>
+
+                {/* Persona bubble */}
+                <div className="float-b self-start max-w-[90%]">
+                  <div className="mb-1 flex items-center gap-1.5">
+                    <img
+                      src="https://api.dicebear.com/7.x/adventurer/svg?seed=GrandpaJoe&backgroundColor=ffdfbf"
+                      className="w-7 h-7 rounded-full"
+                      alt="GJ"
+                    />
+                    <span className="font-mono text-[10px] text-muted">Grandpa Joe</span>
+                  </div>
+                  <div className="rounded-2xl rounded-bl-sm border border-border bg-surface px-4 py-3 shadow-card-hover">
+                    <p className="font-sans text-sm text-text leading-relaxed">
+                      I remember it like yesterday — 1987, downtown Chicago. Started at the warehouse at 6am…
+                    </p>
+                  </div>
+                </div>
+
+                {/* Second user bubble */}
+                <div className="float-a self-end max-w-[80%]" style={{ animationDelay: '1.5s' }}>
+                  <div className="rounded-2xl rounded-br-sm bg-accent px-4 py-3 shadow-card-hover">
+                    <p className="font-sans text-sm text-white leading-relaxed">
+                      What did you love most about it?
+                    </p>
+                  </div>
+                  <p className="mt-1 text-right font-mono text-[10px] text-muted">You</p>
+                </div>
               </div>
+
             </div>
           </div>
         </div>
