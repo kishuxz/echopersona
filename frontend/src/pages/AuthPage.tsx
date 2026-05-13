@@ -19,8 +19,8 @@ export function AuthPage({ mode: initialMode }: AuthPageProps) {
   const navigate = useNavigate()
 
   const inputCls =
-    'w-full rounded border border-border bg-bg px-3 py-2.5 font-sans text-sm text-text placeholder:text-muted outline-none transition-colors focus:border-green'
-  const labelCls = 'block font-mono text-[10px] uppercase tracking-widest text-textdim mb-1.5'
+    'w-full rounded-lg border border-border bg-surface px-3 py-2.5 font-sans text-sm text-text placeholder:text-muted outline-none transition-colors focus:border-blue focus:ring-2 focus:ring-blue/10'
+  const labelCls = 'block font-sans text-[11px] font-medium uppercase tracking-widest text-muted mb-1.5'
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -43,10 +43,10 @@ export function AuthPage({ mode: initialMode }: AuthPageProps) {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-bg px-4">
+    <div className="flex min-h-screen items-center justify-center bg-elevated px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <h1 className="font-mono text-2xl font-bold uppercase tracking-[0.15em] text-green">
+          <h1 className="font-fraunces text-2xl font-semibold text-text">
             EchoPersona
           </h1>
           <p className="mt-1 font-sans text-sm text-textdim">
@@ -55,29 +55,29 @@ export function AuthPage({ mode: initialMode }: AuthPageProps) {
         </div>
 
         {confirmMessage ? (
-          <div className="rounded-lg border border-green/30 bg-surface p-6 text-center">
-            <p className="font-mono text-sm text-green">{confirmMessage}</p>
+          <div className="rounded-xl border border-border bg-surface p-6 text-center shadow-panel">
+            <p className="font-sans text-sm text-green">{confirmMessage}</p>
             <button
-              className="mt-4 font-mono text-xs text-textdim underline"
+              className="mt-4 font-sans text-sm text-textdim underline"
               onClick={() => { setConfirmMessage(null); setMode('login') }}
             >
               Back to login
             </button>
           </div>
         ) : (
-          <div className="rounded-lg border border-border bg-surface p-6">
-            <div className="mb-6 flex rounded border border-border">
+          <div className="rounded-xl border border-border bg-surface p-6 shadow-panel">
+            <div className="mb-6 flex rounded-lg border border-border overflow-hidden">
               <button
-                className={`flex-1 py-2 font-mono text-xs uppercase tracking-widest transition-colors ${
-                  mode === 'login' ? 'bg-green text-bg' : 'text-textdim hover:text-text'
+                className={`flex-1 py-2 font-sans text-sm font-medium transition-colors ${
+                  mode === 'login' ? 'bg-accent text-white' : 'text-textdim hover:text-text'
                 }`}
                 onClick={() => { setMode('login'); setError(null) }}
               >
                 Login
               </button>
               <button
-                className={`flex-1 py-2 font-mono text-xs uppercase tracking-widest transition-colors ${
-                  mode === 'signup' ? 'bg-green text-bg' : 'text-textdim hover:text-text'
+                className={`flex-1 py-2 font-sans text-sm font-medium transition-colors ${
+                  mode === 'signup' ? 'bg-accent text-white' : 'text-textdim hover:text-text'
                 }`}
                 onClick={() => { setMode('signup'); setError(null) }}
               >
@@ -126,24 +126,20 @@ export function AuthPage({ mode: initialMode }: AuthPageProps) {
               </div>
 
               {error && (
-                <p className="font-mono text-[10px] text-red-400">{error}</p>
+                <p className="font-sans text-sm text-red">{error}</p>
               )}
 
               <button
                 type="submit"
                 disabled={loading}
-                className="mt-1 w-full rounded py-3 font-mono text-sm font-bold uppercase tracking-widest transition-all disabled:opacity-40"
-                style={
-                  loading
-                    ? { background: '#111', border: '1px solid #00ff88', color: '#00ff88' }
-                    : { background: '#00ff88', color: '#00170c' }
-                }
+                className="mt-1 w-full rounded-lg py-3 font-sans text-sm font-medium text-white transition-opacity disabled:opacity-40"
+                style={{ background: loading ? '#52525B' : '#18181B' }}
               >
                 {loading ? (
                   <span className="flex items-center justify-center gap-2">
                     <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                      <circle className="opacity-20" cx="12" cy="12" r="10" stroke="#00ff88" strokeWidth="3" />
-                      <path className="opacity-80" fill="#00ff88" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                      <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                     </svg>
                     {mode === 'login' ? 'Signing in…' : 'Creating account…'}
                   </span>

@@ -29,11 +29,11 @@ export function PersonaDetail() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-bg">
         <div className="flex items-center gap-3">
-          <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
-            <circle className="opacity-20" cx="12" cy="12" r="10" stroke="#00ff88" strokeWidth="3" />
-            <path className="opacity-80" fill="#00ff88" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          <svg className="h-5 w-5 animate-spin text-green" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+            <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          <span className="font-mono text-sm text-textdim">Loading…</span>
+          <span className="font-sans text-sm text-textdim">Loading…</span>
         </div>
       </div>
     )
@@ -43,9 +43,9 @@ export function PersonaDetail() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-bg">
         <div className="text-center">
-          <p className="font-mono text-sm text-red-400">{error ?? 'Persona not found'}</p>
+          <p className="font-sans text-sm text-red">{error ?? 'Persona not found'}</p>
           <button
-            className="mt-4 font-mono text-xs text-green underline"
+            className="mt-4 font-sans text-sm text-green underline"
             onClick={() => navigate('/dashboard')}
           >
             ← Back to dashboard
@@ -58,25 +58,25 @@ export function PersonaDetail() {
   return (
     <div className="min-h-screen bg-bg font-sans text-text">
       {/* Header bar */}
-      <div className="border-b border-border px-6 py-3 lg:px-10">
+      <div className="border-b border-border bg-surface px-6 py-3 shadow-card lg:px-10">
         <div className="mx-auto flex max-w-[1440px] items-center gap-4">
           <button
-            className="font-mono text-[10px] uppercase tracking-widest text-textdim transition-colors hover:text-green"
+            className="font-sans text-sm text-muted transition-colors hover:text-text"
             onClick={() => navigate('/dashboard')}
           >
             ← Dashboard
           </button>
           <span className="text-border">|</span>
           <div className="flex items-center gap-2">
-            <span className="font-mono text-sm font-bold text-green">{persona.name}</span>
-            <span className="font-mono text-[10px] text-textdim">·</span>
-            <span className="font-mono text-[10px] text-textdim">{persona.speaking_style}</span>
+            <span className="font-sans text-sm font-semibold text-text">{persona.name}</span>
+            <span className="text-muted">·</span>
+            <span className="font-sans text-sm text-textdim">{persona.speaking_style}</span>
           </div>
-          <div className="ml-auto flex flex-wrap gap-1">
+          <div className="ml-auto flex flex-wrap gap-1.5">
             {persona.personality_traits.slice(0, 4).map((t) => (
               <span
                 key={t}
-                className="rounded border border-border px-2 py-0.5 font-mono text-[9px] text-muted"
+                className="rounded-full bg-cream px-2.5 py-0.5 font-sans text-[11px] text-textdim"
               >
                 {t}
               </span>

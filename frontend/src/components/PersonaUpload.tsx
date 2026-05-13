@@ -239,41 +239,41 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
   // ── Styles ───────────────────────────────────────────────────────────────────
 
   const inputCls =
-    "w-full rounded-none border-0 border-b border-[#1e1e1e] bg-transparent px-0 py-2.5 font-sans text-sm text-[#e0e0e0] placeholder:text-[#282828] outline-none transition-colors focus:border-green";
+    "w-full rounded-none border-0 border-b border-border bg-transparent px-0 py-2.5 font-sans text-sm text-text placeholder:text-muted outline-none transition-colors focus:border-blue";
 
-  const labelCls = "block font-mono text-[9px] uppercase tracking-[0.2em] text-[#333] mb-1.5";
+  const labelCls = "block font-sans text-[10px] font-medium uppercase tracking-[0.2em] text-muted mb-1.5";
 
   const tabCls = (active: boolean) =>
-    `flex flex-1 items-center justify-center gap-1.5 rounded py-1.5 font-mono text-[10px] transition-all duration-150 ${
+    `flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 font-sans text-[11px] font-medium transition-all duration-150 ${
       active
-        ? "bg-[#0d0d0d] border border-green/50 text-green"
-        : "text-[#363636] hover:text-[#666]"
+        ? "bg-accent text-white"
+        : "text-muted hover:text-textdim"
     }`;
 
   const sectionNum = (n: string) => (
     <div className="mb-2.5 flex items-center gap-2.5">
-      <span className="font-mono text-[8px] text-[#1e1e1e]">{n}</span>
-      <div className="h-px flex-1 bg-[#141414]" />
+      <span className="font-mono text-[9px] text-muted">{n}</span>
+      <div className="h-px flex-1 bg-border" />
     </div>
   );
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <div className="rounded-lg border border-[#1a1a1a] bg-[#0d0d0d]">
+    <div className="rounded-xl border border-border bg-surface shadow-card">
       {/* Always-present hidden canvas for photo capture */}
       <canvas ref={canvasRef} className="hidden" />
 
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-[#141414] px-4 py-3">
-        <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-[#2e2e2e]">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <span className="font-sans text-[10px] font-medium uppercase tracking-[0.2em] text-muted">
           Persona
         </span>
         {activePersona && (
           <div className="flex items-center gap-2">
-            <span className="font-mono text-xs text-green">{activePersona.name}</span>
+            <span className="font-sans text-sm font-semibold text-text">{activePersona.name}</span>
             <button
-              className="font-mono text-[10px] text-[#333] transition-colors hover:text-red"
+              className="font-sans text-[11px] text-muted transition-colors hover:text-red"
               onClick={() => { setShowForm(true); setVoiceStatus("idle"); }}
               title="Change persona"
             >
@@ -286,18 +286,18 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
       {/* Active persona summary */}
       {activePersona && !showForm && (
         <div className="p-4">
-          <div className="rounded border border-green/15 bg-[#080808] p-3">
-            <p className="font-mono text-sm font-bold text-green">{activePersona.name}</p>
-            <p className="mt-1 font-sans text-xs text-[#555]">{activePersona.speaking_style}</p>
-            <div className="mt-2 flex flex-wrap gap-1">
+          <div className="rounded-lg border border-border bg-elevated p-3">
+            <p className="font-sans text-sm font-semibold text-text">{activePersona.name}</p>
+            <p className="mt-1 font-sans text-xs text-textdim">{activePersona.speaking_style}</p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
               {activePersona.personality_traits.map((t) => (
-                <span key={t} className="rounded border border-[#1e1e1e] px-2 py-0.5 font-mono text-[10px] text-[#3a3a3a]">
+                <span key={t} className="rounded-full bg-cream px-2.5 py-0.5 font-sans text-[11px] text-textdim">
                   {t}
                 </span>
               ))}
             </div>
           </div>
-          <p className="mt-3 font-sans text-xs text-[#333]">
+          <p className="mt-3 font-sans text-xs text-muted">
             Connect in the voice panel to start talking →
           </p>
         </div>
@@ -359,7 +359,7 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
                   />
                   <button
                     type="button"
-                    className="absolute right-0 top-2 text-[#2a2a2a] transition-colors hover:text-red"
+                    className="absolute right-0 top-2 text-muted transition-colors hover:text-red"
                     onClick={() => setStories((cur) => cur.filter((_, j) => j !== i))}
                     title="Remove story"
                   >
@@ -370,7 +370,7 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
             </div>
             <button
               type="button"
-              className="mt-2 flex w-full items-center justify-center gap-1.5 border border-[#1a1a1a] py-2 font-mono text-xs text-[#2e2e2e] transition-colors hover:border-green/40 hover:text-green"
+              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-border py-2 font-sans text-xs text-muted transition-colors hover:border-accent hover:text-textdim"
               onClick={() => setStories((cur) => [...cur, ""])}
             >
               <Plus size={13} /> Add story
@@ -383,7 +383,7 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
             <label className={labelCls}>Voice samples (optional)</label>
 
             {/* Tab switcher */}
-            <div className="mb-2 flex gap-1 rounded border border-[#161616] p-0.5">
+            <div className="mb-2 flex gap-1 rounded-lg border border-border p-0.5">
               <button type="button" onClick={() => { setVoiceTab("record"); setMicError(null); }} className={tabCls(voiceTab === "record")}>
                 <Mic size={11} /> Record Voice
               </button>
@@ -394,16 +394,16 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
 
             {/* Record tab */}
             {voiceTab === "record" && (
-              <div className="rounded border border-[#161616] bg-[#080808] p-3">
+              <div className="rounded-lg border border-border bg-elevated p-3">
                 {micError && (
-                  <p className="mb-2 font-mono text-[10px] text-red">{micError}</p>
+                  <p className="mb-2 font-sans text-[11px] text-red">{micError}</p>
                 )}
 
                 {!isRecording && !recordedBlob && (
                   <button
                     type="button"
                     onClick={startRecording}
-                    className="flex w-full items-center justify-center gap-2 border border-[#1a1a1a] py-3 font-mono text-xs text-[#2e2e2e] transition-colors hover:border-green/40 hover:text-green"
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-border py-3 font-sans text-sm text-muted transition-colors hover:border-accent hover:text-textdim"
                   >
                     <Mic size={14} /> Start Recording
                   </button>
@@ -424,7 +424,7 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
                     <button
                       type="button"
                       onClick={stopRecording}
-                      className="border border-red/20 px-4 py-1.5 font-mono text-xs text-red transition-colors hover:border-red/50"
+                      className="rounded-lg border border-red/30 px-4 py-1.5 font-sans text-sm text-red transition-colors hover:border-red/60"
                     >
                       Stop Recording
                     </button>
@@ -434,7 +434,7 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
                 {recordedBlob && recordedUrl && (
                   <div className="flex flex-col gap-2">
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-[10px] text-[#3a3a3a]">
+                      <span className="font-mono text-[10px] text-muted">
                         Recorded: {formatDuration(finalDuration)}
                       </span>
                     </div>
@@ -448,14 +448,14 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
                       <button
                         type="button"
                         onClick={useRecording}
-                        className="flex-1 bg-green py-2 font-mono text-xs font-bold text-black transition-opacity hover:opacity-90"
+                        className="flex-1 rounded-lg bg-accent py-2 font-sans text-sm font-medium text-white transition-opacity hover:opacity-90"
                       >
                         Use This Recording
                       </button>
                       <button
                         type="button"
                         onClick={reRecord}
-                        className="font-mono text-[10px] text-[#3a3a3a] transition-colors hover:text-text"
+                        className="font-sans text-[11px] text-muted transition-colors hover:text-textdim"
                       >
                         Re-record
                       </button>
@@ -467,9 +467,9 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
 
             {/* Upload tab */}
             {voiceTab === "upload" && (
-              <label className="flex cursor-pointer flex-col items-center gap-2 border-2 border-dashed border-[#1a1a1a] py-5 transition-colors hover:border-green/30 hover:bg-green/[0.02]">
-                <Upload size={18} className="text-[#2a2a2a]" />
-                <span className="font-mono text-[10px] text-[#2a2a2a]">Drop audio files here</span>
+              <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-border py-5 transition-colors hover:border-border-hi hover:bg-elevated">
+                <Upload size={18} className="text-muted" />
+                <span className="font-sans text-[11px] text-muted">Drop audio files here</span>
                 <input
                   type="file"
                   accept="audio/*"
@@ -489,14 +489,14 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
             {voiceFiles.length > 0 && (
               <div className="mt-2 flex flex-col gap-1">
                 {voiceFiles.map((f, i) => (
-                  <div key={i} className="flex items-center justify-between border border-[#161616] bg-[#080808] px-2 py-1">
-                    <span className="font-mono text-[10px] text-[#3a3a3a]">
+                  <div key={i} className="flex items-center justify-between rounded-lg border border-border bg-elevated px-3 py-1.5">
+                    <span className="font-mono text-[10px] text-textdim">
                       {f.name.startsWith("voice-recording") ? "🎤" : "📁"} {f.name}
                     </span>
                     <button
                       type="button"
                       onClick={() => setVoiceFiles(prev => prev.filter((_, j) => j !== i))}
-                      className="text-[#2a2a2a] transition-colors hover:text-red"
+                      className="text-muted transition-colors hover:text-red"
                     >
                       <Trash2 size={11} />
                     </button>
@@ -508,18 +508,18 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
             {/* Voice clone status */}
             {voiceStatus === "cloning" && (
               <div className="mt-2 flex items-center gap-2">
-                <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-20" cx="12" cy="12" r="10" stroke="#00ff88" strokeWidth="3" />
-                  <path className="opacity-80" fill="#00ff88" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                <svg className="h-3 w-3 animate-spin text-green" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                  <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                <span className="font-mono text-[10px] text-[#3a3a3a]">Cloning voice…</span>
+                <span className="font-sans text-[11px] text-textdim">Cloning voice…</span>
               </div>
             )}
             {voiceStatus === "cloned" && (
-              <p className="mt-2 font-mono text-[10px] text-green">✓ Voice cloned</p>
+              <p className="mt-2 font-sans text-[11px] text-green">✓ Voice cloned</p>
             )}
             {voiceStatus === "error" && (
-              <p className="mt-2 font-mono text-[10px] text-red">Voice clone failed — using default voice</p>
+              <p className="mt-2 font-sans text-[11px] text-red">Voice clone failed — using default voice</p>
             )}
           </div>
 
@@ -529,7 +529,7 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
             <label className={labelCls}>Face photo for video avatar (optional)</label>
 
             {/* Tab switcher */}
-            <div className="mb-2 flex gap-1 rounded border border-[#161616] p-0.5">
+            <div className="mb-2 flex gap-1 rounded-lg border border-border p-0.5">
               <button type="button" onClick={() => { setAvatarTab("camera"); setCameraError(null); }} className={tabCls(avatarTab === "camera")}>
                 <Camera size={11} /> Take Photo
               </button>
@@ -540,16 +540,16 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
 
             {/* Camera tab */}
             {avatarTab === "camera" && (
-              <div className="rounded border border-[#161616] bg-[#080808] p-3">
+              <div className="rounded-lg border border-border bg-elevated p-3">
                 {cameraError && (
-                  <p className="mb-2 font-mono text-[10px] text-red">{cameraError}</p>
+                  <p className="mb-2 font-sans text-[11px] text-red">{cameraError}</p>
                 )}
 
                 {!capturedImage && (
                   <button
                     type="button"
                     onClick={startCamera}
-                    className="flex w-full items-center justify-center gap-2 border border-[#1a1a1a] py-3 font-mono text-xs text-[#2e2e2e] transition-colors hover:border-green/40 hover:text-green"
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-border py-3 font-sans text-sm text-muted transition-colors hover:border-accent hover:text-textdim"
                   >
                     <Camera size={14} /> Open Camera
                   </button>
@@ -566,14 +566,14 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
                       <button
                         type="button"
                         onClick={usePhoto}
-                        className="bg-green px-4 py-2 font-mono text-xs font-bold text-black transition-opacity hover:opacity-90"
+                        className="rounded-lg bg-accent px-4 py-2 font-sans text-sm font-medium text-white transition-opacity hover:opacity-90"
                       >
                         Use This Photo
                       </button>
                       <button
                         type="button"
                         onClick={retakePhoto}
-                        className="font-mono text-[10px] text-[#3a3a3a] transition-colors hover:text-text"
+                        className="font-sans text-[11px] text-muted transition-colors hover:text-textdim"
                       >
                         Retake
                       </button>
@@ -584,7 +584,7 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
                 {!capturedImage && avatarFile && avatarPreview && (
                   <div className="mt-2 flex items-center gap-2">
                     <img src={avatarPreview} alt="Avatar" className="h-8 w-8 rounded-full object-cover" />
-                    <span className="font-mono text-[10px] text-green">✓ {avatarFile.name}</span>
+                    <span className="font-sans text-[11px] text-green">✓ {avatarFile.name}</span>
                   </div>
                 )}
               </div>
@@ -593,7 +593,7 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
             {/* Upload tab */}
             {avatarTab === "upload" && (
               <>
-                <label className="flex cursor-pointer flex-col items-center gap-2 border-2 border-dashed border-[#1a1a1a] py-5 transition-colors hover:border-green/30 hover:bg-green/[0.02]">
+                <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-border py-5 transition-colors hover:border-border-hi hover:bg-elevated">
                   {avatarPreview ? (
                     <img
                       src={avatarPreview}
@@ -602,8 +602,8 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
                     />
                   ) : (
                     <>
-                      <Upload size={18} className="text-[#2a2a2a]" />
-                      <span className="font-mono text-[10px] text-[#2a2a2a]">Upload face photo (JPG/PNG)</span>
+                      <Upload size={18} className="text-muted" />
+                      <span className="font-sans text-[11px] text-muted">Upload face photo (JPG/PNG)</span>
                     </>
                   )}
                   <input
@@ -620,7 +620,7 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
                   />
                 </label>
                 {avatarFile && (
-                  <p className="mt-1 font-mono text-[10px] text-[#3a3a3a]">{avatarFile.name}</p>
+                  <p className="mt-1 font-mono text-[10px] text-muted">{avatarFile.name}</p>
                 )}
               </>
             )}
@@ -636,28 +636,24 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
               value={simliId}
               onChange={(e) => setSimliId(e.target.value)}
             />
-            <p className="mt-1 font-mono text-[9px] text-[#242424]">
+            <p className="mt-1 font-sans text-[10px] text-muted">
               Create a face at app.simli.ai/create then paste the ID here
             </p>
           </div>
 
-          {error && <p className="font-mono text-[10px] text-red">{error}</p>}
+          {error && <p className="font-sans text-sm text-red">{error}</p>}
 
           <button
-            className="btn-glow-green mt-1 w-full py-3 font-mono text-sm font-bold uppercase tracking-widest transition-all disabled:opacity-40"
-            style={
-              busy
-                ? { background: "#080808", border: "1px solid rgba(0,255,136,0.4)", color: "#00ff88" }
-                : { background: "#00ff88", color: "#001a0a", border: "1px solid #00ff88" }
-            }
+            className="mt-1 w-full rounded-lg py-3 font-sans text-sm font-medium text-white transition-opacity disabled:opacity-40"
+            style={{ background: busy ? "#52525B" : "#18181B" }}
             onClick={submit}
             disabled={busy}
           >
             {busy ? (
               <span className="flex items-center justify-center gap-2">
                 <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-20" cx="12" cy="12" r="10" stroke="#00ff88" strokeWidth="3" />
-                  <path className="opacity-80" fill="#00ff88" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                  <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
                 Building persona…
               </span>
@@ -670,14 +666,14 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
 
       {/* Camera modal overlay */}
       {cameraMode && (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90">
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-accent/80 backdrop-blur-sm">
           <div className="flex flex-col items-center gap-4">
-            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#444]">
+            <p className="font-sans text-sm text-white/70">
               Position your face in the circle
             </p>
             <video
               ref={videoRef}
-              className="h-64 w-64 rounded-full border-2 border-green/50 object-cover"
+              className="h-64 w-64 rounded-full border-2 border-white/30 object-cover"
               autoPlay
               playsInline
               muted
@@ -686,14 +682,14 @@ export function PersonaUpload({ onPersona, activePersona }: PersonaUploadProps) 
               <button
                 type="button"
                 onClick={capturePhoto}
-                className="bg-green px-6 py-2.5 font-mono text-sm font-bold text-black transition-opacity hover:opacity-90"
+                className="rounded-lg bg-white px-6 py-2.5 font-sans text-sm font-medium text-accent transition-opacity hover:opacity-90"
               >
                 Capture
               </button>
               <button
                 type="button"
                 onClick={cancelCamera}
-                className="font-mono text-xs text-[#444] transition-colors hover:text-text"
+                className="font-sans text-sm text-white/60 transition-colors hover:text-white"
               >
                 Cancel
               </button>

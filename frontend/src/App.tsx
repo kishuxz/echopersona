@@ -12,24 +12,16 @@ export default function App() {
   const { snapshots, addSnapshot } = useLatencyTracker();
 
   return (
-    <div className="relative min-h-screen bg-[#080808] font-sans" style={{ color: "#f0f0f0" }}>
+    <div className="relative min-h-screen bg-bg font-sans text-text">
 
       {/* ── Navigation ── */}
-      <header className="sticky top-0 z-40 border-b border-[#141414] bg-[#080808]/95 backdrop-blur-md">
+      <header className="sticky top-0 z-40 border-b border-border bg-surface/95 backdrop-blur-md shadow-card">
         <div className="mx-auto flex max-w-[1440px] items-center justify-between px-6 py-3.5 lg:px-10">
+          <span className="font-fraunces text-lg font-semibold text-text">EchoPersona</span>
           <div className="flex items-center gap-3">
-            <span className="relative flex h-2 w-2 shrink-0">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green opacity-60" />
-              <span className="relative h-2 w-2 rounded-full bg-green" />
-            </span>
-            <span className="font-mono text-sm font-bold uppercase tracking-[0.3em] text-green">Echo</span>
-            <span className="font-mono text-xs text-[#242424]">/</span>
-            <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-[#383838]">Persona</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="hidden font-mono text-[10px] text-[#2c2c2c] sm:block">kramkum@iu.edu</span>
-            <div className="h-3 w-px bg-[#1c1c1c]" />
-            <span className="rounded border border-[#1c1c1c] bg-[#0c0c0c] px-2 py-0.5 font-mono text-[9px] uppercase tracking-widest text-[#363636]">
+            <span className="hidden font-sans text-xs text-textdim sm:block">kramkum@iu.edu</span>
+            <div className="h-3 w-px bg-border" />
+            <span className="rounded border border-border bg-elevated px-2 py-0.5 font-mono text-[10px] text-muted">
               v0.1
             </span>
           </div>
@@ -41,11 +33,11 @@ export default function App() {
 
         {/* Page heading */}
         <div className="mb-8 panel-1">
-          <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-[#272727]">Real-time AI</p>
-          <h1 className="font-mono text-3xl font-bold uppercase tracking-[0.12em] text-[#e8e8e8]">
+          <p className="font-sans text-[10px] uppercase tracking-[0.25em] text-muted">Real-time AI</p>
+          <h1 className="font-fraunces text-3xl font-semibold text-text">
             EchoPersona
           </h1>
-          <p className="mt-1.5 font-sans text-sm text-[#424242]">
+          <p className="mt-1.5 font-sans text-sm text-textdim">
             Conversational AI avatars with sub-600ms latency
           </p>
         </div>

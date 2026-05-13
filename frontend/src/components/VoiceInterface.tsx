@@ -35,14 +35,14 @@ function PipelineBar({ stage }: { stage: Stage }) {
           <div key={s.key} className="flex items-center gap-1.5">
             {i > 0 && (
               <span className={`transition-colors duration-300 ${
-                isComplete || isActive ? "text-green/20" : "text-[#1a1a1a]"
+                isComplete || isActive ? "text-green/40" : "text-muted/30"
               }`}>→</span>
             )}
             <span className={`flex items-center gap-0.5 transition-colors duration-200 ${
-              isActive ? "text-green" : isComplete ? "text-[#3a3a3a]" : "text-[#1e1e1e]"
+              isActive ? "text-green" : isComplete ? "text-muted" : "text-muted/40"
             }`}>
               {isComplete ? (
-                <span className="mr-0.5 text-green/40">✓</span>
+                <span className="mr-0.5 text-green/60">✓</span>
               ) : isActive ? (
                 <span className="blink mr-0.5">●</span>
               ) : (
@@ -262,15 +262,14 @@ export function VoiceInterface({ sessionId, personaId, personaName, idleVideoUrl
   console.log("[STATE] isRecording:", isRecording, "isProcessing:", isProcessing, "connected:", connected);
 
   // ── Derived UI state ──────────────────────────────────────────────────
-  const micBorderColor = isProcessing ? "#0088ff" : isRecording ? "#00ff88" : "#1e1e1e";
-  const micBgColor     = isProcessing ? "rgba(0,136,255,0.06)" : isRecording ? "rgba(0,255,136,0.1)" : "#0a0a0a";
-  const micIconColor   = isProcessing ? "#0088ff" : isRecording ? "#00ff88" : "#2e2e2e";
+  const micBg    = isProcessing ? "#2563EB" : isRecording ? "#16A34A" : "#18181B";
+  const micScale = isRecording ? "scale-105" : "";
 
   return (
     <div className="flex flex-col gap-4 lg:flex-row">
 
       {/* ── Voice control panel ── */}
-      <div className="flex min-h-[340px] flex-col items-center gap-5 rounded-lg border border-[#1a1a1a] bg-[#0d0d0d] p-6 lg:w-64 lg:flex-shrink-0">
+      <div className="flex min-h-[340px] flex-col items-center gap-5 rounded-xl border border-border bg-surface p-6 shadow-card lg:w-64 lg:flex-shrink-0">
 
         {/* Avatar / video display */}
         <div className="flex flex-col items-center gap-2">
@@ -305,14 +304,14 @@ export function VoiceInterface({ sessionId, personaId, personaName, idleVideoUrl
 
             {/* 3. Letter / spinner placeholder */}
             {!videoUrl && !idleVideoUrl && (
-              <div className="flex h-40 w-40 items-center justify-center rounded-full bg-[#0a0a0a]">
+              <div className="flex h-40 w-40 items-center justify-center rounded-full bg-elevated">
                 {videoLoading ? (
-                  <svg className="h-7 w-7 animate-spin" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-20" cx="12" cy="12" r="10" stroke="#00ff88" strokeWidth="2.5" />
-                    <path className="opacity-80" fill="#00ff88" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  <svg className="h-7 w-7 animate-spin text-green" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2.5" />
+                    <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
                 ) : (
-                  <span className="font-mono text-3xl font-bold text-[#222]">
+                  <span className="font-fraunces text-3xl font-semibold text-muted">
                     {personaName?.[0]?.toUpperCase() ?? "?"}
                   </span>
                 )}
@@ -321,26 +320,26 @@ export function VoiceInterface({ sessionId, personaId, personaName, idleVideoUrl
           </div>
 
           {videoLoading && !videoUrl && !idleVideoUrl && connected && (
-            <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-[#2a2a2a]">
+            <p className="font-sans text-[10px] text-muted">
               generating video…
             </p>
           )}
         </div>
 
         {/* Connection status */}
-        <div className="flex w-full items-center justify-between border-t border-[#151515] pt-3">
-          <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-[#272727]">Status</span>
+        <div className="flex w-full items-center justify-between border-t border-border pt-3">
+          <span className="font-sans text-[10px] uppercase tracking-[0.2em] text-muted">Status</span>
           <div className="flex items-center gap-1.5">
             <span
               className="h-1.5 w-1.5 rounded-full"
               style={{
-                background: connected ? "#00ff88" : "#252525",
+                background: connected ? "#16A34A" : "#D4D4D8",
                 animation: connected ? "blink 1s step-end infinite" : "none",
               }}
             />
             <span
-              className="font-mono text-[9px] uppercase tracking-widest"
-              style={{ color: connected ? "#00ff88" : "#252525" }}
+              className="font-sans text-[10px] font-medium"
+              style={{ color: connected ? "#16A34A" : "#A1A1AA" }}
             >
               {connected ? "Live" : "Offline"}
             </span>
@@ -350,7 +349,7 @@ export function VoiceInterface({ sessionId, personaId, personaName, idleVideoUrl
         {/* Mic button area */}
         {!connected ? (
           <button
-            className="btn-glow-green w-full rounded border border-green bg-green py-3 font-mono text-sm font-bold uppercase tracking-widest text-[#001f0e] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+            className="w-full rounded-lg bg-accent py-3 font-sans text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             onClick={handleConnect}
             disabled={isConnecting}
           >
@@ -369,10 +368,7 @@ export function VoiceInterface({ sessionId, personaId, personaName, idleVideoUrl
         ) : (
           <>
             {/* Instruction text */}
-            <p
-              className="font-mono text-[10px] uppercase tracking-[0.2em] transition-colors"
-              style={{ color: isProcessing ? "#0088ff" : isRecording ? "#00ff88" : "#2e2e2e" }}
-            >
+            <p className="font-sans text-[11px] text-muted transition-colors">
               {isProcessing ? "Processing…" : isRecording ? "Listening…" : "Hold to speak"}
             </p>
 
@@ -392,32 +388,26 @@ export function VoiceInterface({ sessionId, personaId, personaName, idleVideoUrl
                 onTouchStart={(e) => { e.preventDefault(); handleMicMouseDown(); }}
                 onTouchEnd={(e)   => { e.preventDefault(); handleMicMouseUp(); }}
                 disabled={isProcessing}
-                className="relative z-10 flex h-24 w-24 items-center justify-center rounded-full border-2 transition-all duration-150"
+                className={`relative z-10 flex h-24 w-24 items-center justify-center rounded-full transition-all duration-150 ${micScale}`}
                 style={{
-                  borderColor:     micBorderColor,
-                  backgroundColor: micBgColor,
+                  backgroundColor: micBg,
                   cursor: isProcessing ? "not-allowed" : "pointer",
-                  boxShadow: isRecording
-                    ? "0 0 28px rgba(0,255,136,0.3), 0 0 0 1px rgba(0,255,136,0.2)"
-                    : isProcessing
-                    ? "0 0 24px rgba(0,136,255,0.25)"
-                    : "none",
                 }}
               >
                 {isProcessing ? (
-                  <svg className="h-7 w-7 animate-spin" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-20" cx="12" cy="12" r="10" stroke="#0088ff" strokeWidth="3" />
-                    <path className="opacity-80" fill="#0088ff" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  <svg className="h-7 w-7 animate-spin text-white" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                    <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
                 ) : (
                   <svg
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke={micIconColor}
+                    stroke="white"
                     strokeWidth="1.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className="h-8 w-8 transition-colors duration-150"
+                    className="h-8 w-8"
                   >
                     <rect x="9" y="2" width="6" height="12" rx="3" />
                     <path d="M5 10a7 7 0 0014 0" />

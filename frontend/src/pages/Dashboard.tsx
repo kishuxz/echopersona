@@ -40,22 +40,22 @@ export function Dashboard() {
   return (
     <div className="min-h-screen bg-bg text-text">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-border px-8 py-4">
+      <div className="flex items-center justify-between border-b border-border bg-surface px-8 py-4 shadow-card">
         <div>
-          <h1 className="font-mono text-xl font-bold uppercase tracking-[0.15em] text-green">
+          <h1 className="font-fraunces text-xl font-semibold text-text">
             EchoPersona
           </h1>
-          <p className="font-mono text-[10px] text-textdim">{user?.email}</p>
+          <p className="font-sans text-xs text-muted">{user?.email}</p>
         </div>
         <div className="flex items-center gap-4">
           <button
-            className="rounded bg-green px-4 py-2 font-mono text-xs font-bold uppercase tracking-widest text-bg transition-opacity hover:opacity-90"
+            className="rounded-lg bg-accent px-4 py-2 font-sans text-sm font-medium text-white transition-opacity hover:opacity-90"
             onClick={() => setShowCreate(true)}
           >
             + New Persona
           </button>
           <button
-            className="font-mono text-xs text-textdim transition-colors hover:text-text"
+            className="font-sans text-sm text-textdim transition-colors hover:text-text"
             onClick={handleSignOut}
           >
             Sign Out
@@ -67,11 +67,11 @@ export function Dashboard() {
         {showCreate && (
           <div className="mb-8">
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="font-mono text-xs uppercase tracking-widest text-textdim">
+              <h2 className="font-fraunces text-lg font-semibold text-text">
                 Create Persona
               </h2>
               <button
-                className="font-mono text-[10px] text-muted hover:text-text"
+                className="font-sans text-sm text-muted hover:text-textdim"
                 onClick={() => setShowCreate(false)}
               >
                 cancel
@@ -83,27 +83,27 @@ export function Dashboard() {
           </div>
         )}
 
-        <h2 className="mb-6 font-mono text-xs uppercase tracking-widest text-textdim">
+        <h2 className="mb-6 font-sans text-xs font-medium uppercase tracking-widest text-muted">
           My Personas
         </h2>
 
         {error && (
-          <p className="mb-4 font-mono text-xs text-red-400">{error}</p>
+          <p className="mb-4 font-sans text-sm text-red">{error}</p>
         )}
 
         {loading ? (
           <div className="flex items-center gap-2">
-            <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-20" cx="12" cy="12" r="10" stroke="#00ff88" strokeWidth="3" />
-              <path className="opacity-80" fill="#00ff88" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            <svg className="h-4 w-4 animate-spin text-green" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+              <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
-            <span className="font-mono text-sm text-textdim">Loading personas…</span>
+            <span className="font-sans text-sm text-textdim">Loading personas…</span>
           </div>
         ) : personas.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border py-16 text-center">
-            <p className="font-mono text-sm text-textdim">No personas yet.</p>
+          <div className="rounded-xl border border-dashed border-border bg-surface py-16 text-center shadow-card">
+            <p className="font-sans text-sm text-textdim">No personas yet.</p>
             <button
-              className="mt-4 font-mono text-xs text-green underline"
+              className="mt-4 font-sans text-sm text-green underline"
               onClick={() => setShowCreate(true)}
             >
               Create your first persona →
@@ -147,24 +147,24 @@ function PersonaCard({
     : ''
 
   return (
-    <div className="flex flex-col gap-4 rounded-lg border border-border bg-surface p-5 transition-colors hover:border-green/40">
+    <div className="card-hover flex flex-col gap-4 rounded-xl border border-border bg-surface p-5 shadow-card">
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-green/10 font-mono text-sm font-bold text-green">
+        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-cream font-sans text-sm font-semibold text-text">
           {initials}
         </div>
         <div className="min-w-0">
-          <p className="font-mono text-sm font-bold text-text">{persona.name}</p>
+          <p className="font-sans text-sm font-semibold text-text">{persona.name}</p>
           {createdDate && (
             <p className="mt-0.5 font-mono text-[10px] text-muted">{createdDate}</p>
           )}
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-1">
+      <div className="flex flex-wrap gap-1.5">
         {persona.personality_traits.slice(0, 3).map((t) => (
           <span
             key={t}
-            className="rounded border border-border px-2 py-0.5 font-mono text-[10px] text-textdim"
+            className="rounded-full bg-cream px-2.5 py-0.5 font-sans text-[11px] text-textdim"
           >
             {t}
           </span>
@@ -173,28 +173,28 @@ function PersonaCard({
 
       <div className="flex gap-1.5">
         <span
-          className={`rounded-full px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider ${
+          className={`rounded-full px-2.5 py-0.5 font-sans text-[10px] ${
             persona.voice_id
               ? 'bg-green/10 text-green'
-              : 'bg-border text-muted'
+              : 'bg-cream text-muted'
           }`}
         >
           {persona.voice_id ? 'Voice Cloned' : 'Default Voice'}
         </span>
-        <span className="rounded-full bg-border px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-muted">
+        <span className="rounded-full bg-cream px-2.5 py-0.5 font-sans text-[10px] text-muted">
           {persona.stories.length} {persona.stories.length === 1 ? 'story' : 'stories'}
         </span>
       </div>
 
       <div className="flex gap-2 border-t border-border pt-3">
         <button
-          className="flex-1 rounded bg-green py-2 font-mono text-xs font-bold uppercase tracking-widest text-bg transition-opacity hover:opacity-90"
+          className="flex-1 rounded-lg bg-accent py-2 font-sans text-sm font-medium text-white transition-opacity hover:opacity-90"
           onClick={onTalk}
         >
           Talk Now
         </button>
         <button
-          className="rounded border border-border px-3 py-2 font-mono text-xs text-muted transition-colors hover:border-red-500 hover:text-red-400"
+          className="rounded-lg border border-border px-3 py-2 font-sans text-sm text-muted transition-colors hover:border-red hover:text-red"
           onClick={onDelete}
           title="Delete persona"
         >

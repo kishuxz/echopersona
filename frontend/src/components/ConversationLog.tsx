@@ -9,10 +9,10 @@ export function ConversationLog({ items, draft }: { items: TranscriptItem[]; dra
   }, [items, draft]);
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-lg border border-[#1a1a1a] bg-[#0d0d0d]">
+    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-card">
       {/* Header */}
-      <div className="border-b border-[#141414] px-4 py-3">
-        <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-[#2e2e2e]">
+      <div className="border-b border-border px-4 py-3">
+        <span className="font-sans text-[11px] font-medium uppercase tracking-[0.2em] text-muted">
           Transcript
         </span>
       </div>
@@ -21,43 +21,47 @@ export function ConversationLog({ items, draft }: { items: TranscriptItem[]; dra
       <div className="flex-1 overflow-y-auto px-4 py-3">
         {items.length === 0 && !draft ? (
           <div className="flex h-full min-h-[120px] items-center justify-center">
-            <p className="font-mono text-xs text-[#222]">Conversation will appear here</p>
+            <p className="font-sans text-sm text-muted">Conversation will appear here</p>
           </div>
         ) : (
           <div className="flex flex-col gap-4">
             {items.map((item, index) => (
               <div key={`${item.role}-${index}`}>
                 {item.role === "user" ? (
-                  /* User message — right-aligned, subtle blue tint */
+                  /* User message — right-aligned, near-black */
                   <div className="flex flex-col items-end gap-1">
-                    <span className="font-mono text-[9px] uppercase tracking-[0.15em] text-[#2e2e2e]">
+                    <span className="font-mono text-[10px] text-muted">
                       You
                     </span>
-                    <div className="max-w-[85%] rounded-lg border border-[#0e2240] bg-[#060f1a] px-3 py-2">
-                      <p className="font-sans text-sm leading-relaxed text-[#c8d8e8]">{item.text}</p>
+                    <div className="max-w-[85%] rounded-2xl bg-accent px-4 py-2.5">
+                      <p className="font-sans text-sm leading-relaxed text-white">{item.text}</p>
                     </div>
                   </div>
                 ) : (
-                  /* Assistant message — left-aligned, green left accent */
-                  <div className="flex flex-col gap-1 border-l-2 border-green/15 pl-3">
-                    <span className="font-mono text-[9px] uppercase tracking-[0.15em] text-green/60">
+                  /* Persona message — left-aligned, cream */
+                  <div className="flex flex-col gap-1">
+                    <span className="font-mono text-[10px] text-muted">
                       Persona
                     </span>
-                    <p className="font-sans text-sm leading-relaxed text-[#d0d0d0]">{item.text}</p>
+                    <div className="max-w-[85%] rounded-2xl bg-cream px-4 py-2.5">
+                      <p className="font-sans text-sm leading-relaxed text-text">{item.text}</p>
+                    </div>
                   </div>
                 )}
               </div>
             ))}
 
             {draft && (
-              <div className="flex flex-col gap-1 border-l-2 border-green/15 pl-3">
-                <span className="font-mono text-[9px] uppercase tracking-[0.15em] text-green/60">
+              <div className="flex flex-col gap-1">
+                <span className="font-mono text-[10px] text-muted">
                   Persona
                 </span>
-                <p className="font-sans text-sm leading-relaxed text-[#d0d0d0]">
-                  {draft}
-                  <span className="blink ml-0.5 text-green">▌</span>
-                </p>
+                <div className="max-w-[85%] rounded-2xl bg-cream px-4 py-2.5">
+                  <p className="font-sans text-sm leading-relaxed text-text">
+                    {draft}
+                    <span className="blink ml-0.5 text-green">▌</span>
+                  </p>
+                </div>
               </div>
             )}
 
