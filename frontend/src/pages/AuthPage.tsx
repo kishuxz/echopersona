@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 
@@ -15,8 +15,15 @@ export function AuthPage({ mode: initialMode }: AuthPageProps) {
   const [error, setError] = useState<string | null>(null)
   const [confirmMessage, setConfirmMessage] = useState<string | null>(null)
 
-  const { signIn, signUp } = useAuth()
+  const { signIn, signUp, user } = useAuth()
   const navigate = useNavigate()
+
+  // Redirect to dashboard if already logged in, or after email confirmation link is clicked
+  useEffect(() => {
+    if (user) {
+      navigate('/dashboard', { replace: true })
+    }
+  }, [user])
 
   const inputCls =
     'w-full rounded-lg border border-border bg-surface px-3 py-2.5 font-sans text-sm text-text placeholder:text-muted outline-none transition-colors focus:border-blue focus:ring-2 focus:ring-blue/10'
@@ -33,7 +40,7 @@ export function AuthPage({ mode: initialMode }: AuthPageProps) {
         navigate('/dashboard')
       } else {
         await signUp(email, password, fullName)
-        setConfirmMessage('Check your email to confirm your account.')
+        setConfirmMessage(`We sent a confirmation link to ${email}. Click it to activate your account and you'll be signed in automatically.`)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Authentication failed')
@@ -56,9 +63,19 @@ export function AuthPage({ mode: initialMode }: AuthPageProps) {
 
         {confirmMessage ? (
           <div className="rounded-xl border border-border bg-surface p-6 text-center shadow-panel">
-            <p className="font-sans text-sm text-green">{confirmMessage}</p>
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green/10">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-6 w-6 text-green">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                <polyline points="22,6 12,13 2,6" />
+              </svg>
+            </div>
+            <h3 className="font-fraunces text-lg font-semibold text-text">Check your email</h3>
+            <p className="mt-2 font-sans text-sm text-textdim">{confirmMessage}</p>
+            <p className="mt-3 font-sans text-xs text-muted">
+              This page will redirect automatically once you confirm.
+            </p>
             <button
-              className="mt-4 font-sans text-sm text-textdim underline"
+              className="mt-5 font-sans text-sm text-textdim underline"
               onClick={() => { setConfirmMessage(null); setMode('login') }}
             >
               Back to login

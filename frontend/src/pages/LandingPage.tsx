@@ -1,7 +1,10 @@
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../hooks/useAuth'
 
 export function LandingPage() {
   const navigate = useNavigate()
+  const { user, loading } = useAuth()
+  const isLoggedIn = !loading && !!user
 
   return (
     <div className="min-h-screen bg-bg text-text">
@@ -11,18 +14,29 @@ export function LandingPage() {
           EchoPersona
         </span>
         <div className="flex items-center gap-4">
-          <button
-            className="font-sans text-sm text-textdim transition-colors hover:text-text"
-            onClick={() => navigate('/login')}
-          >
-            Login
-          </button>
-          <button
-            className="rounded-lg bg-accent px-4 py-2 font-sans text-sm font-medium text-white transition-opacity hover:opacity-90"
-            onClick={() => navigate('/signup')}
-          >
-            Get Started
-          </button>
+          {isLoggedIn ? (
+            <button
+              className="rounded-lg bg-accent px-4 py-2 font-sans text-sm font-medium text-white transition-opacity hover:opacity-90"
+              onClick={() => navigate('/dashboard')}
+            >
+              Go to Dashboard →
+            </button>
+          ) : (
+            <>
+              <button
+                className="font-sans text-sm text-textdim transition-colors hover:text-text"
+                onClick={() => navigate('/login')}
+              >
+                Login
+              </button>
+              <button
+                className="rounded-lg bg-accent px-4 py-2 font-sans text-sm font-medium text-white transition-opacity hover:opacity-90"
+                onClick={() => navigate('/signup')}
+              >
+                Get Started
+              </button>
+            </>
+          )}
         </div>
       </nav>
 
@@ -49,9 +63,9 @@ export function LandingPage() {
             <div className="mt-10 flex items-center justify-center gap-4 lg:justify-start">
               <button
                 className="rounded-lg bg-accent px-8 py-3.5 font-sans text-sm font-medium text-white transition-opacity hover:opacity-90"
-                onClick={() => navigate('/signup')}
+                onClick={() => navigate(isLoggedIn ? '/dashboard' : '/signup')}
               >
-                Create Your Legacy →
+                {isLoggedIn ? 'Go to Dashboard →' : 'Create Your Legacy →'}
               </button>
             </div>
           </div>
@@ -260,9 +274,9 @@ export function LandingPage() {
         </p>
         <button
           className="mt-8 rounded-lg bg-accent px-10 py-4 font-sans text-sm font-medium text-white transition-opacity hover:opacity-90"
-          onClick={() => navigate('/signup')}
+          onClick={() => navigate(isLoggedIn ? '/dashboard' : '/signup')}
         >
-          Get Started Free →
+          {isLoggedIn ? 'Go to Dashboard →' : 'Get Started Free →'}
         </button>
       </section>
 
