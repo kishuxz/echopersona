@@ -1,0 +1,190 @@
+# question_bank.yaml — Living Forever AI seed question bank
+# Schema per PERSONA_SPEC.md §2.1 and §5.3.
+# Categories in creation order per §5.1.
+# Extend using the authoring guide at §5.5.
+# _consent category questions are a required flow (§7.2-7.3) — seeded separately.
+
+questions:
+  # ── origins ──────────────────────────────────────────────────────────────────
+  - id: q_origins_01
+    category: origins
+    order: 10
+    modality: video_audio
+    required: false
+    prompt: "Where did you grow up, and what's the first place that feels like 'home' when you close your eyes?"
+    intent: "Anchor a vivid origin scene; capture how the subject narrates place + sensory memory."
+    signals: [affect, voice_texture, themes]
+    max_followups: 2
+    probes:
+      - id: q_origins_01_p1
+        prompt: "Walk me through that place — what did you hear, smell, or see first when you came home?"
+        good_when: shallow
+      - id: q_origins_01_p2
+        prompt: "Who else was usually there with you?"
+        good_when: missing_signal
+
+  - id: q_origins_02
+    category: origins
+    order: 20
+    modality: video_audio
+    required: false
+    prompt: "What's a story your family always told about you as a child?"
+    intent: "Capture family-myth narration + humor register; seeds entity aliases (who tells it)."
+    signals: [voice_texture, humor, entities]
+    max_followups: 2
+    probes:
+      - id: q_origins_02_p1
+        prompt: "Who told it best, and how did they tell it?"
+        good_when: specific_thread
+      - id: q_origins_02_p2
+        prompt: "Was it true, or did it grow a little over the years?"
+        good_when: shallow
+
+  # ── family ───────────────────────────────────────────────────────────────────
+  - id: q_family_01
+    category: family
+    order: 10
+    modality: video_audio
+    required: false
+    prompt: "Tell me about the people you grew up with — who shaped you most?"
+    intent: "Primary entity seeding + relationship stance + what they CALL people (aliases)."
+    signals: [entities, affect, voice_texture]
+    max_followups: 3
+    probes:
+      - id: q_family_01_p1
+        prompt: "What did you call them — by name, a nickname, something only you used?"
+        good_when: missing_signal
+      - id: q_family_01_p2
+        prompt: "What's one thing you learned from them that you still carry?"
+        good_when: shallow
+      - id: q_family_01_p3
+        prompt: "Was there tension there too? It's okay if it wasn't simple."
+        good_when: specific_thread
+
+  # ── coming_of_age ─────────────────────────────────────────────────────────────
+  # (reserved for extension per §5.5; add questions here)
+
+  # ── love ─────────────────────────────────────────────────────────────────────
+  - id: q_love_01
+    category: love
+    order: 10
+    modality: video_audio
+    required: false
+    prompt: "Tell me about a love that mattered — how did it begin?"
+    intent: "Capture warmth/affect, address terms for a partner, narrative cadence."
+    signals: [affect, voice_texture, entities]
+    max_followups: 2
+    probes:
+      - id: q_love_01_p1
+        prompt: "What did you call each other?"
+        good_when: missing_signal
+      - id: q_love_01_p2
+        prompt: "What's a small ordinary moment with them you'd want remembered?"
+        good_when: shallow
+
+  # ── work ─────────────────────────────────────────────────────────────────────
+  - id: q_work_01
+    category: work
+    order: 10
+    modality: text
+    required: false
+    prompt: "What kinds of work have you done over the years? Walk me through it."
+    intent: "Factual vocational timeline — content over delivery; seeds entities (places, roles)."
+    signals: [entities, themes]
+    max_followups: 1
+    probes:
+      - id: q_work_01_p1
+        prompt: "Which of those felt most like 'you'?"
+        good_when: shallow
+
+  # ── beliefs ──────────────────────────────────────────────────────────────────
+  - id: q_beliefs_01
+    category: beliefs
+    order: 10
+    modality: video_audio
+    required: false
+    prompt: "What do you believe about how a person should live? Where did that come from?"
+    intent: "Capture stance + values + the voice they use when they get serious."
+    signals: [stance, affect, voice_texture]
+    max_followups: 2
+    probes:
+      - id: q_beliefs_01_p1
+        prompt: "Has that belief ever been tested?"
+        good_when: shallow
+      - id: q_beliefs_01_p2
+        prompt: "Is there something you used to believe and changed your mind about?"
+        good_when: missing_signal
+
+  # ── texture ──────────────────────────────────────────────────────────────────
+  - id: q_texture_01
+    category: texture
+    order: 10
+    modality: video_audio
+    required: false
+    prompt: "What's a phrase or expression people would recognize as yours?"
+    intent: "DIRECT speech-texture capture — catchphrases for the voice card (§9.2)."
+    signals: [voice_texture, humor]
+    max_followups: 2
+    probes:
+      - id: q_texture_01_p1
+        prompt: "When do you find yourself saying it?"
+        good_when: shallow
+      - id: q_texture_01_p2
+        prompt: "What about something that makes you laugh every time?"
+        good_when: missing_signal
+
+  # ── hardship ─────────────────────────────────────────────────────────────────
+  - id: q_hardship_01
+    category: hardship
+    order: 10
+    modality: video_audio
+    required: false
+    prompt: "Tell me about a hard stretch in your life and how you got through it."
+    intent: "Capture resilience stance + somber affect register (matters for attunement, §9.4)."
+    signals: [affect, stance, themes]
+    max_followups: 2
+    probes:
+      - id: q_hardship_01_p1
+        prompt: "Who, or what, helped?"
+        good_when: shallow
+      - id: q_hardship_01_p2
+        prompt: "What would you say to someone going through that now?"
+        good_when: specific_thread
+
+  # ── places ───────────────────────────────────────────────────────────────────
+  - id: q_places_01
+    category: places
+    order: 10
+    modality: text
+    required: false
+    prompt: "List the homes and places you've lived. A line each is fine."
+    intent: "Factual place entities for the graph; content over delivery."
+    signals: [entities]
+    max_followups: 1
+    probes:
+      - id: q_places_01_p1
+        prompt: "Which one would you go back to if you could?"
+        good_when: shallow
+
+  # ── legacy ───────────────────────────────────────────────────────────────────
+  - id: q_legacy_01
+    category: legacy
+    order: 10
+    modality: video_audio
+    required: true
+    prompt: "If the people you love could hear one thing from you, years from now, what would it be?"
+    intent: "Core legacy message — high-affect, voice-clone gold. Often released per §7.3."
+    signals: [affect, voice_texture, stance]
+    max_followups: 1
+    probes:
+      - id: q_legacy_01_p1
+        prompt: "Is there someone specific you'd want to say something just to?"
+        good_when: shallow
+
+# ── steering bank (§5.4) ──────────────────────────────────────────────────────
+# Evaluator selects steer_id; code fills {topic} from current question context.
+steering:
+  refocus: "I love that — let's hold that thread for a second. Coming back to {topic}, what comes to mind?"
+  wrap_up: "That's a rich one. Before we move on, is there anything you'd want to add?"
+  too_short: "Take your time — even a small detail or a single moment helps."
+  sensitive_ok: "You can share as much or as little as you'd like here."
