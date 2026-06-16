@@ -7,7 +7,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    deepgram_api_key: str = Field(default="", alias="DEEPGRAM_API_KEY")
     groq_api_key: str = Field(default="", alias="GROQ_API_KEY")
     elevenlabs_api_key: str = Field(default="", alias="ELEVENLABS_API_KEY")
     elevenlabs_voice_id: str = Field(default="", alias="ELEVENLABS_VOICE_ID")
@@ -43,9 +42,7 @@ class Settings(BaseSettings):
 
     @property
     def mock_mode(self) -> bool:
-        return self.force_mock_mode or not (
-            self.deepgram_api_key and self.groq_api_key and self.elevenlabs_api_key
-        )
+        return self.force_mock_mode or not (self.groq_api_key and self.elevenlabs_api_key)
 
 
 @lru_cache

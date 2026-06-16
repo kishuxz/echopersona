@@ -21,7 +21,6 @@ _REQUIRED_ALWAYS = [
     ("supabase_anon_key", "SUPABASE_ANON_KEY"),
 ]
 _REQUIRED_LIVE = [
-    ("deepgram_api_key", "DEEPGRAM_API_KEY"),
     ("groq_api_key", "GROQ_API_KEY"),
 ]
 
