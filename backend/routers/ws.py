@@ -17,6 +17,7 @@ from services.latency import LatencyTimer
 from services.llm import stream_llm
 from services.chunker import extract_complete_sentence, is_sentence_complete
 from services.rag import PERSONAS, RAG_INDICES, PersonaRAG, build_system_prompt
+from services.ingestion.source_store import get_memory_units_for_persona
 from services import stt
 from services.tts import stream_tts, tts_audio_chunks
 from services.tts_cartesia import stream_tts_cartesia, tts_audio_chunks_cartesia
@@ -574,7 +575,13 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str) -> None:
             if persona_id not in RAG_INDICES:
                 loop = asyncio.get_running_loop()
                 rag = PersonaRAG()
-                await loop.run_in_executor(None, rag.build_index, persona.stories)
+                units = await get_memory_units_for_persona(persona_id, verified_only=True)
+                if not units:
+                    units = await get_memory_units_for_persona(persona_id, verified_only=False)
+                if units:
+                    await loop.run_in_executor(None, rag.build_index_from_units, units)
+                else:
+                    await loop.run_in_executor(None, rag.build_index, persona.stories)
                 RAG_INDICES[persona_id] = rag
 
     await websocket.accept()

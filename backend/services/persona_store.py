@@ -59,7 +59,7 @@ async def get_persona(persona_id: str, user_id: str) -> Persona | None:
     result = (
         db.table("personas")
         .select(
-            "id, user_id, name, stories, personality_traits, speaking_style, voice_id, did_avatar_url, idle_video_url, simli_face_id, created_at"
+            "id, user_id, name, stories, personality_traits, speaking_style, voice_id, did_avatar_url, idle_video_url, simli_face_id, entity_graph, style_exemplars, created_at"
         )
         .eq("id", persona_id)
         .eq("user_id", user_id)
@@ -76,7 +76,7 @@ async def list_personas(user_id: str) -> list[Persona]:
     result = (
         db.table("personas")
         .select(
-            "id, user_id, name, stories, personality_traits, speaking_style, voice_id, did_avatar_url, idle_video_url, simli_face_id, created_at"
+            "id, user_id, name, stories, personality_traits, speaking_style, voice_id, did_avatar_url, idle_video_url, simli_face_id, entity_graph, style_exemplars, created_at"
         )
         .eq("user_id", user_id)
         .order("created_at", desc=True)
@@ -116,3 +116,13 @@ async def update_persona_simli_face_id(persona_id: str, user_id: str, face_id: s
 async def delete_persona(persona_id: str, user_id: str) -> None:
     db = get_db()
     db.table("personas").delete().eq("id", persona_id).eq("user_id", user_id).execute()
+
+
+async def update_entity_graph(persona_id: str, entity_graph: list[dict]) -> None:
+    db = get_db()
+    db.table("personas").update({"entity_graph": entity_graph}).eq("id", persona_id).execute()
+
+
+async def update_style_exemplars(persona_id: str, style_exemplars: list[str]) -> None:
+    db = get_db()
+    db.table("personas").update({"style_exemplars": style_exemplars}).eq("id", persona_id).execute()
