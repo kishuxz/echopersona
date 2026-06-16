@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from arq.connections import create_pool
 
 from config import settings
-from routers import health, ingest, persona, ws
+from routers import creation, health, ingest, persona, ws
 from worker import WorkerSettings
 
 logger = logging.getLogger(__name__)
@@ -59,4 +59,5 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(persona.router)
 app.include_router(ingest.router)
+app.include_router(creation.router)
 app.include_router(ws.router)

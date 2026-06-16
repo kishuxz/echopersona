@@ -1,63 +1,47 @@
-# PROGRESS.md
+# EchoPersona / Living Forever AI — Project Guide
 
-Terse cross-session state for Claude Code. Update at the end of every session. Read after CLAUDE.md.
+Persona-twin product on the existing EchoPersona codebase. Living people build an AI twin
+(voice, stories, personality) by answering a vetted question bank; chosen family talk to the twin.
+Building chat + chat-twin now; video avatar later.
 
-## Base state (already built, working)
-- EchoPersona live: real-time voice pipeline STT to RAG to LLM to TTS, ~520ms warm.
-- Stack: FastAPI + React/Vite/TS + Supabase + Redis, Docker Compose on private VPC, nginx.
-- FAISS in-process RAG (~2ms). ElevenLabs voice clone + TTS. D-ID video. Groq STT + LLM.
-- Mock mode and latency dashboard working. Load test green to 50 users.
+## Read before building
+- `docs/persona_spec.md` — **authoritative** spec for persona creation, the answer evaluator,
+  the live conversation path, and resonance mechanisms. Follow its data contracts exactly,
+  especially §2 (schemas) and §4 (evaluator I/O JSON). Do not invent fields.
 
-## Active phase
-Phase 1: convert naive FAISS RAG into the persona-conditioned memory pipeline. Groq free tier only, no OpenAI, no GPU.
+## Hard constraints — never violate
+- **Latency:** live reply < 600ms warm. The reply is ONE bounded LLM call. TTS is async — never block text on audio.
+- **Fidelity:** never assert a fact absent from the verified memory units / flattened entity-graph fact-spec.
+  When retrieval is empty, use the in-character no-memory fallback (spec §9.7). Do not fabricate.
+- **No agents.** Only bounded single-shot LLM calls: ingestion transforms (batch), the answer evaluator
+  (creation-time), the live reply, and the optional across-conversation summarizer (spec §9.6, flag-gated).
+- **No GPU. No paid APIs.** All LLM/STT/vision-OCR via Groq free tier (Tesseract is the OCR-only CPU fallback).
+  ElevenLabs + D-ID are separate, non-Groq quotas.
+- **Groq ~1000 req/day, shared across ALL call types.** Budget it (spec §1.1). Interactive calls
+  (evaluator, live reply) must preempt batch ingestion. Track a daily counter in Redis; the arq worker self-throttles.
 
-## Done so far (Phase 1)
-- Memory unit schema and `memory_sources` / `memory_units` tables: `supabase/migrations/001_memory_tables.sql`.
-- Redis + arq worker. `backend/worker/tasks/ingestion.py` runs the full pipeline: Stage 0 → 1 → 2 + Fidelity per episode → `status=done` → enqueues `enrich_persona`.
-- Stage 0 normalize: pytesseract (printed) + Groq vision (`meta-llama/llama-4-scout-17b-16e-instruct`) fallback. Whisper for audio/video. `OPENAI_API_KEY` removed. Tenacity backoff on all Groq calls.
-- Stage 1 episode segmentation: `stage1.py` (Groq `llama-3.1-8b-instant`, JSON mode, char-offset spans).
-- Stage 2 persona-conditioned transform: `stage2.py` (first-person rewrite + stance/affect/themes/entities). Writes `memory_units`.
-- Fidelity verification: `fidelity.py`. Stores `fidelity_flags` + `fidelity_score`. All units `verified=false` until family review. Migration 002 adds these columns.
-- `backend/routers/ingest.py` (POST /ingest/{persona_id}, multipart, enqueues job).
-- **RAG rework** (`services/rag.py`):
-  - `build_index_from_units(units)` embeds `content_first_person` via sentence-transformers, stores unit dicts in FAISS.
-  - `retrieve()` returns `list[dict]` (text + stance/themes/entities metadata).
-  - `build_index(stories)` kept as legacy fallback.
-  - `build_system_prompt()` enhanced: behavior rules (dominant stance + personality + style), entity context block (from `entity_graph`), style exemplar block (from `style_exemplars`).
-  - `ws.py` RAG init: tries `memory_units` from DB (verified first, all if none), falls back to `persona.stories`.
-- Stage 3 entity coreference (`stage3.py`): Groq clusters entity aliases → canonical names + descriptions. Writes `entity_graph` JSONB to personas table.
-- Stage 4 style exemplar bank (`stage4.py`): Groq extracts 5-8 characteristic speech excerpts (preferring audio/video units). Writes `style_exemplars` JSONB to personas table.
-- Enrichment worker (`worker/tasks/enrichment.py`): `enrich_persona(persona_id)` runs Stage 3+4, then invalidates in-memory RAG index.
-- Migration 003 adds `entity_graph` + `style_exemplars` to personas table.
-- `persona_store.py` selects updated to include new columns; `update_entity_graph` + `update_style_exemplars` added.
+## Use CodeGraph (MCP) to navigate
+- Query the CodeGraph MCP server to locate definitions, find callers, and trace dependency edges
+  BEFORE editing. Do not blind-grep. Use it to find the impact radius of any change.
+- The index reflects THIS repo (the laptop tree) — which is the code you edit.
 
-## Next actions (in order)
-1. **End-to-end test**: upload a sample text/audio source via POST /ingest/{persona_id}, watch worker logs for Stage 0→1→2→Fidelity→Enrich, then open a WS session and confirm the richer system prompt fires.
-2. **family review UI**: endpoint + frontend widget to show unverified units (fidelity_score < 0.9 or has_additions=true) and toggle `verified=true`.
-3. Stage 5 (optional now): embed `memory_units` embeddings directly in the DB column (`embedding FLOAT4[]`) so the FAISS index can be reconstructed without re-running sentence-transformers on restart.
+## Known drift — RESOLVED
+- Deepgram startup/mock checks were removed in `stt.py` and `main.py` and committed (step 2).
 
-## Action needed from Kishore
-- Run `supabase/migrations/002_fidelity_columns.sql` (if not already done).
-- Run `supabase/migrations/003_persona_enrichment.sql` in Supabase SQL editor.
-- System packages on VPS/Docker: `apt-get install -y tesseract-ocr poppler-utils` for OCR.
-- `pip install -r requirements.txt` to pull in pytesseract, Pillow, pypdf, pdf2image, tenacity.
+## Build order (slice by slice; confirm each compiles before the next)
+1. ✅ Question bank data + loader (static data from spec §5.3; no LLM).
+2. ✅ Creation state machine + capture: text, and a/v → Groq Whisper STT → answer_text (spec §3).
+   - `services/creation.py`, `routers/creation.py`, `tests/test_creation.py` — 31 tests green.
+   - Migration `migrations/004_creation_fields.sql` — **run manually in Supabase SQL editor before exercising the live endpoint** (idempotent).
+   - Evaluator is a placeholder slot in `deterministic_next_action`; step 3 wires it in.
+3. Answer evaluator: the bounded Groq call + code guardrails + deterministic fallback (spec §4).
+4. Creation → ingestion handoff: write raw + provenance (Stage 0), add `source_type` and
+   `supersedes` for corrections (spec §6).
+5. Consent + succession capture (spec §7.2, §7.3).
+6. Live-path additions: precomputed voice card, listener-aware retrieval, no-memory fallback,
+   attunement folded into the single live call (spec §8, §9.2–9.4, §9.7).
+7. Resonance extras: feedback loop, across-conversation memory (flag-gated), optional TTS.
 
-## Pending decisions
-- Live video retrieval: Tavus-native KB vs FAISS units. Decide after Tavus free-plan test.
-- Memory Lane question bank source (200 questions).
-- Whether to also store embeddings in Supabase so FAISS rebuilds on restart without re-encoding.
-
-## Blockers
-- Migrations 002 and 003 must be run before end-to-end testing.
-
-## Backlog (not now)
-- Tavus CVI provider behind video toggle.
-- Stripe + entitlements + pricing tiers.
-- Consent, family access control, deletion.
-- GPU phases: per-persona fine-tuning, self-hosted inference.
-
-## Last session
-- Reworked RAG: memory_units from DB → sentence-transformers → FAISS, enriched system prompt with entity graph + style exemplars.
-- Built Stage 3 (entity coreference) + Stage 4 (style exemplar extraction) as Groq-powered passes.
-- Wired enrichment worker task; ingestion pipeline auto-dispatches it after units are written.
-- Added migrations 003 and updated Persona model + persona_store to include entity_graph/style_exemplars.
+## Stack & conventions
+FastAPI backend · React/Vite/TS frontend · Supabase (auth/Postgres/storage) · Redis · arq worker ·
+Docker Compose on a private VPC · nginx. Keep every change deterministic and auditable for fidelity.

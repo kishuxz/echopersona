@@ -208,3 +208,15 @@ async def normalize_source(
         return text, (0.0, 0.0)
 
     raise ValueError(f"Unknown modality: '{modality}'")
+
+
+async def transcribe_media(
+    file_bytes: bytes, filename: str, content_type: str
+) -> tuple[str, float]:
+    """Public interface: Groq Whisper STT for a full audio/video file.
+
+    Used by the creation flow for a/v capture; distinct from stt.transcribe_audio
+    which handles real-time PCM chunks from the WebSocket path.
+    Returns (transcript, duration_seconds).
+    """
+    return await _transcribe_media(file_bytes, filename, content_type)

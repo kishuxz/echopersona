@@ -48,6 +48,10 @@ async def create_source_record(
     group_name: str,
     file_id: str,
     text_content: str,
+    source_question_id: str = "",
+    source_type: str = "answer",
+    media_ref: str = "",
+    captured_at: str = "",
 ) -> str:
     """Insert a row in memory_sources. Returns the new source_id (UUID string)."""
     db = get_db()
@@ -59,9 +63,13 @@ async def create_source_record(
             "modality": modality,
             "question_category": question_category,
             "question_text": question_text,
+            "source_question_id": source_question_id,
+            "source_type": source_type,
             "group_name": group_name,
             "file_id": file_id,
+            "media_ref": media_ref,
             "text_content": text_content,
+            "captured_at": captured_at or None,
             "status": "pending",
         })
         .execute()

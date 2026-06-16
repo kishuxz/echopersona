@@ -4,10 +4,12 @@ Loads and validates the static YAML bank at data/question_bank.yaml.
 No LLM calls. No I/O beyond the initial file read (cached after first load).
 
 Public API:
-    get_question_bank()        -> list[QuestionEntry]  (all questions, ordered)
-    get_question(qid)          -> QuestionEntry | None
-    get_steering_bank()        -> dict[str, str]       (steer_id -> template)
-    questions_by_category(cat) -> list[QuestionEntry]  (sorted by order)
+    get_question_bank()           -> list[QuestionEntry]  (bank in YAML order)
+    get_question(qid)             -> QuestionEntry | None
+    get_steering_bank()           -> dict[str, str]       (steer_id -> template)
+    questions_by_category(cat)    -> list[QuestionEntry]  (sorted by order)
+    questions_in_creation_order() -> list[QuestionEntry]  (§5.1 category order)
+    CATEGORY_ORDER                -> list[str]            (§5.1 category sequence)
 """
 from __future__ import annotations
 
@@ -122,3 +124,24 @@ def questions_by_category(category: str) -> list[QuestionEntry]:
         [q for q in _bank().questions if q.category == category],
         key=lambda q: q.order,
     )
+
+
+# §5.1 Memory Lane category sequence — drives creation order
+CATEGORY_ORDER: list[str] = [
+    "origins", "family", "coming_of_age", "love", "work",
+    "beliefs", "texture", "hardship", "places", "legacy", "_consent",
+]
+
+
+def _category_sort_key(q: QuestionEntry) -> tuple[int, int]:
+    try:
+        idx = CATEGORY_ORDER.index(q.category)
+    except ValueError:
+        idx = len(CATEGORY_ORDER)  # unknown categories sort after all known ones
+    return (idx, q.order)
+
+
+@functools.lru_cache(maxsize=1)
+def questions_in_creation_order() -> list[QuestionEntry]:
+    """All questions sorted by §5.1 category order, then by `order` within each category."""
+    return sorted(get_question_bank(), key=_category_sort_key)

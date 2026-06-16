@@ -46,40 +46,5 @@ async def transcribe_audio(audio_bytes: bytes, sample_rate: int = 16000) -> str 
             logger.info("[STT] Groq Whisper transcript: %s", transcript)
             return transcript if transcript else None
     except Exception as e:
-        logger.warning("[STT] Groq Whisper failed (%s) — falling back to Deepgram", e)
-
-    # Fallback: Deepgram REST
-    try:
-        params = {
-            "model": "nova-2",
-            "language": "en-US",
-            "smart_format": "true",
-            "punctuate": "true",
-            "encoding": "linear16",
-            "sample_rate": str(sample_rate),
-            "channels": "1",
-        }
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.post(
-                "https://api.deepgram.com/v1/listen",
-                params=params,
-                headers={
-                    "Authorization": f"Token {settings.deepgram_api_key}",
-                    "Content-Type": "audio/wav",
-                },
-                content=wav_bytes,
-            )
-            response.raise_for_status()
-            data = response.json()
-            transcript = (
-                data.get("results", {})
-                .get("channels", [{}])[0]
-                .get("alternatives", [{}])[0]
-                .get("transcript", "")
-                .strip()
-            )
-            logger.info("[STT] Deepgram fallback transcript: %s", transcript)
-            return transcript if transcript else None
-    except Exception as e:
-        logger.error("[STT] Deepgram fallback also failed: %s", e)
+        logger.error("[STT] Groq Whisper failed: %s", e)
         return None

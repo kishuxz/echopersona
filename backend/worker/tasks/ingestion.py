@@ -49,9 +49,13 @@ def _source_meta(record: dict, timestamp_range: tuple[float, float]) -> dict:
         "modality": record.get("modality", ""),
         "question_category": record.get("question_category", ""),
         "question_text": record.get("question_text", ""),
+        "source_question_id": record.get("source_question_id", ""),
+        "source_type": record.get("source_type", "answer"),
         "file_id": record.get("file_id", ""),
+        "media_ref": record.get("media_ref", ""),
         "group_name": record.get("group_name", ""),
         "timestamp_range": list(timestamp_range),
+        "captured_at": record.get("captured_at", ""),
     }
 
 
