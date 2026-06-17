@@ -1,7 +1,12 @@
 # EchoPersona — Build Progress
 
 ## Active feature
-Step 7 — Entitlements and Stripe gating (Slice C done — checkout route)
+Step 7 — Entitlements and Stripe gating (Slice D done — webhook handler)
+
+## Step 7 Slice D ✅ — Stripe webhook handler (2026-06-17)
+- `backend/services/stripe_webhooks.py` — `record_event_idempotent`, `handle_checkout_completed`, `handle_subscription_event`, `process_stripe_event`; price→tier mapping; status→EntitlementStatus mapping; unknown price/user handled safely
+- `backend/routers/billing.py` — `POST /billing/webhook`: signature verification (400 on failure), idempotency gate (200 on duplicate), event routing
+- `backend/tests/test_stripe_webhooks.py` — 23 new tests (route + service layer); 199 total passing
 
 ## Step 7 Slice C ✅ — Stripe checkout route (2026-06-17)
 - `backend/services/billing.py` — `create_checkout_session`: get-or-create Stripe customer, create subscription checkout session
@@ -43,12 +48,12 @@ Previous milestones:
 None.
 
 ## Next action
-Step 7 Slice D — `POST /billing/webhook` (Stripe webhook handler, idempotency, entitlement upsert), `GET /billing/status`, `tests/test_billing_webhook.py`.
+Step 7 Slice E — `GET /billing/status` (return current entitlement tier and access flags for the authed user).
 
 ## Last known green verification
 ```bash
 cd backend && python -m pytest tests/ -q
-# 127 passed (all slices green, 2026-06-17)
+# 199 passed (all slices green, 2026-06-17)
 cd frontend && npx tsc --noEmit && npm run build
 # typecheck clean; built in 1.10s
 ```

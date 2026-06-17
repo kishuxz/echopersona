@@ -1,0 +1,187 @@
+from __future__ import annotations
+
+import logging
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING
+
+import stripe
+
+from config import settings
+from services.entitlements import (
+    get_entitlement_by_customer_or_subscription,
+    upsert_entitlement_from_subscription,
+)
+
+if TYPE_CHECKING:
+    from supabase import Client
+
+stripe.api_key = settings.stripe_secret_key
+
+logger = logging.getLogger(__name__)
+
+_EVENTS_TABLE = "stripe_webhook_events"
+
+# Only statuses that map 1-to-1 to our EntitlementStatus are listed here.
+# Anything not found (e.g. "incomplete") defaults to "canceled" — deny paid access.
+_STRIPE_STATUS_MAP: dict[str, str] = {
+    "active": "active",
+    "trialing": "trialing",
+    "past_due": "past_due",
+    "canceled": "canceled",
+    "unpaid": "unpaid",
+}
+
+
+def _price_to_tier(price_id: str) -> str | None:
+    """Map a Stripe price ID to a plan tier using configured env vars.
+    Returns None for any price ID not in the configuration — never grants paid access.
+    """
+    if not price_id:
+        return None
+    creator = settings.stripe_price_creator_monthly
+    legacy = settings.stripe_price_legacy_monthly
+    if creator and price_id == creator:
+        return "creator"
+    if legacy and price_id == legacy:
+        return "legacy"
+    return None
+
+
+async def record_event_idempotent(db: "Client", event_id: str, event_type: str) -> bool:
+    """Record event_id in stripe_webhook_events before processing.
+
+    Returns True  → event is new; proceed with processing.
+    Returns False → event already recorded; skip all side effects (return 200 to Stripe).
+    """
+    existing = (
+        db.table(_EVENTS_TABLE)
+        .select("stripe_event_id")
+        .eq("stripe_event_id", event_id)
+        .maybe_single()
+        .execute()
+    )
+    if existing.data:
+        return False
+    db.table(_EVENTS_TABLE).insert(
+        {"stripe_event_id": event_id, "event_type": event_type}
+    ).execute()
+    return True
+
+
+async def _resolve_user_id(db: "Client", subscription) -> str | None:
+    """Resolve Supabase user_id from subscription metadata, then fall back to DB lookup.
+
+    Subscription metadata is empty for most subscription events (we only set it on the
+    checkout session and the Stripe customer).  The DB lookup by customer_id is the
+    primary resolution path for subscription.created/updated/deleted.
+    """
+    metadata = getattr(subscription, "metadata", {}) or {}
+    user_id = metadata.get("supabase_user_id")
+    if user_id:
+        return str(user_id)
+
+    customer_id = str(subscription.customer) if getattr(subscription, "customer", None) else None
+    sub_id = subscription.id if getattr(subscription, "id", None) else None
+
+    existing = await get_entitlement_by_customer_or_subscription(
+        db,
+        stripe_customer_id=customer_id,
+        stripe_subscription_id=sub_id,
+    )
+    return existing.user_id if existing else None
+
+
+async def _upsert_from_subscription(
+    db: "Client",
+    subscription,
+    user_id: str,
+) -> None:
+    """Extract fields from a Stripe Subscription object and upsert the entitlement row."""
+    price_id = ""
+    try:
+        price_id = subscription.items.data[0].price.id
+    except (AttributeError, IndexError, TypeError):
+        pass
+
+    plan_tier = _price_to_tier(price_id)
+    if plan_tier is None:
+        logger.warning(
+            "stripe_webhooks: unknown price_id '%s' on subscription %s — skipping upsert",
+            price_id,
+            getattr(subscription, "id", "?"),
+        )
+        return
+
+    raw_status = getattr(subscription, "status", "canceled")
+    status = _STRIPE_STATUS_MAP.get(raw_status, "canceled")
+
+    period_end_ts = getattr(subscription, "current_period_end", None)
+    current_period_end = (
+        datetime.fromtimestamp(period_end_ts, tz=timezone.utc) if period_end_ts else None
+    )
+
+    await upsert_entitlement_from_subscription(
+        db,
+        user_id=user_id,
+        stripe_customer_id=str(subscription.customer),
+        stripe_subscription_id=subscription.id,
+        plan_tier=plan_tier,
+        status=status,
+        current_period_end=current_period_end,
+        cancel_at_period_end=bool(getattr(subscription, "cancel_at_period_end", False)),
+    )
+
+
+async def handle_checkout_completed(db: "Client", session) -> None:
+    """Handle checkout.session.completed.
+
+    The checkout session holds metadata.supabase_user_id (set at session creation),
+    but the subscription object retrieved here may not — so we read user_id from the
+    session first, then fall back to DB lookup.
+    """
+    subscription_id = getattr(session, "subscription", None)
+    if not subscription_id:
+        logger.info("stripe_webhooks: checkout.session.completed has no subscription — skipping")
+        return
+
+    subscription = stripe.Subscription.retrieve(subscription_id)
+
+    metadata = getattr(session, "metadata", {}) or {}
+    user_id: str | None = metadata.get("supabase_user_id")
+    if not user_id:
+        user_id = await _resolve_user_id(db, subscription)
+
+    if not user_id:
+        logger.warning("stripe_webhooks: cannot resolve user_id from checkout session — skipping")
+        return
+
+    await _upsert_from_subscription(db, subscription, user_id)
+
+
+async def handle_subscription_event(db: "Client", subscription) -> None:
+    """Handle customer.subscription.{created,updated,deleted}."""
+    user_id = await _resolve_user_id(db, subscription)
+    if not user_id:
+        logger.warning(
+            "stripe_webhooks: cannot resolve user_id for subscription %s — skipping",
+            getattr(subscription, "id", "?"),
+        )
+        return
+    await _upsert_from_subscription(db, subscription, user_id)
+
+
+async def process_stripe_event(db: "Client", event) -> None:
+    """Route a verified Stripe event to the appropriate handler."""
+    event_type: str = event.type
+    obj = event.data.object
+
+    if event_type == "checkout.session.completed":
+        await handle_checkout_completed(db, obj)
+    elif event_type in (
+        "customer.subscription.created",
+        "customer.subscription.updated",
+        "customer.subscription.deleted",
+    ):
+        await handle_subscription_event(db, obj)
+    else:
+        logger.debug("stripe_webhooks: unhandled event type '%s'", event_type)
