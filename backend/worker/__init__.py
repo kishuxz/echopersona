@@ -4,7 +4,7 @@ from arq.connections import RedisSettings
 
 from config import settings
 from worker.tasks.enrichment import enrich_persona
-from worker.tasks.ingestion import ingest_memory_unit
+from worker.tasks.ingestion import ingest_correction_unit, ingest_memory_unit
 
 
 def _redis_settings() -> RedisSettings:
@@ -18,5 +18,5 @@ def _redis_settings() -> RedisSettings:
 
 
 class WorkerSettings:
-    functions = [ingest_memory_unit, enrich_persona]
+    functions = [ingest_memory_unit, ingest_correction_unit, enrich_persona]
     redis_settings = _redis_settings()

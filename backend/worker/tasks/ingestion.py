@@ -10,6 +10,7 @@ import logging
 from services.ingestion.fidelity import verify_fidelity
 from services.ingestion.source_store import (
     download_source_file,
+    get_memory_unit,
     get_source_record,
     update_source_status,
     update_unit_fidelity,
@@ -59,13 +60,19 @@ def _source_meta(record: dict, timestamp_range: tuple[float, float]) -> dict:
     }
 
 
-async def ingest_memory_unit(ctx: dict, source_id: str, user_id: str) -> dict:
-    """Full ingestion pipeline for one source item."""
-    record = await get_source_record(source_id)
-    if not record:
-        logger.error("Source record not found: %s", source_id)
-        return {"source_id": source_id, "status": "error", "reason": "record_not_found"}
+async def _run_pipeline(
+    ctx: dict,
+    record: dict,
+    user_id: str,
+    version: int = 1,
+    supersedes: str | None = None,
+) -> dict:
+    """Core ingestion pipeline: normalize → segment → transform → fidelity → write.
 
+    version/supersedes are forwarded to write_memory_unit so corrections can
+    carry supersedes=<replaced_unit_id> and version=replaced.version+1 (§6/§7.1).
+    """
+    source_id: str = record["id"]
     await update_source_status(source_id, "processing")
 
     try:
@@ -104,14 +111,12 @@ async def ingest_memory_unit(ctx: dict, source_id: str, user_id: str) -> dict:
 
         for i, episode in enumerate(episodes):
             try:
-                # Stage 2: persona-conditioned transform
                 unit_data = await transform_episode(episode, record)
                 logger.info(
                     "[Pipeline] Stage 2 done source_id=%s episode=%d/%d",
                     source_id, i + 1, len(episodes),
                 )
 
-                # Write memory unit (verified=False by default)
                 unit_id = await write_memory_unit(
                     user_id=user_id,
                     persona_id=persona_id,
@@ -122,11 +127,10 @@ async def ingest_memory_unit(ctx: dict, source_id: str, user_id: str) -> dict:
                     affect=unit_data["affect"],
                     themes=unit_data["themes"],
                     entities=unit_data["entities"],
-                    version=1,        # §2.3 [add-004] — step 5 will pass supersedes for corrections
-                    supersedes=None,
+                    version=version,
+                    supersedes=supersedes,
                 )
 
-                # Fidelity verification
                 fidelity = await verify_fidelity(
                     source_episode_text=episode["episode_text"],
                     content_first_person=unit_data["content_first_person"],
@@ -155,7 +159,6 @@ async def ingest_memory_unit(ctx: dict, source_id: str, user_id: str) -> dict:
             "[Pipeline] done source_id=%s units_created=%d", source_id, len(units_created)
         )
 
-        # Kick off per-persona enrichment (Stage 3 entity graph + Stage 4 style exemplars)
         if persona_id and units_created:
             try:
                 await ctx["redis"].enqueue_job("enrich_persona", persona_id)
@@ -174,3 +177,49 @@ async def ingest_memory_unit(ctx: dict, source_id: str, user_id: str) -> dict:
         logger.error("Pipeline failed source_id=%s: %s", source_id, exc, exc_info=True)
         await update_source_status(source_id, "error")
         return {"source_id": source_id, "status": "error", "reason": str(exc)}
+
+
+async def ingest_memory_unit(ctx: dict, source_id: str, user_id: str) -> dict:
+    """Full ingestion pipeline for one source item (answers)."""
+    record = await get_source_record(source_id)
+    if not record:
+        logger.error("Source record not found: %s", source_id)
+        return {"source_id": source_id, "status": "error", "reason": "record_not_found"}
+    return await _run_pipeline(ctx, record, user_id, version=1, supersedes=None)
+
+
+async def ingest_correction_unit(
+    ctx: dict,
+    source_id: str,
+    user_id: str,
+    supersedes_unit_id: str,
+) -> dict:
+    """Ingestion pipeline for a wrong_fact correction (§7.1).
+
+    Identical pipeline to ingest_memory_unit, but the produced units carry
+    supersedes=<replaced_unit_id> and version=replaced.version+1.
+    The replaced unit stays in the DB for audit; live retrieval excludes it
+    via get_memory_units_for_persona(exclude_superseded=True).
+    """
+    record = await get_source_record(source_id)
+    if not record:
+        logger.error("Source record not found: %s", source_id)
+        return {"source_id": source_id, "status": "error", "reason": "record_not_found"}
+
+    superseded = await get_memory_unit(supersedes_unit_id)
+    if not superseded:
+        logger.error("Superseded unit not found: %s", supersedes_unit_id)
+        return {
+            "source_id": source_id,
+            "status": "error",
+            "reason": "superseded_unit_not_found",
+        }
+
+    new_version = superseded.get("version", 1) + 1
+    logger.info(
+        "[Pipeline] correction source_id=%s supersedes=%s new_version=%d",
+        source_id, supersedes_unit_id, new_version,
+    )
+    return await _run_pipeline(
+        ctx, record, user_id, version=new_version, supersedes=supersedes_unit_id
+    )

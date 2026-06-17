@@ -175,15 +175,44 @@ async def get_memory_units_for_source(source_id: str) -> list[dict]:
     return result.data or []
 
 
+async def get_memory_unit(unit_id: str) -> dict | None:
+    """Fetch a single memory_unit row by its unit_id."""
+    db = get_db()
+    result = (
+        db.table("memory_units")
+        .select("*")
+        .eq("unit_id", unit_id)
+        .maybe_single()
+        .execute()
+    )
+    return result.data
+
+
 async def get_memory_units_for_persona(
     persona_id: str,
     verified_only: bool = False,
+    exclude_superseded: bool = False,
 ) -> list[dict]:
     """Load all memory_units for a persona, sorted by creation time.
 
-    If verified_only=True and none exist, returns [] (caller should fall back).
+    exclude_superseded=True drops units whose unit_id appears in the
+    supersedes field of any other unit — i.e. units that have been replaced
+    by a correction (§6/§7.1). Old versions stay in the DB for audit but
+    must not appear in live retrieval.
     """
     db = get_db()
+
+    superseded_ids: set[str] = set()
+    if exclude_superseded:
+        sup_result = (
+            db.table("memory_units")
+            .select("supersedes")
+            .eq("persona_id", persona_id)
+            .not_.is_("supersedes", "null")
+            .execute()
+        )
+        superseded_ids = {str(row["supersedes"]) for row in (sup_result.data or [])}
+
     q = (
         db.table("memory_units")
         .select("*")
@@ -192,5 +221,7 @@ async def get_memory_units_for_persona(
     )
     if verified_only:
         q = q.eq("verified", True)
+    if superseded_ids:
+        q = q.not_.in_("unit_id", list(superseded_ids))
     result = q.execute()
     return result.data or []
