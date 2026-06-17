@@ -23,6 +23,8 @@ Implement `backend/services/consent.py`, `backend/routers/consent.py`, and
 ## Completed this session
 - `backend/models/consent.py` ✅ — `ModalityConsent`, `ConsentRights`, `ConsentCreate`,
   `ConsentRecord`, `SuccessionBeneficiary`, `SuccessionCreate`, `SuccessionRecord`
+- `backend/services/consent.py` ✅ — `ensure_persona_owner`, `get_active_consent_record`,
+  `write_consent_record`, `get_active_succession_record`, `write_succession_record`
 
 ## Last known green verification
 ```bash
