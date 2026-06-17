@@ -7,8 +7,15 @@ from pydantic import BaseModel
 
 from config import settings
 from middleware.auth import get_current_user
+from models.entitlements import BillingStatusResponse
 from services.billing import create_checkout_session
 from services.db import get_db
+from services.entitlements import (
+    can_use_chat,
+    can_use_video,
+    can_use_voice,
+    get_entitlement_for_user,
+)
 from services.stripe_webhooks import process_stripe_event, record_event_idempotent
 
 logger = logging.getLogger(__name__)
@@ -80,3 +87,25 @@ async def stripe_webhook(request: Request) -> dict:
 
     await process_stripe_event(db, event)
     return {"status": "ok"}
+
+
+@router.get("/status", response_model=BillingStatusResponse)
+async def get_billing_status(
+    user_id: str = Depends(get_current_user),
+) -> BillingStatusResponse:
+    """Return the authenticated user's current entitlement and access flags.
+
+    No Stripe API calls are made — reads only from the stripe_entitlements table.
+    Returns safe free-tier defaults when no entitlement row exists.
+    """
+    db = get_db()
+    entitlement = await get_entitlement_for_user(db, user_id)
+    return BillingStatusResponse(
+        plan_tier=entitlement.plan_tier if entitlement else "free",
+        status=entitlement.status if entitlement else None,
+        can_use_chat=can_use_chat(entitlement),
+        can_use_voice=can_use_voice(entitlement),
+        can_use_video=can_use_video(entitlement),
+        current_period_end=entitlement.current_period_end if entitlement else None,
+        cancel_at_period_end=entitlement.cancel_at_period_end if entitlement else False,
+    )

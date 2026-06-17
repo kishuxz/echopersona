@@ -33,3 +33,13 @@ class EntitlementUpsert(BaseModel):
 class AccessDecision(BaseModel):
     allowed: bool
     reason: str = ""
+
+
+class BillingStatusResponse(BaseModel):
+    plan_tier: PlanTier
+    status: EntitlementStatus | None = None
+    can_use_chat: bool
+    can_use_voice: bool
+    can_use_video: bool
+    current_period_end: datetime | None = None
+    cancel_at_period_end: bool = False

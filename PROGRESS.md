@@ -1,7 +1,12 @@
 # EchoPersona — Build Progress
 
 ## Active feature
-Step 7 — Entitlements and Stripe gating (Slice D done — webhook handler)
+Step 7 — Entitlements and Stripe gating (Slice E done — billing status endpoint)
+
+## Step 7 Slice E ✅ — Billing status endpoint (2026-06-17)
+- `backend/models/entitlements.py` — added `BillingStatusResponse` (plan_tier, status, access flags, period_end; no Stripe IDs)
+- `backend/routers/billing.py` — `GET /billing/status`: JWT required; reads `stripe_entitlements` only (no Stripe API calls); free-tier defaults when no row exists
+- `backend/tests/test_billing_status.py` — 14 new tests; 213 total passing
 
 ## Step 7 Slice D ✅ — Stripe webhook handler (2026-06-17)
 - `backend/services/stripe_webhooks.py` — `record_event_idempotent`, `handle_checkout_completed`, `handle_subscription_event`, `process_stripe_event`; price→tier mapping; status→EntitlementStatus mapping; unknown price/user handled safely
@@ -48,12 +53,12 @@ Previous milestones:
 None.
 
 ## Next action
-Step 7 Slice E — `GET /billing/status` (return current entitlement tier and access flags for the authed user).
+Step 7 Slice F — WebSocket live-path gating: use `can_use_voice` / `can_use_video` from entitlement service to enforce modality access on the live conversation path.
 
 ## Last known green verification
 ```bash
 cd backend && python -m pytest tests/ -q
-# 199 passed (all slices green, 2026-06-17)
+# 213 passed (all slices green, 2026-06-17)
 cd frontend && npx tsc --noEmit && npm run build
 # typecheck clean; built in 1.10s
 ```
