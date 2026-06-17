@@ -1,0 +1,56 @@
+from datetime import datetime
+from typing import Literal
+
+from pydantic import BaseModel, Field
+
+
+class ModalityConsent(BaseModel):
+    voice_clone: bool = False
+    video_avatar: bool = False
+    text_twin: bool = True
+
+
+class ConsentRights(BaseModel):
+    subject_may_delete: bool = True
+    subject_may_review: bool = True
+
+
+class ConsentCreate(BaseModel):
+    modality_consent: ModalityConsent = Field(default_factory=ModalityConsent)
+    rights: ConsentRights = Field(default_factory=ConsentRights)
+    policy_version: str = "1"
+    affirmation_media_ref: str | None = None
+
+
+class ConsentRecord(ConsentCreate):
+    id: str
+    persona_id: str
+    subject_user_id: str
+    captured_at: datetime
+    consent_version: int
+    status: Literal["active", "superseded", "revoked"]
+    ended_at: datetime | None = None
+    supersedes: str | None = None
+
+
+class SuccessionBeneficiary(BaseModel):
+    user_id: str
+    relationship: str
+    address_term: str = ""
+    scope: Literal["full", "curated"]
+    activation_trigger: Literal["immediate", "posthumous_verified"]
+    release_messages: list[str] = Field(default_factory=list)
+
+
+class SuccessionCreate(BaseModel):
+    beneficiaries: list[SuccessionBeneficiary] = Field(default_factory=list)
+
+
+class SuccessionRecord(SuccessionCreate):
+    id: str
+    persona_id: str
+    subject_user_id: str
+    captured_at: datetime
+    status: Literal["active", "superseded", "revoked"]
+    ended_at: datetime | None = None
+    supersedes: str | None = None

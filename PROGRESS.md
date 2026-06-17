@@ -17,8 +17,12 @@ Migration `backend/migrations/005_consent_succession.sql` must be run manually i
 before building the consent/succession service layer. Idempotent — safe to re-run.
 
 ## Next action
-After running migration 005: implement `backend/models/consent.py`, `backend/services/consent.py`,
-`backend/routers/consent.py`, and `backend/tests/test_consent.py` (spec §7.2, §7.3, §2.4–2.5).
+Implement `backend/services/consent.py`, `backend/routers/consent.py`, and
+`backend/tests/test_consent.py` (spec §7.2, §7.3, §2.4–2.5).
+
+## Completed this session
+- `backend/models/consent.py` ✅ — `ModalityConsent`, `ConsentRights`, `ConsentCreate`,
+  `ConsentRecord`, `SuccessionBeneficiary`, `SuccessionCreate`, `SuccessionRecord`
 
 ## Last known green verification
 ```bash
