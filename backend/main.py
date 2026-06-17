@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from arq.connections import create_pool
 
 from config import settings
-from routers import creation, health, ingest, persona, review, ws
+from routers import consent, creation, health, ingest, persona, review, ws
 from worker import WorkerSettings
 
 logger = logging.getLogger(__name__)
@@ -61,4 +61,5 @@ app.include_router(persona.router)
 app.include_router(ingest.router)
 app.include_router(creation.router)
 app.include_router(review.router)
+app.include_router(consent.router)
 app.include_router(ws.router)
