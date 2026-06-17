@@ -39,7 +39,7 @@ _VALID_SKIP_REASONS = {"saturated", "capped", "covered_elsewhere", "low_value", 
 
 
 def _load_evaluator_prompt() -> str:
-    path = Path(__file__).parent.parent / "prompts" / "EVALUATOR_SYSTEM.md"
+    path = Path(__file__).parent.parent / "prompts" / "evaluator_system.md"
     text = path.read_text(encoding="utf-8")
     marker_start = "## SYSTEM PROMPT (copy below this line)\n"
     marker_end = "\n## (end of system prompt)"
