@@ -13,12 +13,12 @@ Previous milestones:
 - Step 1 ✅ Question bank loader
 
 ## Current blocker
-Migration `backend/migrations/004_creation_fields.sql` must be run manually in Supabase SQL editor
-before exercising the live creation endpoint. Idempotent — safe to re-run.
+Migration `backend/migrations/005_consent_succession.sql` must be run manually in Supabase SQL editor
+before building the consent/succession service layer. Idempotent — safe to re-run.
 
 ## Next action
-Implement consent record capture (spec §7.2) and succession / beneficiary intent (spec §7.3).
-Follow data contract in `docs/product-spec.md` §2.4–2.5. Add migration for consent + succession tables.
+After running migration 005: implement `backend/models/consent.py`, `backend/services/consent.py`,
+`backend/routers/consent.py`, and `backend/tests/test_consent.py` (spec §7.2, §7.3, §2.4–2.5).
 
 ## Last known green verification
 ```bash
@@ -28,5 +28,7 @@ cd backend && python -m pytest tests/ -q
 ## Do not forget
 - Run `backend/migrations/004_creation_fields.sql` in Supabase SQL editor (adds `persona_id`,
   `source_question_id`, `source_type`, `supersedes`, `captured_at`, `media_ref` to memory_units).
+- Run `backend/migrations/005_consent_succession.sql` in Supabase SQL editor (adds `consent_records`
+  and `succession_records` tables with append-only semantics, unique-active indexes, and RLS).
 - Stripe, Tavus not yet wired in — see `docs/backlog.md`.
 - Build steps 6 (live-path additions) and 7 (resonance) follow step 5.
