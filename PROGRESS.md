@@ -1,16 +1,16 @@
 # EchoPersona — Build Progress
 
 ## Active feature
-Build step 5b (frontend) — Minimal consent/succession UI
-- Slice 1 ✅ TypeScript types + API client functions (getConsent, saveConsent, getSuccession, saveSuccession)
-- Slice 2 ✅ Consent UI — `/dashboard/persona/:personaId/consent` route, `ConsentPage.tsx`, "Consent →" entry point in PersonaDetail header
-- Slice 3 ✅ Succession UI — optional beneficiary card (email, relationship, scope, activation trigger) with saved summary + edit flow
+Plan Step 6 — Live-path listener/auth context
 
 ## Last completed
-Build step 5b backend ✅ — Consent + succession capture (spec §7.2, §7.3)
+Step 5b ✅ — Full consent/succession vertical slice (spec §7.2, §7.3)
 - Migration 005 applied in Supabase SQL editor
-- 112 tests green (`backend/tests/test_consent.py` — 11 new tests)
-- Pushed to main
+- RLS enabled on consent + succession tables
+- Backend models, services, routes, tests (112 passed)
+- Frontend: `ConsentPage.tsx`, route, nav link, API client, TypeScript types
+- Frontend typecheck clean; production build passes
+- Pushed to main (`cdd857f`)
 
 Previous milestones:
 - Step 5a ✅ Self-review correction loop
@@ -23,15 +23,21 @@ Previous milestones:
 None.
 
 ## Next action
-Step 5b complete. Next: step 6 (live-path additions) or step 7 (resonance) per `docs/backlog.md`.
+Plan Step 6 using plan-feature skill — live-path listener/auth context additions.
 
 ## Last known green verification
 ```bash
 cd backend && python -m pytest tests/ -q
 # 112 passed
+
+cd frontend && npx tsc --noEmit
+# clean
+
+cd frontend && npm run build
+# 1649 modules, build succeeded
 ```
 
 ## Do not forget
 - Migrations 004 and 005 are applied in Supabase SQL editor — do not re-run unless schema is reset.
 - Stripe, Tavus not yet wired in — see `docs/backlog.md`.
-- Build steps 6 (live-path additions) and 7 (resonance) follow step 5 frontend.
+- Build step 7 (resonance) follows step 6.
