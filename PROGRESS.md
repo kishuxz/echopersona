@@ -7,9 +7,9 @@ Step 6 — Live-path listener/auth context (in progress)
 - Slice 1 ✅ `ListenerContext` model added to `backend/models/consent.py`
 - Slice 2 ✅ `services/listener.py` — `resolve_listener_context` + `get_active_consent_for_persona`; 10 new tests
 - Slice 3 ✅ `services/persona_store.py` — `get_persona_by_id` (no owner filter, post-auth use only)
+- Slice 4 ✅ `services/rag.py` — `build_system_prompt` accepts `listener_ctx`; listener block injected for beneficiaries only; 5 new prompt tests
 
 ## Remaining slices
-- Slice 4: `services/rag.py` — add `listener_ctx` param to `build_system_prompt`
 - Slice 5: `routers/ws.py` — wire auth, SESSION_LISTENER, modality gating
 - Slice 6: additional ws integration tests
 
@@ -38,7 +38,7 @@ Slice 4: update `build_system_prompt` in `services/rag.py` to accept `listener_c
 ## Last known green verification
 ```bash
 cd backend && python -m pytest tests/ -q
-# 122 passed (10 new listener tests)
+# 127 passed (15 in test_listener.py)
 ```
 
 ## Do not forget

@@ -1,4 +1,4 @@
-"""Tests for services/listener.py — live-path access resolution (spec §8.1.2, §9.3).
+"""Tests for services/listener.py and build_system_prompt listener injection (spec §8.1.2, §9.3).
 
 Coverage:
   - No consent record → denied
@@ -9,14 +9,18 @@ Coverage:
   - Beneficiary with posthumous_verified → denied
   - Stranger not in succession beneficiaries → denied
   - No succession record for non-owner → denied
+  - build_system_prompt: listener_ctx=None → prompt unchanged
+  - build_system_prompt: is_owner=True → prompt unchanged
+  - build_system_prompt: beneficiary → listener block appended
 
 All DB calls are mocked — no Supabase, no network.
 """
 import asyncio
 from unittest.mock import MagicMock
 
-from models.consent import ListenerContext
+from models.consent import ListenerContext, ModalityConsent
 from services.listener import resolve_listener_context
+from services.rag import build_system_prompt
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -179,3 +183,80 @@ class TestBeneficiaryAccess:
         db = _make_db([_CONSENT_ROW_FULL, _PERSONA_ROW, {"beneficiaries": []}])
         result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _BENEFICIARY_ID))
         assert result is None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# build_system_prompt — listener context injection
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _make_persona():
+    from models.persona import Persona
+    return Persona(
+        id="p1",
+        user_id=_OWNER_ID,
+        name="Gran",
+        stories=[],
+        personality_traits=["warm"],
+        speaking_style="gentle",
+    )
+
+_MODALITIES_FULL = ModalityConsent(voice_clone=True, video_avatar=True, text_twin=True)
+
+_OWNER_CTX = ListenerContext(
+    listener_user_id=_OWNER_ID,
+    is_owner=True,
+    allowed_modalities=_MODALITIES_FULL,
+)
+
+_BENEFICIARY_CTX = ListenerContext(
+    listener_user_id=_BENEFICIARY_ID,
+    is_owner=False,
+    relationship="daughter",
+    address_term="kiddo",
+    scope="full",
+    allowed_modalities=_MODALITIES_FULL,
+)
+
+_BENEFICIARY_CTX_MINIMAL = ListenerContext(
+    listener_user_id=_BENEFICIARY_ID,
+    is_owner=False,
+    relationship="son",
+    allowed_modalities=_MODALITIES_FULL,
+)
+
+
+class TestBuildSystemPromptListenerInjection:
+
+    def _base_prompt(self):
+        """Baseline prompt with no listener_ctx for comparison."""
+        return build_system_prompt(_make_persona(), [])
+
+    def test_no_listener_ctx_unchanged(self):
+        assert build_system_prompt(_make_persona(), []) == self._base_prompt()
+
+    def test_owner_ctx_unchanged(self):
+        # is_owner=True → no listener block, identical to no-ctx output
+        result = build_system_prompt(_make_persona(), [], listener_ctx=_OWNER_CTX)
+        assert result == self._base_prompt()
+
+    def test_beneficiary_ctx_adds_listener_block(self):
+        result = build_system_prompt(_make_persona(), [], listener_ctx=_BENEFICIARY_CTX)
+        assert "LISTENER CONTEXT:" in result
+        assert "daughter" in result
+        assert '"kiddo"' in result
+        assert "full" in result
+        assert "Do not infer listener identity" in result
+
+    def test_beneficiary_ctx_does_not_alter_persona_block(self):
+        # Core persona identity must be unchanged even with listener block
+        base = self._base_prompt()
+        result = build_system_prompt(_make_persona(), [], listener_ctx=_BENEFICIARY_CTX)
+        assert result.startswith(base)
+
+    def test_beneficiary_ctx_minimal_no_address_or_scope(self):
+        # address_term=None, scope=None → those lines omitted, no KeyError
+        result = build_system_prompt(_make_persona(), [], listener_ctx=_BENEFICIARY_CTX_MINIMAL)
+        assert "LISTENER CONTEXT:" in result
+        assert "son" in result
+        assert "kiddo" not in result   # address_term absent → not injected
+        assert "scope" not in result.lower().split("listener")[1]  # scope line absent

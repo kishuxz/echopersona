@@ -12,6 +12,7 @@ import logging
 import numpy as np
 
 from config import settings
+from models.consent import ListenerContext
 from models.persona import Persona, PersonaCreate
 
 logger = logging.getLogger(__name__)
@@ -141,6 +142,7 @@ def _truncate(text: str, max_words: int = 80) -> str:
 def build_system_prompt(
     persona: Persona | None,
     retrieved_context: list[dict] | list[str],
+    listener_ctx: ListenerContext | None = None,
 ) -> str:
     if persona is None:
         return (
@@ -202,6 +204,21 @@ def build_system_prompt(
         ex = persona.style_exemplars[:3]
         style_block = "\nCHARACTERISTIC PHRASES:\n" + "\n".join(f'  "{e}"' for e in ex)
 
+    # Listener context block — only for authenticated non-owner beneficiaries
+    listener_block = ""
+    if listener_ctx is not None and not listener_ctx.is_owner:
+        lines = ["LISTENER CONTEXT:"]
+        if listener_ctx.relationship:
+            lines.append(f"You are speaking with the persona owner's {listener_ctx.relationship}.")
+        if listener_ctx.address_term:
+            lines.append(
+                f'You may address them as "{listener_ctx.address_term}" when natural.'
+            )
+        if listener_ctx.scope:
+            lines.append(f"Access scope: {listener_ctx.scope}.")
+        lines.append("Do not infer listener identity beyond this authenticated context.")
+        listener_block = "\n" + "\n".join(lines)
+
     prompt = (
         f"You are {persona.name}. Speak only in first person. 1-2 sentences max.\n"
         f"IMPORTANT: Use ONLY the memories below. Ignore all outside knowledge about this name.\n"
@@ -209,6 +226,7 @@ def build_system_prompt(
         f"\nYOUR MEMORIES:\n{context_block}"
         f"{entity_block}"
         f"{style_block}"
+        f"{listener_block}"
     )
     logger.debug("system prompt length: %d chars", len(prompt))
     return prompt
