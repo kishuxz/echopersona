@@ -54,6 +54,26 @@ async def create_persona(user_id: str, data: PersonaCreate) -> Persona:
     return Persona(**result.data[0])
 
 
+async def get_persona_by_id(persona_id: str) -> Persona | None:
+    """Load a persona by id without ownership filtering.
+
+    Only call this after access has been validated by resolve_listener_context.
+    """
+    db = get_db()
+    result = (
+        db.table("personas")
+        .select(
+            "id, user_id, name, stories, personality_traits, speaking_style, voice_id, did_avatar_url, idle_video_url, simli_face_id, entity_graph, style_exemplars, created_at"
+        )
+        .eq("id", persona_id)
+        .maybe_single()
+        .execute()
+    )
+    if not result.data:
+        return None
+    return Persona(**result.data)
+
+
 async def get_persona(persona_id: str, user_id: str) -> Persona | None:
     db = get_db()
     result = (

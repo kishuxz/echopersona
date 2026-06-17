@@ -1,9 +1,19 @@
 # EchoPersona — Build Progress
 
 ## Active feature
-Plan Step 6 — Live-path listener/auth context
+Step 6 — Live-path listener/auth context (in progress)
 
-## Last completed
+## Completed slices this step
+- Slice 1 ✅ `ListenerContext` model added to `backend/models/consent.py`
+- Slice 2 ✅ `services/listener.py` — `resolve_listener_context` + `get_active_consent_for_persona`; 10 new tests
+- Slice 3 ✅ `services/persona_store.py` — `get_persona_by_id` (no owner filter, post-auth use only)
+
+## Remaining slices
+- Slice 4: `services/rag.py` — add `listener_ctx` param to `build_system_prompt`
+- Slice 5: `routers/ws.py` — wire auth, SESSION_LISTENER, modality gating
+- Slice 6: additional ws integration tests
+
+## Last completed step
 Step 5b ✅ — Full consent/succession vertical slice (spec §7.2, §7.3)
 - Migration 005 applied in Supabase SQL editor
 - RLS enabled on consent + succession tables
@@ -23,18 +33,12 @@ Previous milestones:
 None.
 
 ## Next action
-Plan Step 6 using plan-feature skill — live-path listener/auth context additions.
+Slice 4: update `build_system_prompt` in `services/rag.py` to accept `listener_ctx`.
 
 ## Last known green verification
 ```bash
 cd backend && python -m pytest tests/ -q
-# 112 passed
-
-cd frontend && npx tsc --noEmit
-# clean
-
-cd frontend && npm run build
-# 1649 modules, build succeeded
+# 122 passed (10 new listener tests)
 ```
 
 ## Do not forget
