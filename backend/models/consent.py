@@ -54,3 +54,17 @@ class SuccessionRecord(SuccessionCreate):
     status: Literal["active", "superseded", "revoked"]
     ended_at: datetime | None = None
     supersedes: str | None = None
+
+
+class ListenerContext(BaseModel):
+    """Resolved access context for a live-session participant.
+
+    Built at WebSocket connect time from consent_records + succession_records.
+    Never inferred — always authenticated from DB records.
+    """
+    listener_user_id: str
+    is_owner: bool
+    relationship: str | None = None
+    address_term: str | None = None
+    scope: Literal["full", "curated"] | None = None
+    allowed_modalities: ModalityConsent
