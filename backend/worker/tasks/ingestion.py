@@ -122,6 +122,8 @@ async def ingest_memory_unit(ctx: dict, source_id: str, user_id: str) -> dict:
                     affect=unit_data["affect"],
                     themes=unit_data["themes"],
                     entities=unit_data["entities"],
+                    version=1,        # §2.3 [add-004] — step 5 will pass supersedes for corrections
+                    supersedes=None,
                 )
 
                 # Fidelity verification

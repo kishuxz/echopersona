@@ -115,8 +115,15 @@ async def write_memory_unit(
     affect: dict,
     themes: list[str],
     entities: dict,
+    version: int = 1,
+    supersedes: str | None = None,
 ) -> str:
-    """Insert one row into memory_units. Returns the new unit_id."""
+    """Insert one row into memory_units. Returns the new unit_id.
+
+    version/supersedes are §2.3 [add-004] fields: version defaults to 1;
+    supersedes is set only for corrections (§6/§7.1, step 5).
+    Requires migration 004 to be applied before use against a live DB.
+    """
     db = get_db()
     result = (
         db.table("memory_units")
@@ -130,6 +137,8 @@ async def write_memory_unit(
             "affect": affect,
             "themes": themes,
             "entities": entities,
+            "version": version,
+            "supersedes": supersedes,
             "verified": False,
             "embedding": [],
             "fidelity_flags": [],
