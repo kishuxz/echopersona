@@ -4,6 +4,16 @@
 > stories — anyone can then have a live voice conversation with that persona
 > in under 600ms.
 
+## Project workflow
+
+| Document | Purpose |
+|---|---|
+| [`CLAUDE.md`](CLAUDE.md) | Stable project rules, constraints, coding conventions |
+| [`PROGRESS.md`](PROGRESS.md) | Current build state, active feature, next action |
+| [`docs/agent-workflow.md`](docs/agent-workflow.md) | How agents and skills should be used |
+| [`docs/runbook.md`](docs/runbook.md) | Operational commands and deploy steps |
+| [`docs/product-spec.md`](docs/product-spec.md) | Authoritative product spec and data contracts |
+
 ## Live Demo
 
 [kishoreai.online](https://kishoreai.online)

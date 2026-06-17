@@ -1,47 +1,145 @@
-# EchoPersona / Living Forever AI — Project Guide
+# EchoPersona — Project Rules
 
-Persona-twin product on the existing EchoPersona codebase. Living people build an AI twin
-(voice, stories, personality) by answering a vetted question bank; chosen family talk to the twin.
-Building chat + chat-twin now; video avatar later.
+Persona-twin product: living people build an AI twin (voice, stories, personality) by answering a
+vetted question bank; chosen family talk to the twin. Chat + chat-twin now; video avatar later.
 
-## Read before building
-- `docs/persona_spec.md` — **authoritative** spec for persona creation, the answer evaluator,
-  the live conversation path, and resonance mechanisms. Follow its data contracts exactly,
-  especially §2 (schemas) and §4 (evaluator I/O JSON). Do not invent fields.
+## Must read before building
+- `docs/product-spec.md` — authoritative spec for persona creation, evaluator, live conversation,
+  resonance mechanisms. Follow data contracts exactly (§2 schemas, §4 evaluator I/O). Do not invent fields.
+- `docs/architecture.md` — how the layers connect and where each concern lives.
+- `PROGRESS.md` — current build state and active blocker.
+
+---
 
 ## Hard constraints — never violate
-- **Latency:** live reply < 600ms warm. The reply is ONE bounded LLM call. TTS is async — never block text on audio.
-- **Fidelity:** never assert a fact absent from the verified memory units / flattened entity-graph fact-spec.
-  When retrieval is empty, use the in-character no-memory fallback (spec §9.7). Do not fabricate.
-- **No agents.** Only bounded single-shot LLM calls: ingestion transforms (batch), the answer evaluator
-  (creation-time), the live reply, and the optional across-conversation summarizer (spec §9.6, flag-gated).
-- **No GPU. No paid APIs.** All LLM/STT/vision-OCR via Groq free tier (Tesseract is the OCR-only CPU fallback).
-  ElevenLabs + D-ID are separate, non-Groq quotas.
-- **Groq ~1000 req/day, shared across ALL call types.** Budget it (spec §1.1). Interactive calls
-  (evaluator, live reply) must preempt batch ingestion. Track a daily counter in Redis; the arq worker self-throttles.
 
-## Use CodeGraph (MCP) to navigate
-- Query the CodeGraph MCP server to locate definitions, find callers, and trace dependency edges
-  BEFORE editing. Do not blind-grep. Use it to find the impact radius of any change.
-- The index reflects THIS repo (the laptop tree) — which is the code you edit.
+| Constraint | Rule |
+|---|---|
+| **Latency** | Live reply < 600ms warm. ONE bounded LLM call. TTS is async — never block text on audio. |
+| **Fidelity** | Never assert a fact absent from verified memory units / entity-graph fact-spec. No-memory fallback (spec §9.7) when retrieval is empty. Do not fabricate. |
+| **No agents** | Only bounded single-shot LLM calls: batch ingestion transforms, answer evaluator (creation-time), live reply, optional across-conversation summarizer (spec §9.6, flag-gated). |
+| **No GPU** | All LLM/STT/vision-OCR via Groq free tier. Tesseract CPU fallback for OCR only. |
+| **Groq RPM** | Free tier: ~30 req/min shared across all call types. Interactive calls (evaluator, live reply) preempt batch ingestion. Track per-minute counter in Redis; arq worker self-throttles. |
 
-## Known drift — RESOLVED
-- Deepgram startup/mock checks were removed in `stt.py` and `main.py` and committed (step 2).
+---
 
-## Build order (slice by slice; confirm each compiles before the next)
-1. ✅ Question bank data + loader (static data from spec §5.3; no LLM).
-2. ✅ Creation state machine + capture: text, and a/v → Groq Whisper STT → answer_text (spec §3).
-   - `services/creation.py`, `routers/creation.py`, `tests/test_creation.py` — 31 tests green.
-   - Migration `migrations/004_creation_fields.sql` — **run manually in Supabase SQL editor before exercising the live endpoint** (idempotent).
-   - Evaluator is a placeholder slot in `deterministic_next_action`; step 3 wires it in.
-3. Answer evaluator: the bounded Groq call + code guardrails + deterministic fallback (spec §4).
-4. Creation → ingestion handoff: write raw + provenance (Stage 0), add `source_type` and
-   `supersedes` for corrections (spec §6).
-5. Consent + succession capture (spec §7.2, §7.3).
-6. Live-path additions: precomputed voice card, listener-aware retrieval, no-memory fallback,
-   attunement folded into the single live call (spec §8, §9.2–9.4, §9.7).
-7. Resonance extras: feedback loop, across-conversation memory (flag-gated), optional TTS.
+## Architecture rules
 
-## Stack & conventions
-FastAPI backend · React/Vite/TS frontend · Supabase (auth/Postgres/storage) · Redis · arq worker ·
-Docker Compose on a private VPC · nginx. Keep every change deterministic and auditable for fidelity.
+- **Persona work at ingestion, never at query time.** Live path retrieves already-persona-conditioned
+  memory units; it does not do persona reasoning.
+- **Supabase is source of truth** for all persistent state: personas, memory units, sessions, consent,
+  entitlements.
+- **Redis is temporary only**: rate-limit counters, semantic cache, job status, session state. Nothing
+  in Redis is the source of truth for billing or persona data.
+- **Heavy ingestion (Stages 1–4)** runs exclusively in the arq worker. Never inside an edge function
+  or a FastAPI request handler.
+- **Stripe entitlements table** is the billing/access source of truth once payments are wired in.
+- **RAG at query time is plumbing, not persona**. FAISS retrieves pre-built memory units; the live call
+  assembles them. No persona reasoning at query time.
+
+---
+
+## Coding rules
+
+- Single-shot LLM calls only. No chaining, no agent loops.
+- Validate all LLM JSON output in code. Never trust model output directly.
+- Every DB write is auditable: include `source_type`, `captured_at`, and `provenance` fields.
+- Migrations go in `backend/migrations/` (named `NNN_description.sql`) AND in `supabase/migrations/`
+  for Supabase CLI tracking. Run manually in the Supabase SQL editor for now.
+- Test new services before wiring into routes. Run `cd backend && python -m pytest tests/ -q` after
+  each slice.
+
+---
+
+## Security rules
+
+- Never expose `SUPABASE_SERVICE_ROLE_KEY` to frontend.
+- All persona endpoints and WebSocket require a valid Supabase JWT (`middleware/auth.py`).
+- Supabase RLS must be enabled on every table containing user data.
+- Stripe webhooks must validate the `Stripe-Signature` header before processing.
+- No secrets in code; use `.env` / environment variables. `.env` files are gitignored.
+
+---
+
+## Supabase rules
+
+- All schema changes go through a migration file first — no ad-hoc SQL in production.
+- RLS policies required on every table. Use `USING (auth.uid() = user_id)` patterns.
+- Storage buckets: set appropriate RLS policies; never make user-uploaded content public without review.
+- Use Supabase service role key only in the FastAPI backend (server-side). Frontend uses anon key.
+
+---
+
+## Stripe rules (planned — not yet built)
+
+- Stripe checkout sessions created server-side only. Never pass price IDs from the client.
+- Webhook handler must verify `Stripe-Signature`; idempotency via `stripe_event_id` column.
+- Entitlements table in Supabase is updated by the webhook handler, not the checkout redirect.
+- Never grant access based on URL parameters or frontend state alone.
+
+---
+
+## RAG / persona rules
+
+- Memory units must pass fidelity verification before being indexed.
+- `resolved_entity_ids` must be written by Stage 3 before Stage 4 indexes.
+- The live reply prompt includes: retrieved memory units + persona card + voice card + entity graph
+  fact-spec + listener context. Assemble in `services/rag.py`.
+- No-memory fallback (spec §9.7) activates when FAISS returns empty or below threshold.
+
+---
+
+## Media rules
+
+- ElevenLabs TTS is async — fire it after text is committed to the client.
+- Cartesia is the fast TTS alternative (~80ms TTFA). Toggle via `TTS_PROVIDER=cartesia`.
+- Voice clone requires at least one `video_audio` answer stored in Supabase Storage.
+- D-ID / Simli video generation is optional and must never block the live reply path.
+- Tavus integration (planned): same async non-blocking constraint applies.
+
+---
+
+## Documentation rules
+
+- **Do not create new markdown files** unless explicitly approved or no existing category fits.
+- Update existing docs rather than creating new ones. Approved doc files:
+  - `CLAUDE.md` — stable project rules (this file)
+  - `PROGRESS.md` — current session state only
+  - `README.md` — public-facing project overview
+  - `docs/product-spec.md` — product behavior, data contracts, question bank
+  - `docs/architecture.md` — technical architecture
+  - `docs/decisions.md` — decision log
+  - `docs/backlog.md` — future ideas
+  - `docs/pricing-data-lifecycle.md` — pricing, preservation, deletion, legacy policy
+  - `docs/agent-workflow.md` — how agents and skills should be used
+  - `docs/runbook.md` — operational commands and steps
+  - `backend/prompts/evaluator_system.md` — LLM prompt (not documentation)
+- `docs/archive/` — obsolete files only; include an archive note at the top.
+
+---
+
+## Verification commands
+
+```bash
+# Backend tests
+cd backend && python -m pytest tests/ -q
+
+# Type-check frontend
+cd frontend && npx tsc --noEmit
+
+# Start backend dev server (requires .env)
+cd backend && uvicorn main:app --port 8000 --reload
+
+# Start frontend dev
+cd frontend && npm run dev
+
+# Docker stack
+docker compose up --build
+```
+
+---
+
+## CodeGraph (MCP)
+
+Query the CodeGraph MCP server to locate definitions, find callers, and trace dependency edges
+BEFORE editing. Use `codegraph_explore` for most questions. Do not blind-grep.
