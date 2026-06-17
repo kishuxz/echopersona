@@ -35,3 +35,9 @@ supabase/.temp/
 .pytest_cache/
 htmlcov/
 .coverage
+
+# Local AI/tooling state
+.codegraph/
+.cursor/
+.gemini/
+.mcp.json
