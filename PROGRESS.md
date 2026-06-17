@@ -1,7 +1,14 @@
 # EchoPersona — Build Progress
 
 ## Active feature
-Step 7 — Entitlements and Stripe gating (Slice A done — migration)
+Step 7 — Entitlements and Stripe gating (Slice B done — config, models, service)
+
+## Step 7 Slice B ✅ — Config, models, entitlement service (2026-06-17)
+- `backend/config.py` — added `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_CREATOR_MONTHLY`, `STRIPE_PRICE_LEGACY_MONTHLY`, `FRONTEND_BILLING_SUCCESS_URL`, `FRONTEND_BILLING_CANCEL_URL`
+- `backend/requirements.txt` — added `stripe>=8.0.0`
+- `backend/models/entitlements.py` — `PlanTier`, `EntitlementStatus`, `StripeEntitlement`, `EntitlementUpsert`, `AccessDecision`
+- `backend/services/entitlements.py` — `get_entitlement_for_user`, `get_entitlement_by_customer_or_subscription`, `upsert_entitlement_from_subscription`, `can_use_chat`, `can_use_voice`, `can_use_video`
+- `backend/tests/test_entitlements.py` — 32 new tests; 159 total passing
 
 ## Step 7 Slice A ✅ — Billing migration (2026-06-17)
 - `backend/migrations/006_stripe_entitlements.sql` — `stripe_entitlements` table (tier, status, Stripe IDs, period end) + `stripe_webhook_events` table (idempotency log) + RLS + indexes
@@ -30,7 +37,7 @@ Previous milestones:
 None.
 
 ## Next action
-Step 7 Slice B — config.py (STRIPE_* vars), requirements.txt (add stripe), models/entitlements.py, services/entitlements.py.
+Step 7 Slice C — `routers/stripe.py` (checkout + status + webhook), `main.py` (register router), `tests/test_stripe_webhook.py`.
 
 ## Last known green verification
 ```bash

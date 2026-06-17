@@ -34,6 +34,19 @@ class Settings(BaseSettings):
 
     public_base_url: str = Field(default="https://kishoreai.online", alias="PUBLIC_BASE_URL")
 
+    stripe_secret_key: str = Field(default="", alias="STRIPE_SECRET_KEY")
+    stripe_webhook_secret: str = Field(default="", alias="STRIPE_WEBHOOK_SECRET")
+    stripe_price_creator_monthly: str = Field(default="", alias="STRIPE_PRICE_CREATOR_MONTHLY")
+    stripe_price_legacy_monthly: str = Field(default="", alias="STRIPE_PRICE_LEGACY_MONTHLY")
+    frontend_billing_success_url: str = Field(
+        default="http://localhost:5173/billing/success",
+        alias="FRONTEND_BILLING_SUCCESS_URL",
+    )
+    frontend_billing_cancel_url: str = Field(
+        default="http://localhost:5173/billing/cancel",
+        alias="FRONTEND_BILLING_CANCEL_URL",
+    )
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
