@@ -68,6 +68,12 @@ export function PersonaDetail() {
           <span className="text-border">|</span>
           <div className="flex items-center gap-2">
             <span className="font-fraunces text-base font-semibold text-text">{persona.name}</span>
+            <button
+              className="ml-2 font-sans text-xs text-muted transition-colors hover:text-textdim"
+              onClick={() => navigate(`/dashboard/persona/${personaId}/consent`)}
+            >
+              Consent →
+            </button>
             {persona.speaking_style && (
               <>
                 <span className="text-muted">·</span>

@@ -1,6 +1,6 @@
 import { DEFAULT_API_BASE, DEFAULT_WS_BASE } from '../constants'
 import { supabase } from './supabase'
-import type { Persona, PersonaCreate } from '../types'
+import type { Persona, PersonaCreate, ConsentRecord, ConsentCreate, SuccessionRecord, SuccessionCreate } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? DEFAULT_API_BASE
 
@@ -105,6 +105,56 @@ export async function deletePersona(personaId: string): Promise<void> {
     method: 'DELETE',
     headers,
   })
+}
+
+export async function getConsent(personaId: string): Promise<ConsentRecord | null> {
+  const headers = await getAuthHeaders()
+  const res = await fetch(`${API_BASE}/personas/${personaId}/consent`, { headers })
+  if (res.status === 404) return null
+  if (!res.ok) {
+    const err = await res.json()
+    throw new Error(err.detail || 'Failed to fetch consent')
+  }
+  return res.json()
+}
+
+export async function saveConsent(personaId: string, data: ConsentCreate): Promise<ConsentRecord> {
+  const headers = await getAuthHeaders()
+  const res = await fetch(`${API_BASE}/personas/${personaId}/consent`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json()
+    throw new Error(err.detail || 'Failed to save consent')
+  }
+  return res.json()
+}
+
+export async function getSuccession(personaId: string): Promise<SuccessionRecord | null> {
+  const headers = await getAuthHeaders()
+  const res = await fetch(`${API_BASE}/personas/${personaId}/succession`, { headers })
+  if (res.status === 404) return null
+  if (!res.ok) {
+    const err = await res.json()
+    throw new Error(err.detail || 'Failed to fetch succession')
+  }
+  return res.json()
+}
+
+export async function saveSuccession(personaId: string, data: SuccessionCreate): Promise<SuccessionRecord> {
+  const headers = await getAuthHeaders()
+  const res = await fetch(`${API_BASE}/personas/${personaId}/succession`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json()
+    throw new Error(err.detail || 'Failed to save succession')
+  }
+  return res.json()
 }
 
 export async function buildWsUrl(

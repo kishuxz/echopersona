@@ -4,6 +4,7 @@ import { AuthPage } from './pages/AuthPage'
 import { Dashboard } from './pages/Dashboard'
 import { LandingPage } from './pages/LandingPage'
 import { PersonaDetail } from './pages/PersonaDetail'
+import { ConsentPage } from './pages/ConsentPage'
 import { PersonaEdit } from './pages/PersonaEdit'
 
 export const router = createBrowserRouter([
@@ -23,6 +24,14 @@ export const router = createBrowserRouter([
     element: (
       <ProtectedRoute>
         <PersonaDetail />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/dashboard/persona/:personaId/consent',
+    element: (
+      <ProtectedRoute>
+        <ConsentPage />
       </ProtectedRoute>
     ),
   },
