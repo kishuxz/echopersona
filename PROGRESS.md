@@ -1,7 +1,13 @@
 # EchoPersona — Build Progress
 
 ## Active feature
-Step 7 — Entitlements and Stripe gating (Slice B done — config, models, service)
+Step 7 — Entitlements and Stripe gating (Slice C done — checkout route)
+
+## Step 7 Slice C ✅ — Stripe checkout route (2026-06-17)
+- `backend/services/billing.py` — `create_checkout_session`: get-or-create Stripe customer, create subscription checkout session
+- `backend/routers/billing.py` — `POST /billing/checkout`: auth required; maps plan_tier to price ID from config; rejects unknown tiers (422) and missing price config (500)
+- `backend/main.py` — registered `billing.router`
+- `backend/tests/test_billing_checkout.py` — 17 new tests (route + service layer); 176 total passing
 
 ## Step 7 Slice B ✅ — Config, models, entitlement service (2026-06-17)
 - `backend/config.py` — added `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_CREATOR_MONTHLY`, `STRIPE_PRICE_LEGACY_MONTHLY`, `FRONTEND_BILLING_SUCCESS_URL`, `FRONTEND_BILLING_CANCEL_URL`
@@ -37,7 +43,7 @@ Previous milestones:
 None.
 
 ## Next action
-Step 7 Slice C — `routers/stripe.py` (checkout + status + webhook), `main.py` (register router), `tests/test_stripe_webhook.py`.
+Step 7 Slice D — `POST /billing/webhook` (Stripe webhook handler, idempotency, entitlement upsert), `GET /billing/status`, `tests/test_billing_webhook.py`.
 
 ## Last known green verification
 ```bash
