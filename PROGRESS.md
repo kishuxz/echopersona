@@ -1,7 +1,12 @@
 # EchoPersona — Build Progress
 
 ## Active feature
-Step 7 — Entitlements and Stripe gating (planning)
+Step 7 — Entitlements and Stripe gating (Slice A done — migration)
+
+## Step 7 Slice A ✅ — Billing migration (2026-06-17)
+- `backend/migrations/006_stripe_entitlements.sql` — `stripe_entitlements` table (tier, status, Stripe IDs, period end) + `stripe_webhook_events` table (idempotency log) + RLS + indexes
+- `supabase/migrations/006_stripe_entitlements.sql` — identical copy for Supabase CLI
+- **Not yet applied** — run in Supabase SQL editor before Slice C (webhook handler)
 
 ## Last completed step
 Step 6 ✅ — Live-path listener/auth context (spec §8.1.2, §9.3)
@@ -25,7 +30,7 @@ Previous milestones:
 None.
 
 ## Next action
-Plan Step 7 using plan-feature skill — entitlements table, Stripe checkout, webhook handler, and access gating by plan tier.
+Step 7 Slice B — config.py (STRIPE_* vars), requirements.txt (add stripe), models/entitlements.py, services/entitlements.py.
 
 ## Last known green verification
 ```bash
@@ -37,6 +42,7 @@ cd frontend && npx tsc --noEmit && npm run build
 
 ## Do not forget
 - Migrations 004 and 005 are applied in Supabase SQL editor — do not re-run unless schema is reset.
-- Stripe, Tavus not yet wired in — see `docs/backlog.md`.
-- `SESSION_LISTENER` not cleaned up on disconnect (same gap as `SESSION_HISTORY`) — close in Step 7 or 8.
+- Migration 006 is written but not yet applied — run before Slice C.
+- Tavus not yet wired in — see `docs/backlog.md`.
+- `SESSION_LISTENER` not cleaned up on disconnect (same gap as `SESSION_HISTORY`) — close in Step 7 Slice D.
 - `posthumous_verified` beneficiary activation is explicitly deferred — activation signal not yet wired.
