@@ -5,19 +5,23 @@ Session state is stored in Redis as JSON (TTL = SESSION_TTL_SECONDS).
 Per-answer flow:
   1. [a/v only] STT via Stage 0 Whisper (full media files, not PCM chunks).
   2. Stage 0 write: insert memory_sources row synchronously — no LLM, no wait.
-  3. Deterministic action §4.4  ←  step 3 will plug the evaluator in here.
+  3. Evaluator (§4): bounded Groq call → evaluate_next_action(); falls back to §4.4.
   4. State transition (pure, tested).
   5. Return NextStep to the router.
 """
 from __future__ import annotations
 
+import json
 import logging
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Literal
 
+import httpx
 from pydantic import BaseModel, Field
 
+from services.groq_limiter import groq_acquire
 from services.question_bank import QuestionEntry, get_steering_bank, questions_in_creation_order
 
 logger = logging.getLogger(__name__)
@@ -25,6 +29,26 @@ logger = logging.getLogger(__name__)
 SESSION_TTL_SECONDS = 7 * 24 * 3600
 _SESSION_KEY_PREFIX = "creation_session:"
 SHORT_ANSWER_THRESHOLD = 120  # §4.4 — tune against real sessions
+
+_GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
+_EVALUATOR_MODEL = "llama-3.1-8b-instant"
+
+_VALID_NEXT_ACTIONS = {"ask_probe", "advance", "steer"}
+_VALID_STEER_IDS = {"refocus", "wrap_up", "too_short", "sensitive_ok"}
+_VALID_SKIP_REASONS = {"saturated", "capped", "covered_elsewhere", "low_value", None}
+
+
+def _load_evaluator_prompt() -> str:
+    path = Path(__file__).parent.parent / "prompts" / "EVALUATOR_SYSTEM.md"
+    text = path.read_text(encoding="utf-8")
+    marker_start = "## SYSTEM PROMPT (copy below this line)\n"
+    marker_end = "\n## (end of system prompt)"
+    start = text.index(marker_start) + len(marker_start)
+    end = text.index(marker_end)
+    return text[start:end].strip()
+
+
+_EVALUATOR_SYSTEM_PROMPT = _load_evaluator_prompt()
 
 
 # ── Session state ─────────────────────────────────────────────────────────────
@@ -41,7 +65,7 @@ class CreationSession(BaseModel):
     current_probe_id: str | None = None
     followups_used_this_question: int = 0
 
-    # Signal + topic saturation — updated by evaluator (step 3)
+    # Signal + topic saturation — updated by evaluator (§4)
     signal_coverage: dict[str, Literal["none", "partial", "saturated"]] = Field(
         default_factory=dict
     )
@@ -120,9 +144,6 @@ def deterministic_next_action(
 ) -> dict:
     """§4.4 deterministic fallback — zero Groq calls.
 
-    Step 3 inserts the real evaluator call before this function; until then
-    this is the only decision logic.
-
     Returns dict: {next_action, probe_id?}
     """
     probes = question.probes
@@ -190,6 +211,220 @@ def apply_action(
     )
 
 
+# ── Evaluator (§4) ───────────────────────────────────────────────────────────
+
+
+def _build_evaluator_input(
+    question: QuestionEntry,
+    answer_text: str,
+    session: CreationSession,
+) -> dict:
+    """Build the §4.1 evaluator user-message JSON. Pure."""
+    signal_coverage = {
+        k: v for k, v in session.signal_coverage.items()
+        if v in ("partial", "saturated")
+    }
+    return {
+        "question": {
+            "id": question.id,
+            "prompt": question.prompt,
+            "category": question.category,
+            "intent": question.intent,
+            "signals": question.signals,
+        },
+        "prepared_probes": [
+            {"id": p.id, "prompt": p.prompt, "good_when": p.good_when}
+            for p in question.probes
+        ],
+        "answer_text": answer_text,
+        "session_state": {
+            "followups_used_this_question": session.followups_used_this_question,
+            "max_followups": question.max_followups,
+            "signal_coverage": signal_coverage,
+            "topics_well_covered": session.topics_well_covered,
+        },
+    }
+
+
+def _validate_evaluator_output(
+    raw: dict,
+    question: QuestionEntry,
+    session: CreationSession,
+) -> dict | None:
+    """Apply §4.2 schema check and §4.3 guardrails. Returns safe action dict or None → fallback."""
+    try:
+        next_action = raw.get("next_action")
+        if next_action not in _VALID_NEXT_ACTIONS:
+            return None
+
+        # §4.3: enforce max_followups in code regardless of model output
+        if next_action == "ask_probe" and session.followups_used_this_question >= question.max_followups:
+            return {"next_action": "advance", "skip_reason": "capped"}
+
+        if next_action == "ask_probe":
+            probe_id = raw.get("probe_id")
+            valid_probe_ids = {p.id for p in question.probes}
+            if not probe_id or probe_id not in valid_probe_ids:
+                return None  # probe injection blocked → caller falls back
+
+            # §4.3: code override when all target signals are already saturated
+            if question.signals and all(
+                session.signal_coverage.get(s) == "saturated" for s in question.signals
+            ):
+                return {"next_action": "advance", "skip_reason": "saturated"}
+
+            # §4.3: conservative default — low-confidence probe request → advance
+            confidence = float(raw.get("confidence", 1.0))
+            if confidence < 0.5:
+                return {"next_action": "advance", "skip_reason": "low_value"}
+
+            return {"next_action": "ask_probe", "probe_id": probe_id}
+
+        if next_action == "steer":
+            steer_id = raw.get("steer_id")
+            if steer_id not in _VALID_STEER_IDS:
+                return None
+            return {"next_action": "steer", "steer_id": steer_id}
+
+        # advance
+        skip_reason = raw.get("skip_reason")
+        if skip_reason == "null":  # model may return the string "null"
+            skip_reason = None
+        if skip_reason not in _VALID_SKIP_REASONS:
+            skip_reason = None
+        return {"next_action": "advance", "skip_reason": skip_reason}
+
+    except (TypeError, KeyError, ValueError):
+        return None
+
+
+def _update_coverage(
+    session: CreationSession,
+    signals_present: list[str],
+    topics_touched: list[str],
+) -> CreationSession:
+    """Accumulate signal_coverage and topics_well_covered from evaluator answer_quality. Pure."""
+    new_coverage = dict(session.signal_coverage)
+    for sig in signals_present:
+        current = new_coverage.get(sig, "none")
+        if current == "none":
+            new_coverage[sig] = "partial"
+        elif current == "partial":
+            new_coverage[sig] = "saturated"
+        # saturated stays saturated
+
+    new_topics = list(session.topics_well_covered)
+    for topic in topics_touched:
+        if topic not in new_topics:
+            new_topics.append(topic)
+
+    return session.model_copy(update={
+        "signal_coverage": new_coverage,
+        "topics_well_covered": new_topics,
+    })
+
+
+async def _call_evaluator_raw(
+    question: QuestionEntry,
+    answer_text: str,
+    session: CreationSession,
+) -> dict:
+    """Make the bounded Groq evaluator call. Raises on any error — caller handles fallback.
+
+    Creation-time only. Never called on the live reply path.
+    """
+    from config import settings  # noqa: PLC0415
+
+    if settings.mock_mode:
+        return {
+            "answered": True,
+            "answer_quality": {
+                "depth": "adequate",
+                "on_topic": True,
+                "multi_topic": False,
+                "topics_touched": [],
+                "signals_present": [],
+            },
+            "next_action": "advance",
+            "probe_id": None,
+            "steer_id": None,
+            "skip_reason": None,
+            "confidence": 0.9,
+        }
+
+    await groq_acquire(interactive=True)
+
+    payload = {
+        "model": _EVALUATOR_MODEL,
+        "response_format": {"type": "json_object"},
+        "messages": [
+            {"role": "system", "content": _EVALUATOR_SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": json.dumps(
+                    _build_evaluator_input(question, answer_text, session)
+                ),
+            },
+        ],
+        "max_tokens": 512,
+        "temperature": 0.1,
+    }
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.post(
+            _GROQ_CHAT_URL,
+            headers={
+                "Authorization": f"Bearer {settings.groq_api_key}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+        )
+        resp.raise_for_status()
+
+    return json.loads(resp.json()["choices"][0]["message"]["content"])
+
+
+async def evaluate_next_action(
+    session: CreationSession,
+    question: QuestionEntry,
+    answer_text: str,
+) -> tuple[CreationSession, dict]:
+    """Try the Groq evaluator (§4); fall back to §4.4 deterministic on any failure.
+
+    Returns (updated_session, action_dict). Updates signal_coverage and
+    topics_well_covered on success; leaves session unchanged on fallback.
+    Creation-time only — never called on the live reply path.
+    """
+    try:
+        raw = await _call_evaluator_raw(question, answer_text, session)
+        action = _validate_evaluator_output(raw, question, session)
+        if action is None:
+            raise ValueError("evaluator output failed validation")
+
+        answer_quality = raw.get("answer_quality") or {}
+        signals_present = answer_quality.get("signals_present") or []
+        topics_touched = answer_quality.get("topics_touched") or []
+        session = _update_coverage(session, signals_present, topics_touched)
+
+        logger.debug(
+            "[evaluator] q=%s action=%s confidence=%.2f",
+            question.id,
+            action["next_action"],
+            float(raw.get("confidence", 0.0)),
+        )
+        return session, action
+
+    except Exception as exc:
+        logger.warning("[evaluator] failed (%s) — using §4.4 deterministic fallback", exc)
+        action = deterministic_next_action(
+            session.followups_used_this_question,
+            question.max_followups,
+            answer_text,
+            question,
+        )
+        return session, action
+
+
 # ── Stage 0 source write ──────────────────────────────────────────────────────
 
 
@@ -245,12 +480,7 @@ async def capture_text(
         update={"pending_source_ids": session.pending_source_ids + [source_id]}
     )
 
-    action = deterministic_next_action(
-        session.followups_used_this_question,
-        question.max_followups,
-        answer_text,
-        question,
-    )
+    session, action = await evaluate_next_action(session, question, answer_text)
     session, next_step = apply_action(session, question, action)
     await save_session(session)
     return session, next_step, source_id
@@ -292,12 +522,7 @@ async def capture_av(
         update={"pending_source_ids": session.pending_source_ids + [source_id]}
     )
 
-    action = deterministic_next_action(
-        session.followups_used_this_question,
-        question.max_followups,
-        answer_text,
-        question,
-    )
+    session, action = await evaluate_next_action(session, question, answer_text)
     session, next_step = apply_action(session, question, action)
     await save_session(session)
     return session, next_step, source_id, answer_text
