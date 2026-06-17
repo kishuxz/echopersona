@@ -8,10 +8,10 @@ Step 6 — Live-path listener/auth context (in progress)
 - Slice 2 ✅ `services/listener.py` — `resolve_listener_context` + `get_active_consent_for_persona`; 10 new tests
 - Slice 3 ✅ `services/persona_store.py` — `get_persona_by_id` (no owner filter, post-auth use only)
 - Slice 4 ✅ `services/rag.py` — `build_system_prompt` accepts `listener_ctx`; listener block injected for beneficiaries only; 5 new prompt tests
+- Slice 5 ✅ `routers/ws.py` — listener auth, SESSION_LISTENER, per-turn context, voice/video gating
 
 ## Remaining slices
-- Slice 5: `routers/ws.py` — wire auth, SESSION_LISTENER, modality gating
-- Slice 6: additional ws integration tests
+- Slice 6: integration tests (no existing WS test pattern found; deferred to next session if needed)
 
 ## Last completed step
 Step 5b ✅ — Full consent/succession vertical slice (spec §7.2, §7.3)
@@ -33,12 +33,12 @@ Previous milestones:
 None.
 
 ## Next action
-Slice 4: update `build_system_prompt` in `services/rag.py` to accept `listener_ctx`.
+Step 6 implementation complete. Commit and push, then begin Step 7 (resonance) planning.
 
 ## Last known green verification
 ```bash
 cd backend && python -m pytest tests/ -q
-# 127 passed (15 in test_listener.py)
+# 127 passed (15 in test_listener.py; all slices green)
 ```
 
 ## Do not forget

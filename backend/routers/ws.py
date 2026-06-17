@@ -11,8 +11,11 @@ from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
 from config import settings
 from middleware.auth import verify_token
+from models.consent import ListenerContext
 from models.session import ConversationTurn
 from services import audio_store, did, persona_store
+from services.db import get_db
+from services.listener import resolve_listener_context
 from services.latency import LatencyTimer
 from services.llm import stream_llm
 from services.chunker import extract_complete_sentence, is_sentence_complete
@@ -26,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 SESSION_HISTORY: dict[str, list[ConversationTurn]] = {}
+SESSION_LISTENER: dict[str, ListenerContext | None] = {}
 
 # In-memory response cache: md5(normalized_question) -> (response_text, expires_at)
 _RESPONSE_CACHE: dict[str, tuple[str, float]] = {}
@@ -132,6 +136,10 @@ async def _run_turn_inner(
     persona_id = websocket.query_params.get("persona_id")
     persona = PERSONAS.get(persona_id or "")
 
+    listener_ctx = SESSION_LISTENER.get(session_id)
+    _voice_allowed = listener_ctx is None or listener_ctx.allowed_modalities.voice_clone
+    _video_allowed = listener_ctx is None or listener_ctx.allowed_modalities.video_avatar
+
     # FAISS encode + search is CPU-bound; run in thread executor so it doesn't
     # block the event loop, and gather concurrently with the history fetch.
     loop = asyncio.get_running_loop()
@@ -147,7 +155,7 @@ async def _run_turn_inner(
         if persona_id in RAG_INDICES else _no_rag(),
         _fetch_history(),
     )
-    system_prompt = build_system_prompt(persona, retrieved)
+    system_prompt = build_system_prompt(persona, retrieved, listener_ctx)
     if persona:
         logger.debug("persona=%r | RAG chunks=%d", persona.name, len(retrieved))
     else:
@@ -244,7 +252,8 @@ async def _run_turn_inner(
             for sentence in re.split(r'(?<=[.!?])\s+', cached_text):
                 s = sentence.strip()
                 if len(s) >= _MIN_TTS_CHARS:
-                    await tts_queue.put(s)
+                    if _voice_allowed:
+                        await tts_queue.put(s)
             response_text = cached_text
         else:
             # Latency floor: ~620-640ms warm on Groq free tier due to network RTT.
@@ -271,7 +280,8 @@ async def _run_turn_inner(
                     sentence_buf = ""
                     if len(chunk) >= _MIN_TTS_CHARS:
                         logger.debug("CHUNKER newline flush: %d chars", len(chunk))
-                        await tts_queue.put(chunk)
+                        if _voice_allowed:
+                            await tts_queue.put(chunk)
                         first_chunk_flushed = True
                     continue
                 # Sentence boundary detected at end of buffer (no trailing space needed)
@@ -283,7 +293,8 @@ async def _run_turn_inner(
                             "CHUNKER sentence flush: %d chars, %.0fms after first token",
                             len(sentence), elapsed_since_first,
                         )
-                        await tts_queue.put(sentence)
+                        if _voice_allowed:
+                            await tts_queue.put(sentence)
                         first_chunk_flushed = True
                 # First-chunk safety: flush at _FIRST_FLUSH_CHARS to minimise ElevenLabs TTFA
                 elif not first_chunk_flushed and len(sentence_buf) > _FIRST_FLUSH_CHARS:
@@ -293,21 +304,24 @@ async def _run_turn_inner(
                         "CHUNKER first-chunk safety flush: %d chars, %.0fms after first token",
                         len(chunk), elapsed_since_first,
                     )
-                    await tts_queue.put(chunk)
+                    if _voice_allowed:
+                        await tts_queue.put(chunk)
                     sentence_buf = ""
                     first_chunk_flushed = True
                 # Subsequent safety: cap at _SUBSEQUENT_FLUSH_CHARS to avoid long unbounded chunks
                 elif first_chunk_flushed and len(sentence_buf) > _SUBSEQUENT_FLUSH_CHARS:
                     chunk = sentence_buf.strip()
                     logger.debug("CHUNKER safety flush: %d chars", len(chunk))
-                    await tts_queue.put(chunk)
+                    if _voice_allowed:
+                        await tts_queue.put(chunk)
                     sentence_buf = ""
                 # Time-based flush: no sentence boundary for _TIME_FLUSH_S → send what we have
                 if (not time_flush_done and first_token_sent
                         and time.perf_counter() - first_token_time > _TIME_FLUSH_S
                         and sentence_buf.strip()):
                     logger.debug("CHUNKER time-based flush: %d chars", len(sentence_buf))
-                    await tts_queue.put(sentence_buf.strip())
+                    if _voice_allowed:
+                        await tts_queue.put(sentence_buf.strip())
                     sentence_buf = ""
                     time_flush_done = True
             # Store successful response in cache
@@ -320,7 +334,7 @@ async def _run_turn_inner(
         raise
 
     # Flush trailing text (last sentence may lack a trailing space)
-    if sentence_buf.strip():
+    if sentence_buf.strip() and _voice_allowed:
         await tts_queue.put(sentence_buf.strip())
     await tts_queue.put(None)
     await tts_task
@@ -329,7 +343,7 @@ async def _run_turn_inner(
         raise tts_error[0]
 
     # Fire D-ID with pre-generated ElevenLabs audio for lip-sync
-    if persona and persona.did_avatar_url and settings.did_api_key and collected_audio:
+    if _video_allowed and persona and persona.did_avatar_url and settings.did_api_key and collected_audio:
         all_audio = b"".join(collected_audio)
         _did_task = asyncio.create_task(
             _generate_and_send_video(all_audio, persona.did_avatar_url, websocket)
@@ -365,6 +379,10 @@ async def _run_text_turn(websocket: WebSocket, session_id: str, user_text: str) 
         persona_id = websocket.query_params.get("persona_id")
         persona = PERSONAS.get(persona_id or "")
 
+        listener_ctx = SESSION_LISTENER.get(session_id)
+        _voice_allowed = listener_ctx is None or listener_ctx.allowed_modalities.voice_clone
+        _video_allowed = listener_ctx is None or listener_ctx.allowed_modalities.video_avatar
+
         loop = asyncio.get_running_loop()
 
         async def _fetch_history():
@@ -378,7 +396,7 @@ async def _run_text_turn(websocket: WebSocket, session_id: str, user_text: str) 
             if persona_id in RAG_INDICES else _no_rag(),
             _fetch_history(),
         )
-        system_prompt = build_system_prompt(persona, retrieved)
+        system_prompt = build_system_prompt(persona, retrieved, listener_ctx)
         logger.debug("RAG retrieved %d chunks", len(retrieved))
         voice_id = persona.voice_id if persona else None
 
@@ -458,7 +476,8 @@ async def _run_text_turn(websocket: WebSocket, session_id: str, user_text: str) 
                 for sentence in re.split(r'(?<=[.!?])\s+', cached_text):
                     s = sentence.strip()
                     if len(s) >= _MIN_TTS_CHARS:
-                        await tts_queue.put(s)
+                        if _voice_allowed:
+                            await tts_queue.put(s)
                 response_text = cached_text
             else:
                 async for token in stream_llm(user_text, system_prompt, history):
@@ -475,31 +494,36 @@ async def _run_text_turn(websocket: WebSocket, session_id: str, user_text: str) 
                         sentence_buf = ""
                         if len(chunk) >= _MIN_TTS_CHARS:
                             logger.debug("CHUNKER newline flush: %d chars", len(chunk))
-                            await tts_queue.put(chunk)
+                            if _voice_allowed:
+                                await tts_queue.put(chunk)
                             first_chunk_flushed = True
                         continue
                     if is_sentence_complete(sentence_buf):
                         sentence, sentence_buf = extract_complete_sentence(sentence_buf)
                         if sentence:
                             logger.debug("CHUNKER sentence flush: %d chars", len(sentence))
-                            await tts_queue.put(sentence)
+                            if _voice_allowed:
+                                await tts_queue.put(sentence)
                             first_chunk_flushed = True
                     elif not first_chunk_flushed and len(sentence_buf) > _FIRST_FLUSH_CHARS:
                         chunk = sentence_buf.strip()
                         logger.debug("CHUNKER first-chunk safety flush: %d chars", len(chunk))
-                        await tts_queue.put(chunk)
+                        if _voice_allowed:
+                            await tts_queue.put(chunk)
                         sentence_buf = ""
                         first_chunk_flushed = True
                     elif first_chunk_flushed and len(sentence_buf) > _SUBSEQUENT_FLUSH_CHARS:
                         chunk = sentence_buf.strip()
                         logger.debug("CHUNKER safety flush: %d chars", len(chunk))
-                        await tts_queue.put(chunk)
+                        if _voice_allowed:
+                            await tts_queue.put(chunk)
                         sentence_buf = ""
                     if (not time_flush_done and first_token_sent
                             and time.perf_counter() - first_token_time > _TIME_FLUSH_S
                             and sentence_buf.strip()):
                         logger.debug("CHUNKER time-based flush: %d chars", len(sentence_buf))
-                        await tts_queue.put(sentence_buf.strip())
+                        if _voice_allowed:
+                            await tts_queue.put(sentence_buf.strip())
                         sentence_buf = ""
                         time_flush_done = True
                 if response_text.strip():
@@ -510,7 +534,7 @@ async def _run_text_turn(websocket: WebSocket, session_id: str, user_text: str) 
             await tts_task
             raise
 
-        if sentence_buf.strip():
+        if sentence_buf.strip() and _voice_allowed:
             await tts_queue.put(sentence_buf.strip())
         await tts_queue.put(None)
         await tts_task
@@ -519,7 +543,7 @@ async def _run_text_turn(websocket: WebSocket, session_id: str, user_text: str) 
             raise tts_error[0]
 
         # Fire D-ID with pre-generated ElevenLabs audio for lip-sync
-        if persona and persona.did_avatar_url and settings.did_api_key and collected_audio:
+        if _video_allowed and persona and persona.did_avatar_url and settings.did_api_key and collected_audio:
             all_audio = b"".join(collected_audio)
             _did_task = asyncio.create_task(
                 _generate_and_send_video(all_audio, persona.did_avatar_url, websocket)
@@ -560,14 +584,16 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str) -> None:
         await websocket.close(code=4001, reason="Unauthorized")
         return
 
-    # Load persona from DB if not already in-memory, verify ownership
+    # Validate access: consent gate + owner/beneficiary check
+    listener_ctx: ListenerContext | None = None
     if persona_id:
-        if persona_id in PERSONAS:
-            if PERSONAS[persona_id].user_id != user_id:
-                await websocket.close(code=4003, reason="Forbidden")
-                return
-        else:
-            persona = await persona_store.get_persona(persona_id, user_id)
+        db = get_db()
+        listener_ctx = await resolve_listener_context(db, persona_id, user_id)
+        if listener_ctx is None:
+            await websocket.close(code=4003, reason="Access denied")
+            return
+        if persona_id not in PERSONAS:
+            persona = await persona_store.get_persona_by_id(persona_id)
             if not persona:
                 await websocket.close(code=4004, reason="Persona not found")
                 return
@@ -581,10 +607,11 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str) -> None:
                 if units:
                     await loop.run_in_executor(None, rag.build_index_from_units, units)
                 else:
-                    await loop.run_in_executor(None, rag.build_index, persona.stories)
+                    await loop.run_in_executor(None, rag.build_index, PERSONAS[persona_id].stories)
                 RAG_INDICES[persona_id] = rag
 
     await websocket.accept()
+    SESSION_LISTENER[session_id] = listener_ctx
     logger.info("Connection opened: session=%s", session_id)
     audio_queue: asyncio.Queue[bytes | None] = asyncio.Queue()
     release_time_ref: list[float] = [0.0]
@@ -633,17 +660,21 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str) -> None:
                 release_time_ref = [0.0]
                 turn_task = None  # next _run_turn created lazily on first audio frame
             elif msg_type == "simli_session_request":
-                pid = websocket.query_params.get("persona_id", "")
-                p = PERSONAS.get(pid)
-                if p and p.simli_face_id:
-                    from services import simli as simli_svc
-                    simli_token = await simli_svc.create_session(p.simli_face_id)
-                    if simli_token:
-                        await websocket.send_json({"type": "simli_session_token", "token": simli_token})
-                    else:
-                        await websocket.send_json({"type": "simli_session_error", "message": "Simli session creation failed"})
+                _l = SESSION_LISTENER.get(session_id)
+                if _l is not None and not _l.allowed_modalities.video_avatar:
+                    await websocket.send_json({"type": "simli_session_error", "message": "Video not permitted by consent"})
                 else:
-                    await websocket.send_json({"type": "simli_session_error", "message": "No Simli face configured for this persona"})
+                    pid = websocket.query_params.get("persona_id", "")
+                    p = PERSONAS.get(pid)
+                    if p and p.simli_face_id:
+                        from services import simli as simli_svc
+                        simli_token = await simli_svc.create_session(p.simli_face_id)
+                        if simli_token:
+                            await websocket.send_json({"type": "simli_session_token", "token": simli_token})
+                        else:
+                            await websocket.send_json({"type": "simli_session_error", "message": "Simli session creation failed"})
+                    else:
+                        await websocket.send_json({"type": "simli_session_error", "message": "No Simli face configured for this persona"})
             else:
                 await websocket.send_json({"type": "error", "message": f"Unknown message type: {msg_type}"})
     except WebSocketDisconnect:
