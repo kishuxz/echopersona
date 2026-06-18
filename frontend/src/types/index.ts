@@ -85,6 +85,16 @@ export interface SuccessionCreate {
   beneficiaries?: Beneficiary[];
 }
 
+export interface BillingStatus {
+  plan_tier: 'free' | 'creator' | 'legacy';
+  status: 'active' | 'trialing' | 'past_due' | 'canceled' | 'unpaid' | null;
+  can_use_chat: boolean;
+  can_use_voice: boolean;
+  can_use_video: boolean;
+  cancel_at_period_end: boolean;
+  current_period_end: string | null;
+}
+
 export type ServerMessage =
   | { type: "transcript"; text: string; is_final: boolean; latency_ms: number }
   | { type: "llm_token"; token: string; latency_ms: number }

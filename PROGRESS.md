@@ -1,10 +1,18 @@
 # EchoPersona — Build Progress
 
 ## Active feature
-Planning minimal frontend billing/upgrade UI (post Step 7 — all backend billing gates complete)
+Step 7 complete. No active feature.
 
 ## Last completed step
-Step 7 Slice F ✅ — Live-path billing entitlement gating (2026-06-17, `ec67319`)
+Step 7 Slice G ✅ — Minimal frontend billing and upgrade UI (2026-06-17)
+- `frontend/src/types/index.ts` — added `BillingStatus` interface
+- `frontend/src/lib/api.ts` — added `getBillingStatus()` (GET /billing/status) and `startCheckout()` (POST /billing/checkout; redirects internally, price IDs never exposed to frontend)
+- `frontend/src/pages/BillingPage.tsx` — new page at `/dashboard/billing`; shows plan tier pill, status, Chat/Voice/Video access pills, renewal/cancellation date; upgrade buttons rendered per tier order (free→both, creator→legacy only, legacy→none); two independent error states (fatal load error vs. inline checkout error)
+- `frontend/src/router.tsx` — added protected `/dashboard/billing` route
+- `frontend/src/pages/Dashboard.tsx` — added "Billing & Plan" nav button in header
+- TypeScript: clean (`npx tsc --noEmit` 0 errors); build: clean (`npm run build` succeeded)
+
+### Slice F — Live-path billing entitlement gating (2026-06-17, `ec67319`)
 - `backend/routers/ws.py` — `SESSION_ENTITLEMENT` dict; billing gate closes WebSocket 4002 before `accept()` if `can_use_chat` fails; per-turn `_voice_allowed` / `_video_allowed` require entitlement AND consent; Simli handler AND-gates `can_use_video` + consent; `SESSION_ENTITLEMENT.pop` in finally block
 - Close codes: 4001=unauth, 4002=billing, 4003=consent, 4004=persona not found
 - Persona sessions use persona owner's entitlement; freeform sessions use connecting user's entitlement
@@ -52,14 +60,14 @@ Step 7 Slice F ✅ — Live-path billing entitlement gating (2026-06-17, `ec6731
 None.
 
 ## Next action
-Plan minimal frontend billing/upgrade UI: subscription status display + checkout button wired to `POST /billing/checkout`. Read `docs/product-spec.md` and consult `product-architect` agent before building.
+Step 7 complete. Verify migration 006 is applied in Supabase SQL editor, then test billing flow end-to-end in staging.
 
 ## Last known green verification
 ```bash
 cd backend && python -m pytest tests/ -q
 # 228 passed (all Step 7 slices green, 2026-06-17)
 cd frontend && npx tsc --noEmit && npm run build
-# typecheck clean; built in 1.10s
+# typecheck clean; built in 1.13s (Slice G, 2026-06-17)
 ```
 
 ## Do not forget

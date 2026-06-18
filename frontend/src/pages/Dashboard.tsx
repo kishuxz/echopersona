@@ -73,6 +73,12 @@ export function Dashboard() {
           </button>
           <button
             className="font-sans text-sm text-textdim transition-colors hover:text-text"
+            onClick={() => navigate('/dashboard/billing')}
+          >
+            Billing & Plan
+          </button>
+          <button
+            className="font-sans text-sm text-textdim transition-colors hover:text-text"
             onClick={handleSignOut}
           >
             Sign Out

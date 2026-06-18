@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { AuthPage } from './pages/AuthPage'
+import { BillingPage } from './pages/BillingPage'
 import { Dashboard } from './pages/Dashboard'
 import { LandingPage } from './pages/LandingPage'
 import { PersonaDetail } from './pages/PersonaDetail'
@@ -40,6 +41,14 @@ export const router = createBrowserRouter([
     element: (
       <ProtectedRoute>
         <PersonaEdit />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/dashboard/billing',
+    element: (
+      <ProtectedRoute>
+        <BillingPage />
       </ProtectedRoute>
     ),
   },

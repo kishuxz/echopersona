@@ -1,6 +1,6 @@
 import { DEFAULT_API_BASE, DEFAULT_WS_BASE } from '../constants'
 import { supabase } from './supabase'
-import type { Persona, PersonaCreate, ConsentRecord, ConsentCreate, SuccessionRecord, SuccessionCreate } from '../types'
+import type { Persona, PersonaCreate, ConsentRecord, ConsentCreate, SuccessionRecord, SuccessionCreate, BillingStatus } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? DEFAULT_API_BASE
 
@@ -155,6 +155,25 @@ export async function saveSuccession(personaId: string, data: SuccessionCreate):
     throw new Error(err.detail || 'Failed to save succession')
   }
   return res.json()
+}
+
+export async function getBillingStatus(): Promise<BillingStatus> {
+  const headers = await getAuthHeaders()
+  const res = await fetch(`${API_BASE}/billing/status`, { headers })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
+export async function startCheckout(plan_tier: 'creator' | 'legacy'): Promise<void> {
+  const headers = await getAuthHeaders()
+  const res = await fetch(`${API_BASE}/billing/checkout`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ plan_tier }),
+  })
+  if (!res.ok) throw new Error(await res.text())
+  const { checkout_url } = await res.json()
+  window.location.href = checkout_url
 }
 
 export async function buildWsUrl(
