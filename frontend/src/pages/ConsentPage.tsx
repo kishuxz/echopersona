@@ -191,16 +191,16 @@ export function ConsentPage() {
             ← {persona.name}
           </button>
           <span className="text-border">|</span>
-          <span className="font-sans text-sm text-textdim">Consent & Permissions</span>
+          <span className="font-sans text-sm text-textdim">Consent & Succession</span>
         </div>
       </div>
 
       {/* Content */}
       <div className="mx-auto max-w-[640px] px-6 py-10 lg:px-0">
         <div className="mb-8">
-          <h1 className="font-fraunces text-2xl font-semibold text-text">Consent & Permissions</h1>
+          <h1 className="font-fraunces text-2xl font-semibold text-text">Consent & Succession</h1>
           <p className="mt-1 font-sans text-sm text-textdim">
-            Control how this twin can be used and what rights the subject holds.
+            Choose how your twin can be used and who may access it after you.
           </p>
           {!hasConsent && (
             <p className="mt-2 font-sans text-xs text-muted">No consent saved yet — defaults shown.</p>
@@ -244,20 +244,20 @@ export function ConsentPage() {
           {/* Rights */}
           <div className="rounded-2xl border border-border bg-surface px-6 py-5 shadow-card">
             <p className="font-sans text-[10px] font-medium uppercase tracking-[0.2em] text-muted">
-              Subject rights
+              Your rights
             </p>
             <div className="mt-3 divide-y divide-border">
               <CheckRow
                 checked={rights.subject_may_review}
                 onChange={(v) => setRights((r) => ({ ...r, subject_may_review: v }))}
-                label="Subject may review"
-                hint="The subject of this persona may view their captured stories and answers."
+                label="I can review my captured stories and answers"
+                hint="You may view all stories and answers captured for this persona."
               />
               <CheckRow
                 checked={rights.subject_may_delete}
                 onChange={(v) => setRights((r) => ({ ...r, subject_may_delete: v }))}
-                label="Subject may delete"
-                hint="The subject of this persona may request deletion of their data."
+                label="I can request deletion of my data"
+                hint="You may submit a deletion request and have your data removed."
               />
             </div>
           </div>
@@ -293,7 +293,7 @@ export function ConsentPage() {
                   Optional — who may access this twin after you.
                 </p>
               </div>
-              {!showSuccessionForm && (
+              {!showSuccessionForm && !successionRecord && (
                 <button
                   onClick={() => setShowSuccessionForm(true)}
                   className="font-sans text-xs text-green transition-opacity hover:opacity-70"
@@ -302,6 +302,12 @@ export function ConsentPage() {
                 </button>
               )}
             </div>
+
+            {!showSuccessionForm && !successionRecord && (
+              <p className="mt-3 font-sans text-sm text-textdim">
+                Designate a trusted person to access this twin on your behalf.
+              </p>
+            )}
 
             {/* Saved summary when form is hidden */}
             {!showSuccessionForm && successionRecord && successionRecord.beneficiaries.length > 0 && (
@@ -312,6 +318,12 @@ export function ConsentPage() {
                   </span>
                   <span className="ml-2 font-sans text-xs text-muted">
                     {successionRecord.beneficiaries[0].user_id}
+                  </span>
+                  <span className="ml-2 font-sans text-xs text-muted">
+                    · {successionRecord.beneficiaries[0].scope === 'full' ? 'Full access' : 'Curated'}
+                  </span>
+                  <span className="ml-1 font-sans text-xs text-muted">
+                    · {successionRecord.beneficiaries[0].activation_trigger === 'immediate' ? 'Immediately' : 'After verified passing'}
                   </span>
                 </div>
                 <button
@@ -377,6 +389,11 @@ export function ConsentPage() {
                       </button>
                     ))}
                   </div>
+                  <p className="mt-1.5 font-sans text-xs text-muted">
+                    {benefScope === 'full'
+                      ? 'Beneficiary can access all conversations and memories.'
+                      : 'Beneficiary can only access memories you have marked as shareable.'}
+                  </p>
                 </div>
 
                 {/* Activation trigger */}
@@ -400,6 +417,11 @@ export function ConsentPage() {
                       </button>
                     ))}
                   </div>
+                  <p className="mt-1.5 font-sans text-xs text-muted">
+                    {benefTrigger === 'immediate'
+                      ? 'Access is granted as soon as the beneficiary accepts.'
+                      : 'Access is granted only after a passing has been confirmed by the platform.'}
+                  </p>
                 </div>
 
                 {/* Succession save row */}
