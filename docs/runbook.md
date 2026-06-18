@@ -139,13 +139,30 @@ server {
 }
 ```
 
+**Pre-deploy static verification (run on VPS or locally — no Docker, no secrets required):**
+
+```bash
+python3 scripts/verify_vpc_config.py
+# Expected: all [PASS], exit 0. Fix any [FAIL] before proceeding.
+```
+
 **Docker Compose deploy steps:**
 1. SSH into VPS
 2. `cd /opt/echopersona && git pull origin main`
 3. Ensure root `.env` has all production values (see env var checklist below)
 4. `docker compose up --build -d`
-5. Verify: `curl https://kishoreai.online/health` → `{"status":"ok"}`
-6. WebSocket: connect to `wss://kishoreai.online/ws/<session_id>?token=<jwt>`
+5. Verify health: `curl https://kishoreai.online/health` → `{"status":"ok"}`
+6. Verify nginx routes to backend (not React SPA):
+   ```bash
+   curl -s https://kishoreai.online/openapi.json | python3 -c "import sys,json; d=json.load(sys.stdin); print('API title:', d['info']['title'])"
+   # Expected: API title: EchoPersona (JSON response — not an HTML page)
+   ```
+7. Verify Docker port bindings are local-only:
+   ```bash
+   ss -tlnp | grep -E ':(3000|8000|6379)\b'
+   # All entries must show 127.0.0.1:PORT — none should show 0.0.0.0:PORT
+   ```
+8. WebSocket: connect to `wss://kishoreai.online/ws/<session_id>?token=<jwt>`
 
 **Rollback:**
 ```bash
