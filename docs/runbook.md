@@ -114,14 +114,21 @@ server {
     ssl_certificate     /etc/letsencrypt/live/kishoreai.online/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/kishoreai.online/privkey.pem;
 
+    # Allow audio file uploads (voice answers, avatars).
+    client_max_body_size 50m;
+
     location / {
         proxy_pass http://localhost:3000;
         proxy_http_version 1.1;
+        # Required for WebSocket upgrade (wss:// live chat).
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-Proto $scheme;
+        # Keep WebSocket connections alive for up to 1 hour.
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
     }
 }
 
@@ -146,7 +153,12 @@ git checkout <previous-commit>
 docker compose up --build -d
 ```
 
-**Important — `VITE_*` vars are baked in at build time.** If the root `.env` does not set `VITE_API_BASE_URL` and `VITE_WS_BASE_URL`, the Docker Compose defaults apply (`https://kishoreai.online` / `wss://kishoreai.online`). Local devs must set these in their local `.env` to point at localhost; production `.env` should leave them unset or explicitly set to the production values.
+**Important — `VITE_*` vars are baked in at build time.** Docker Compose defaults `VITE_API_BASE_URL` to `https://kishoreai.online` and `VITE_WS_BASE_URL` to `wss://kishoreai.online`. For local dev with Docker, override both in the root `.env`:
+```
+VITE_API_BASE_URL=http://localhost:8000
+VITE_WS_BASE_URL=ws://localhost:8000
+```
+Production `.env` can leave them unset (the compose defaults apply) or set them explicitly.
 
 ### Secondary/Alternative: Render (backend) + Vercel (frontend)
 
