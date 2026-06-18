@@ -8,6 +8,7 @@ vetted question bank; chosen family talk to the twin. Chat + chat-twin now; vide
   resonance mechanisms. Follow data contracts exactly (§2 schemas, §4 evaluator I/O). Do not invent fields.
 - `docs/architecture.md` — how the layers connect and where each concern lives.
 - `PROGRESS.md` — current build state and active blocker.
+- `AGENTS.md` — agent workflow rules and kstack workflow reference.
 
 ---
 
@@ -114,6 +115,7 @@ vetted question bank; chosen family talk to the twin. Chat + chat-twin now; vide
   - `docs/agent-workflow.md` — how agents and skills should be used
   - `docs/runbook.md` — operational commands and steps
   - `backend/prompts/evaluator_system.md` — LLM prompt (not documentation)
+  - `AGENTS.md` — agent workflow rules and kstack reference
 - `docs/archive/` — obsolete files only; include an archive note at the top.
 
 ---
