@@ -273,7 +273,7 @@ export function LandingPage() {
               period: 'per month',
               desc: 'For richer connections',
               features: ['Everything in Free', 'Voice cloning', 'Up to 10 personas', 'Priority support'],
-              cta: 'Coming soon',
+              cta: 'Launching soon',
               highlight: true,
               action: undefined as (() => void) | undefined,
             },
@@ -283,7 +283,7 @@ export function LandingPage() {
               period: 'per month',
               desc: 'For lasting legacies',
               features: ['Everything in Creator', 'Video avatar', 'Unlimited personas', 'Succession & consent tools'],
-              cta: 'Coming soon',
+              cta: 'Launching soon',
               highlight: false,
               action: undefined as (() => void) | undefined,
             },
@@ -392,10 +392,10 @@ export function LandingPage() {
               GitHub
             </a>
             <span className="font-sans text-sm text-muted">·</span>
-            <a href="#" className="font-sans text-sm text-muted transition-colors hover:text-textdim">
+            <a href="/privacy" className="font-sans text-sm text-muted transition-colors hover:text-textdim">
               Privacy
             </a>
-            <a href="#" className="font-sans text-sm text-muted transition-colors hover:text-textdim">
+            <a href="/terms" className="font-sans text-sm text-muted transition-colors hover:text-textdim">
               Terms
             </a>
           </nav>

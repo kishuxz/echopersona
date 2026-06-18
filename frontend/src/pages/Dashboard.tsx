@@ -81,7 +81,7 @@ export function Dashboard() {
             + New Persona
           </button>
           <button
-            className="hidden font-sans text-sm text-textdim transition-colors hover:text-text sm:block"
+            className="font-sans text-sm text-textdim transition-colors hover:text-text"
             onClick={() => navigate('/dashboard/billing')}
           >
             Billing
@@ -95,7 +95,7 @@ export function Dashboard() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-6xl px-8 py-8">
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-8">
         {showCreate && (
           <div className="mb-10">
             <div className="mb-4 flex items-center justify-between">

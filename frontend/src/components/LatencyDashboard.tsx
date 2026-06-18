@@ -111,7 +111,7 @@ export function LatencyDashboard({ snapshots }: { snapshots: LatencySnapshot[] }
           <MetricCard label="STT"   value={latest?.stt_ms}             target="target <200ms" metricKey="STT"   />
           <MetricCard label="LLM"   value={latest?.llm_first_token_ms} target="target <150ms" metricKey="LLM"   />
           <MetricCard label="TTS"   value={latest?.tts_first_audio_ms} target="target <350ms" metricKey="TTS"   />
-          <MetricCard label="Total" value={latest?.tts_first_audio_ms} target="target <600ms" metricKey="TOTAL" />
+          <MetricCard label="Total" value={latest?.total_ms}           target="target <600ms" metricKey="TOTAL" />
         </div>
 
         {/* Chart */}
