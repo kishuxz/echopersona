@@ -37,4 +37,4 @@ export const WS_CLIENT_MSG = {
 // Timing
 export const CONNECT_DELAY_MS = 500        // pause before initial WS connect to avoid page-load race
 export const RECONNECT_DELAY_MS = 1000     // delay before auto-retry on unexpected close
-export const KEEP_ALIVE_INTERVAL_MS = 10 * 60 * 1000  // Render free-tier keep-alive ping interval
+export const KEEP_ALIVE_INTERVAL_MS = 10 * 60 * 1000  // health-check ping interval (10 min)

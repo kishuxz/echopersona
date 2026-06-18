@@ -1,4 +1,5 @@
 {
+  "_comment": "SECONDARY DEPLOYMENT TARGET — not the current primary. Primary target is the private VPS at kishoreai.online using docker-compose.yml + VPS nginx. Use this file only when deploying the frontend to Vercel as an experimental/backup path.",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]

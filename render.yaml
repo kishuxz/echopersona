@@ -1,3 +1,7 @@
+# SECONDARY DEPLOYMENT TARGET — not the current primary.
+# Primary target: private VPS at kishoreai.online using docker-compose.yml + VPS nginx.
+# Use this file only if deploying to Render.com as an experimental/backup path.
+
 services:
   - type: web
     name: echopersona-backend
@@ -22,10 +26,10 @@ services:
       # DEEPGRAM_API_KEY
       # --- Redis (required; use Upstash TLS URL) ---
       # REDIS_URL                  ← rediss://default:<password>@<host>:<port>
-      # --- CORS (required; set to your Vercel URL) ---
-      # CORS_ORIGINS               ← https://echopersona.vercel.app
+      # --- CORS (required; set to your frontend domain) ---
+      # CORS_ORIGINS               ← https://kishoreai.online (primary VPS) or https://echopersona.vercel.app (Vercel alt)
       # --- Public URL (required; used for D-ID audio file references) ---
-      # PUBLIC_BASE_URL            ← https://echopersona-backend.onrender.com
+      # PUBLIC_BASE_URL            ← https://echopersona-backend.onrender.com (Render) or https://kishoreai.online (VPS)
       # --- Optional media services ---
       # DID_API_KEY
       # SIMLI_API_KEY
@@ -36,5 +40,5 @@ services:
       # STRIPE_WEBHOOK_SECRET
       # STRIPE_PRICE_CREATOR_MONTHLY
       # STRIPE_PRICE_LEGACY_MONTHLY
-      # FRONTEND_BILLING_SUCCESS_URL  ← https://echopersona.vercel.app/billing/success
-      # FRONTEND_BILLING_CANCEL_URL   ← https://echopersona.vercel.app/billing/cancel
+      # FRONTEND_BILLING_SUCCESS_URL  ← https://kishoreai.online/billing/success (primary VPS) or https://echopersona.vercel.app/billing/success (Vercel alt)
+      # FRONTEND_BILLING_CANCEL_URL   ← https://kishoreai.online/billing/cancel (primary VPS) or https://echopersona.vercel.app/billing/cancel (Vercel alt)

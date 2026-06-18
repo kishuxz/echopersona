@@ -87,30 +87,71 @@ Migrations live in two places:
 2. Create two products with recurring monthly prices:
    - **Creator** (e.g. $9/mo) — copy the `price_*` ID into `STRIPE_PRICE_CREATOR_MONTHLY`.
    - **Legacy** (e.g. $19/mo) — copy the `price_*` ID into `STRIPE_PRICE_LEGACY_MONTHLY`.
-3. Register a webhook endpoint at `https://your-backend.render.com/billing/webhook` with these events:
+3. Register a webhook endpoint at `https://kishoreai.online/billing/webhook` with these events:
    - `checkout.session.completed`
    - `customer.subscription.created`
    - `customer.subscription.updated`
    - `customer.subscription.deleted`
-4. Copy the endpoint's signing secret into `STRIPE_WEBHOOK_SECRET` on Render.
-5. Set `FRONTEND_BILLING_SUCCESS_URL` and `FRONTEND_BILLING_CANCEL_URL` to the production frontend URLs (e.g. `https://your-frontend.vercel.app/billing/success`).
+4. Copy the endpoint's signing secret into `STRIPE_WEBHOOK_SECRET` in the root `.env`.
+5. Set `FRONTEND_BILLING_SUCCESS_URL=https://kishoreai.online/billing/success` and `FRONTEND_BILLING_CANCEL_URL=https://kishoreai.online/billing/cancel`.
 
 ---
 
 ## Deployment
 
-### Backend → Render.com
+### Primary: Private VPS at kishoreai.online — Docker Compose
 
-1. Push to `main` (Render auto-deploys on push)
-2. Or manually: Render dashboard → Manual Deploy
-3. Required env vars: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`,
-   `GROQ_API_KEY`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `REDIS_URL`, `CORS_ORIGINS`
+**VPS outer nginx (runs on host, not in Docker):**
 
-### Frontend → Vercel
+Handles TLS termination (port 443) and proxies to the frontend container at `localhost:3000`.
+Minimum config (`/etc/nginx/sites-enabled/kishoreai.online`):
 
-1. Push to `main` (Vercel auto-deploys)
-2. Required env vars: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_API_BASE_URL`,
-   `VITE_WS_BASE_URL`
+```nginx
+server {
+    listen 443 ssl;
+    server_name kishoreai.online;
+
+    ssl_certificate     /etc/letsencrypt/live/kishoreai.online/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/kishoreai.online/privkey.pem;
+
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+server {
+    listen 80;
+    server_name kishoreai.online;
+    return 301 https://$host$request_uri;
+}
+```
+
+**Docker Compose deploy steps:**
+1. SSH into VPS
+2. `cd /opt/echopersona && git pull origin main`
+3. Ensure root `.env` has all production values (see env var checklist below)
+4. `docker compose up --build -d`
+5. Verify: `curl https://kishoreai.online/health` → `{"status":"ok"}`
+6. WebSocket: connect to `wss://kishoreai.online/ws/<session_id>?token=<jwt>`
+
+**Rollback:**
+```bash
+git checkout <previous-commit>
+docker compose up --build -d
+```
+
+**Important — `VITE_*` vars are baked in at build time.** If the root `.env` does not set `VITE_API_BASE_URL` and `VITE_WS_BASE_URL`, the Docker Compose defaults apply (`https://kishoreai.online` / `wss://kishoreai.online`). Local devs must set these in their local `.env` to point at localhost; production `.env` should leave them unset or explicitly set to the production values.
+
+### Secondary/Alternative: Render (backend) + Vercel (frontend)
+
+1. Backend → push to `main`; Render auto-deploys from `render.yaml`
+2. Frontend → push to `main`; Vercel auto-deploys from `frontend/vercel.json`
 
 ### Environment variable checklist
 
@@ -124,7 +165,7 @@ Migrations live in two places:
 | `ELEVENLABS_VOICE_ID` | yes | no | TTS live mode |
 | `REDIS_URL` | yes | no | Rate limiting |
 | `CORS_ORIGINS` | yes | no | Production |
-| `PUBLIC_BASE_URL` | yes | no | D-ID audio URL base (set to Render URL in prod) |
+| `PUBLIC_BASE_URL` | yes | no | D-ID audio URL base (production: `https://kishoreai.online`) |
 | `DID_API_KEY` | yes | no | Optional video |
 | `CARTESIA_API_KEY` | yes | no | Optional alt TTS |
 | `TTS_PROVIDER` | yes | no | Optional (default: elevenlabs) |
@@ -179,7 +220,7 @@ redis-cli -u $REDIS_URL GET groq:rpm:$(date +%s | awk '{print int($1/60)}')
 | Ingestion stuck | arq worker not running | `arq worker.WorkerSettings` in backend dir |
 | Evaluator always advances | Groq rate limit hit | Check Redis RPM counter; wait 60s |
 | `memory_units` insert fails | Migration 004 not applied | Run `004_creation_fields.sql` in Supabase |
-| CORS error | `CORS_ORIGINS` missing or wrong | Set to exact Vercel domain including protocol |
+| CORS error | `CORS_ORIGINS` missing or wrong | Set to `https://kishoreai.online` (no trailing slash) |
 | `POST /billing/checkout` returns 500 | `STRIPE_PRICE_*` env var is empty | Set the price ID env vars and restart the backend |
 | Webhook returns 400 Invalid Signature | `STRIPE_WEBHOOK_SECRET` mismatched | Use the `whsec_*` from `stripe listen` output (local) or the Dashboard endpoint secret (prod) |
 | `stripe_entitlements` row missing after checkout | Price ID mismatch or subscription events not registered | Confirm price IDs match exactly; add subscription events to the webhook in the Dashboard |

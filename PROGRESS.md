@@ -1,7 +1,7 @@
 # EchoPersona — Build Progress
 
 ## Active feature
-Step 9 — Deployment readiness (Render + Vercel + Supabase env wiring).
+Step 9B — Deployment reconciliation: private VPS Docker Compose at kishoreai.online (correcting stale Render+Vercel config from Step 9).
 
 ## Last completed step
 Step 8E.2 ✅ — Structural frontend safety polish (2026-06-17)
@@ -86,7 +86,7 @@ Step 7 Slice G ✅ — Minimal frontend billing and upgrade UI (2026-06-17)
 None. Migration 006 (`stripe_entitlements`) must be confirmed applied in Supabase SQL editor before billing demo.
 
 ## Next action
-Step 9 in progress — set env vars in Render and Vercel dashboards, verify health check, test full flow.
+Step 9B.1 done — docs/config reconciled to private VPC Docker. Next: fix docker-compose.yml build arg defaults (CORS_ORIGINS, VITE_API_BASE_URL, VITE_WS_BASE_URL) for production; then SSH to VPS, write production .env, `docker compose up --build -d`, verify `https://kishoreai.online/health`.
 
 ## Last known green verification
 ```bash

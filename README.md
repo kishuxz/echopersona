@@ -82,7 +82,7 @@ eliminating the inter-sentence ElevenLabs round-trip gap.
 | RAG | FAISS + sentence-transformers (paraphrase-MiniLM-L3-v2) |
 | Voice Cloning | ElevenLabs Instant Voice Cloning |
 | Video Avatars | D-ID talking-head generation (optional) |
-| Infra | Render.com (backend), Vercel (frontend), Supabase (DB/Auth), Upstash Redis |
+| Infra | Private VPS / Docker Compose (primary), Supabase (DB/Auth), Upstash Redis |
 
 ---
 
@@ -148,32 +148,29 @@ npm run dev          # → http://localhost:5173
 
 ## Deployment
 
-| Service | Platform | Config |
-|---|---|---|
-| Backend (FastAPI) | Render.com | `render.yaml` — rootDir: `backend`, start: `uvicorn main:app --host 0.0.0.0 --port $PORT` |
-| Frontend (React SPA) | Vercel | `frontend/vercel.json` — SPA catch-all rewrite to `index.html` |
-| Database / Auth | Supabase (hosted) | Postgres + Auth + Storage |
-| Redis | Upstash (TLS) | Rate limiting and semantic cache |
+### Primary: Private VPS at kishoreai.online — Docker Compose
 
-**Backend → Render**
+The production deployment runs on a private VPS using Docker Compose behind a VPS-native nginx that terminates TLS.
 
-1. Connect GitHub repo → set Root Directory to `backend`
-2. Build: `pip install -r requirements.txt` · Start: `uvicorn main:app --host 0.0.0.0 --port $PORT`
-3. Set all required env vars in the Render dashboard (see `render.yaml` comments for full list)
-4. Verify: `GET https://<your-backend>.onrender.com/health` → `{"status":"ok"}`
+| Container | Role |
+|---|---|
+| `frontend` | nginx:alpine — serves SPA + proxies `/ws/`, `/audio/`, `/persona/*` to backend |
+| `backend` | uvicorn/FastAPI (port 8000, internal) |
+| `worker` | arq worker.WorkerSettings |
+| `redis` | redis:7-alpine (port 6379, internal) |
 
-**Frontend → Vercel**
+**Deploy steps:**
+1. SSH into VPS
+2. `git pull origin main`
+3. Ensure root `.env` has all production values (see `docs/runbook.md` for full checklist)
+4. `docker compose up --build -d`
+5. Verify: `curl https://kishoreai.online/health` → `{"status":"ok"}`
 
-1. Connect GitHub repo → set Root Directory to `frontend`
-2. Framework preset: Vite · Output directory: `dist`
-3. Set these env vars in Vercel Project Settings before the first build:
-   - `VITE_SUPABASE_URL` — Supabase project URL
-   - `VITE_SUPABASE_ANON_KEY` — Supabase anon key
-   - `VITE_API_BASE_URL` — `https://<your-backend>.onrender.com`
-   - `VITE_WS_BASE_URL` — `wss://<your-backend>.onrender.com`
-4. Set `CORS_ORIGINS` on Render to the Vercel deployment URL (e.g. `https://echopersona.vercel.app`)
+See `docs/runbook.md` for the full env var checklist and VPS nginx configuration.
 
-See `docs/runbook.md` for the full env var checklist and migration steps.
+### Secondary/Alternative: Render (backend) + Vercel (frontend)
+
+`render.yaml` and `frontend/vercel.json` are kept for experimental or backup deployments. See those files for configuration details.
 
 ---
 
