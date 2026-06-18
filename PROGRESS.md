@@ -1,7 +1,15 @@
 # EchoPersona — Build Progress
 
 ## Active feature
-Step 7 — Entitlements and Stripe gating (Slice E done — billing status endpoint)
+Step 7 — Entitlements and Stripe gating (Slice F done — WebSocket entitlement gating)
+
+## Step 7 Slice F ✅ — WebSocket entitlement gating (2026-06-17)
+- `backend/routers/ws.py` — added `SESSION_ENTITLEMENT` dict; hoisted `db = get_db()` before consent block; billing gate (4002 close, chat check, `can_use_chat`) added before `websocket.accept()`; per-turn `_voice_allowed` / `_video_allowed` now AND entitlement + consent; Simli handler checks `can_use_video(entitlement)` alongside consent; `SESSION_ENTITLEMENT.pop` in finally block
+- Close codes: 4001=unauth, 4002=billing, 4003=consent, 4004=persona not found
+- Persona owner's entitlement checked for persona sessions; connecting user's for freeform
+- `audio_end` remains unconditional — frontend never hangs on voice/video denial
+- Simli gate verified: deny condition `(consent_blocks OR entitlement_blocks)` = AND semantics for allowing (both must pass)
+- `backend/tests/test_ws_entitlements.py` — 15 new tests; 228 total passing
 
 ## Step 7 Slice E ✅ — Billing status endpoint (2026-06-17)
 - `backend/models/entitlements.py` — added `BillingStatusResponse` (plan_tier, status, access flags, period_end; no Stripe IDs)
@@ -53,12 +61,12 @@ Previous milestones:
 None.
 
 ## Next action
-Step 7 Slice F — WebSocket live-path gating: use `can_use_voice` / `can_use_video` from entitlement service to enforce modality access on the live conversation path.
+Step 7 complete. Next: frontend billing UI (checkout button, status display) or Step 8 (TBD).
 
 ## Last known green verification
 ```bash
 cd backend && python -m pytest tests/ -q
-# 213 passed (all slices green, 2026-06-17)
+# 228 passed (all slices green, 2026-06-17)
 cd frontend && npx tsc --noEmit && npm run build
 # typecheck clean; built in 1.10s
 ```

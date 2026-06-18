@@ -24,12 +24,15 @@ from services.ingestion.source_store import get_memory_units_for_persona
 from services import stt
 from services.tts import stream_tts, tts_audio_chunks
 from services.tts_cartesia import stream_tts_cartesia, tts_audio_chunks_cartesia
+from models.entitlements import StripeEntitlement
+from services.entitlements import can_use_chat, can_use_voice, can_use_video, get_entitlement_for_user
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 SESSION_HISTORY: dict[str, list[ConversationTurn]] = {}
 SESSION_LISTENER: dict[str, ListenerContext | None] = {}
+SESSION_ENTITLEMENT: dict[str, StripeEntitlement | None] = {}
 
 # In-memory response cache: md5(normalized_question) -> (response_text, expires_at)
 _RESPONSE_CACHE: dict[str, tuple[str, float]] = {}
@@ -137,8 +140,13 @@ async def _run_turn_inner(
     persona = PERSONAS.get(persona_id or "")
 
     listener_ctx = SESSION_LISTENER.get(session_id)
-    _voice_allowed = listener_ctx is None or listener_ctx.allowed_modalities.voice_clone
-    _video_allowed = listener_ctx is None or listener_ctx.allowed_modalities.video_avatar
+    _entitlement = SESSION_ENTITLEMENT.get(session_id)
+    _voice_allowed = can_use_voice(_entitlement) and (
+        listener_ctx is None or listener_ctx.allowed_modalities.voice_clone
+    )
+    _video_allowed = can_use_video(_entitlement) and (
+        listener_ctx is None or listener_ctx.allowed_modalities.video_avatar
+    )
 
     # FAISS encode + search is CPU-bound; run in thread executor so it doesn't
     # block the event loop, and gather concurrently with the history fetch.
@@ -380,8 +388,13 @@ async def _run_text_turn(websocket: WebSocket, session_id: str, user_text: str) 
         persona = PERSONAS.get(persona_id or "")
 
         listener_ctx = SESSION_LISTENER.get(session_id)
-        _voice_allowed = listener_ctx is None or listener_ctx.allowed_modalities.voice_clone
-        _video_allowed = listener_ctx is None or listener_ctx.allowed_modalities.video_avatar
+        _entitlement = SESSION_ENTITLEMENT.get(session_id)
+        _voice_allowed = can_use_voice(_entitlement) and (
+            listener_ctx is None or listener_ctx.allowed_modalities.voice_clone
+        )
+        _video_allowed = can_use_video(_entitlement) and (
+            listener_ctx is None or listener_ctx.allowed_modalities.video_avatar
+        )
 
         loop = asyncio.get_running_loop()
 
@@ -585,9 +598,9 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str) -> None:
         return
 
     # Validate access: consent gate + owner/beneficiary check
+    db = get_db()
     listener_ctx: ListenerContext | None = None
     if persona_id:
-        db = get_db()
         listener_ctx = await resolve_listener_context(db, persona_id, user_id)
         if listener_ctx is None:
             await websocket.close(code=4003, reason="Access denied")
@@ -610,8 +623,17 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str) -> None:
                     await loop.run_in_executor(None, rag.build_index, PERSONAS[persona_id].stories)
                 RAG_INDICES[persona_id] = rag
 
+    # Billing gate: check persona owner's entitlement (or connecting user's for freeform sessions).
+    # Can_use_chat is always True today; gate is wired for future tier changes.
+    _owner_id = PERSONAS[persona_id].user_id if persona_id else user_id
+    entitlement = await get_entitlement_for_user(db, _owner_id)
+    if not can_use_chat(entitlement):
+        await websocket.close(code=4002, reason="Subscription required")
+        return
+
     await websocket.accept()
     SESSION_LISTENER[session_id] = listener_ctx
+    SESSION_ENTITLEMENT[session_id] = entitlement
     logger.info("Connection opened: session=%s", session_id)
     audio_queue: asyncio.Queue[bytes | None] = asyncio.Queue()
     release_time_ref: list[float] = [0.0]
@@ -661,8 +683,9 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str) -> None:
                 turn_task = None  # next _run_turn created lazily on first audio frame
             elif msg_type == "simli_session_request":
                 _l = SESSION_LISTENER.get(session_id)
-                if _l is not None and not _l.allowed_modalities.video_avatar:
-                    await websocket.send_json({"type": "simli_session_error", "message": "Video not permitted by consent"})
+                _ent = SESSION_ENTITLEMENT.get(session_id)
+                if (_l is not None and not _l.allowed_modalities.video_avatar) or not can_use_video(_ent):
+                    await websocket.send_json({"type": "simli_session_error", "message": "Video not permitted"})
                 else:
                     pid = websocket.query_params.get("persona_id", "")
                     p = PERSONAS.get(pid)
@@ -686,3 +709,4 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str) -> None:
     finally:
         if turn_task:
             turn_task.cancel()
+        SESSION_ENTITLEMENT.pop(session_id, None)
