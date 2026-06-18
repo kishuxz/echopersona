@@ -1,9 +1,15 @@
 # EchoPersona — Build Progress
 
 ## Active feature
-Step 7 complete. No active feature.
+Step 8B — Persona creation and upload UX polish.
 
 ## Last completed step
+Step 8 Slice A ✅ — Landing page and dashboard polish (2026-06-17)
+- `frontend/src/pages/LandingPage.tsx` — stats grid responsive (`grid-cols-1 sm:grid-cols-3`); border-r gated on `sm:` breakpoint; added 3-tier pricing section (Free / Creator / Legacy) between speed section and CTA; footer Dashboard link is now auth-aware (guests see "Sign In"); added Privacy · Terms stub links; footer nav wraps on mobile
+- `frontend/src/pages/Dashboard.tsx` — `displayName` now reads `user.user_metadata.full_name` with email-slug fallback; `handleDelete` now prompts for confirmation and surfaces API errors; header right-side buttons use `gap-3` and "Billing & Plan" label shortened to "Billing" and hidden on xs via `sm:block`
+- TypeScript: clean; build: clean (`npm run build` succeeded, 2026-06-17)
+
+## Step 7 last completed step
 Step 7 Slice G ✅ — Minimal frontend billing and upgrade UI (2026-06-17)
 - `frontend/src/types/index.ts` — added `BillingStatus` interface
 - `frontend/src/lib/api.ts` — added `getBillingStatus()` (GET /billing/status) and `startCheckout()` (POST /billing/checkout; redirects internally, price IDs never exposed to frontend)
@@ -60,14 +66,14 @@ Step 7 Slice G ✅ — Minimal frontend billing and upgrade UI (2026-06-17)
 None.
 
 ## Next action
-Step 7 complete. Verify migration 006 is applied in Supabase SQL editor, then test billing flow end-to-end in staging.
+Plan Step 8B (persona creation and upload UX polish) using plan-feature skill.
 
 ## Last known green verification
 ```bash
 cd backend && python -m pytest tests/ -q
 # 228 passed (all Step 7 slices green, 2026-06-17)
 cd frontend && npx tsc --noEmit && npm run build
-# typecheck clean; built in 1.13s (Slice G, 2026-06-17)
+# typecheck clean; built in 1.08s (Step 8 Slice A, 2026-06-17)
 ```
 
 ## Do not forget

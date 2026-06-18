@@ -28,9 +28,14 @@ export function Dashboard() {
     setShowCreate(false)
   }
 
-  const handleDelete = async (id: string) => {
-    await deletePersona(id)
-    setPersonas((prev) => prev.filter((p) => p.id !== id))
+  const handleDelete = async (id: string, name: string) => {
+    if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) return
+    try {
+      await deletePersona(id)
+      setPersonas((prev) => prev.filter((p) => p.id !== id))
+    } catch {
+      setError('Failed to delete persona. Please try again.')
+    }
   }
 
   const handleSignOut = async () => {
@@ -38,15 +43,18 @@ export function Dashboard() {
     navigate('/login')
   }
 
-  const firstName = user?.email?.split('@')[0]?.split('.')[0] ?? ''
-  const displayName = firstName.charAt(0).toUpperCase() + firstName.slice(1)
+  const rawName: string =
+    (user?.user_metadata?.full_name as string | undefined) ||
+    user?.email?.split('@')[0]?.split('.')[0] ||
+    ''
+  const displayName = rawName.charAt(0).toUpperCase() + rawName.slice(1)
 
   return (
     <div className="min-h-screen bg-bg text-text">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-border bg-surface px-8 py-4 shadow-card">
+      <div className="flex flex-wrap items-center justify-between gap-y-2 border-b border-border bg-surface px-6 py-4 shadow-card lg:px-8">
         <div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <button
               className="font-sans text-sm text-muted transition-colors hover:text-text"
               onClick={() => navigate('/')}
@@ -64,7 +72,7 @@ export function Dashboard() {
             </p>
           )}
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <button
             className="btn-shimmer rounded-lg px-4 py-2 font-sans text-sm font-medium text-white"
             onClick={() => setShowCreate(true)}
@@ -72,10 +80,10 @@ export function Dashboard() {
             + New Persona
           </button>
           <button
-            className="font-sans text-sm text-textdim transition-colors hover:text-text"
+            className="hidden font-sans text-sm text-textdim transition-colors hover:text-text sm:block"
             onClick={() => navigate('/dashboard/billing')}
           >
-            Billing & Plan
+            Billing
           </button>
           <button
             className="font-sans text-sm text-textdim transition-colors hover:text-text"
@@ -132,7 +140,7 @@ export function Dashboard() {
                 persona={p}
                 onTalk={() => navigate(`/dashboard/persona/${p.id}`)}
                 onEdit={() => navigate(`/dashboard/persona/${p.id}/edit`)}
-                onDelete={() => handleDelete(p.id)}
+                onDelete={() => handleDelete(p.id, p.name)}
               />
             ))}
           </div>

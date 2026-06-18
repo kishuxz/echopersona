@@ -141,13 +141,13 @@ export function LandingPage() {
       {/* Stats */}
       <section className="border-y border-border bg-surface py-12 shadow-card">
         <div className="mx-auto max-w-4xl px-8">
-          <div className="grid grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 gap-8 sm:grid-cols-3">
             {[
               { value: '~1.5s',          label: 'Response latency' },
               { value: '2 min',          label: 'Voice cloning' },
               { value: 'RAG-powered',    label: 'Memory retrieval' },
             ].map(({ value, label }, i) => (
-              <div key={label} className={`text-center ${i < 2 ? 'border-r border-border' : ''}`}>
+              <div key={label} className={`text-center ${i < 2 ? 'sm:border-r sm:border-border' : ''}`}>
                 <p className="font-mono text-3xl font-bold text-text">{value}</p>
                 <p className="mt-1.5 font-sans text-sm text-textdim">{label}</p>
               </div>
@@ -247,6 +247,99 @@ export function LandingPage() {
         </div>
       </section>
 
+      {/* Pricing */}
+      <section className="mx-auto max-w-4xl px-8 py-20">
+        <h2 className="mb-3 text-center font-fraunces text-2xl font-semibold text-text">
+          Simple, honest pricing
+        </h2>
+        <p className="mb-12 text-center font-sans text-sm text-textdim">
+          Start free. Upgrade when you're ready to add voice and video.
+        </p>
+        <div className="grid gap-6 md:grid-cols-3">
+          {[
+            {
+              tier: 'Free',
+              price: '$0',
+              period: 'forever',
+              desc: 'For getting started',
+              features: ['Text twin', 'Up to 3 personas', 'Unlimited conversations'],
+              cta: isLoggedIn ? 'Go to Dashboard' : 'Get Started Free',
+              highlight: false,
+              action: () => navigate(isLoggedIn ? '/dashboard' : '/signup'),
+            },
+            {
+              tier: 'Creator',
+              price: '$12',
+              period: 'per month',
+              desc: 'For richer connections',
+              features: ['Everything in Free', 'Voice cloning', 'Up to 10 personas', 'Priority support'],
+              cta: 'Coming soon',
+              highlight: true,
+              action: undefined as (() => void) | undefined,
+            },
+            {
+              tier: 'Legacy',
+              price: '$29',
+              period: 'per month',
+              desc: 'For lasting legacies',
+              features: ['Everything in Creator', 'Video avatar', 'Unlimited personas', 'Succession & consent tools'],
+              cta: 'Coming soon',
+              highlight: false,
+              action: undefined as (() => void) | undefined,
+            },
+          ].map(({ tier, price, period, desc, features, cta, highlight, action }) => (
+            <div
+              key={tier}
+              className={`flex flex-col rounded-2xl border p-6 shadow-card ${
+                highlight
+                  ? 'border-accent bg-accent text-white'
+                  : 'border-border bg-surface text-text'
+              }`}
+            >
+              <p className={`font-mono text-xs uppercase tracking-widest ${highlight ? 'text-white/60' : 'text-muted'}`}>
+                {tier}
+              </p>
+              <div className="mt-3 flex items-end gap-1.5">
+                <span className={`font-fraunces text-3xl font-semibold ${highlight ? 'text-white' : 'text-text'}`}>
+                  {price}
+                </span>
+                <span className={`mb-1 font-sans text-xs ${highlight ? 'text-white/60' : 'text-muted'}`}>
+                  /{period}
+                </span>
+              </div>
+              <p className={`mt-1.5 font-sans text-xs ${highlight ? 'text-white/70' : 'text-textdim'}`}>
+                {desc}
+              </p>
+              <ul className="mt-5 flex flex-col gap-2.5 flex-1">
+                {features.map((f) => (
+                  <li key={f} className="flex items-start gap-2">
+                    <svg viewBox="0 0 16 16" fill="currentColor" className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${highlight ? 'text-white/80' : 'text-green'}`}>
+                      <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z" />
+                    </svg>
+                    <span className={`font-sans text-sm leading-snug ${highlight ? 'text-white/90' : 'text-textdim'}`}>
+                      {f}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <button
+                className={`mt-6 w-full rounded-lg py-2.5 font-sans text-sm font-medium transition-opacity ${
+                  highlight
+                    ? 'bg-white text-accent hover:opacity-90'
+                    : action
+                    ? 'bg-accent text-white hover:opacity-90'
+                    : 'cursor-default bg-elevated text-muted'
+                }`}
+                onClick={action}
+                disabled={!action}
+              >
+                {cta}
+              </button>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* CTA */}
       <section className="border-t border-border bg-elevated py-20 text-center">
         <h2 className="font-fraunces text-3xl font-semibold text-text">
@@ -267,19 +360,29 @@ export function LandingPage() {
       <footer className="border-t border-border bg-surface px-8 py-8">
         <div className="mx-auto flex max-w-4xl flex-col items-center gap-4 md:flex-row md:justify-between">
           <span className="font-fraunces text-base font-semibold text-text">EchoPersona</span>
-          <nav className="flex items-center gap-6">
+          <nav className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
             <button
               className="font-sans text-sm text-textdim transition-colors hover:text-text"
               onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
             >
               Home
             </button>
-            <button
-              className="font-sans text-sm text-textdim transition-colors hover:text-text"
-              onClick={() => navigate('/dashboard')}
-            >
-              Dashboard
-            </button>
+            {isLoggedIn && (
+              <button
+                className="font-sans text-sm text-textdim transition-colors hover:text-text"
+                onClick={() => navigate('/dashboard')}
+              >
+                Dashboard
+              </button>
+            )}
+            {!isLoggedIn && (
+              <button
+                className="font-sans text-sm text-textdim transition-colors hover:text-text"
+                onClick={() => navigate('/login')}
+              >
+                Sign In
+              </button>
+            )}
             <a
               href="https://github.com/kishuxz/echopersona"
               target="_blank"
@@ -287,6 +390,13 @@ export function LandingPage() {
               className="font-sans text-sm text-textdim transition-colors hover:text-text"
             >
               GitHub
+            </a>
+            <span className="font-sans text-sm text-muted">·</span>
+            <a href="#" className="font-sans text-sm text-muted transition-colors hover:text-textdim">
+              Privacy
+            </a>
+            <a href="#" className="font-sans text-sm text-muted transition-colors hover:text-textdim">
+              Terms
             </a>
           </nav>
           <p className="font-sans text-xs text-muted">© 2026 EchoPersona. Built with care.</p>
