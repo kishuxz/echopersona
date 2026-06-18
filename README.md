@@ -82,7 +82,7 @@ eliminating the inter-sentence ElevenLabs round-trip gap.
 | RAG | FAISS + sentence-transformers (paraphrase-MiniLM-L3-v2) |
 | Voice Cloning | ElevenLabs Instant Voice Cloning |
 | Video Avatars | D-ID talking-head generation (optional) |
-| Infra | Docker Compose, nginx reverse proxy |
+| Infra | Render.com (backend), Vercel (frontend), Supabase (DB/Auth), Upstash Redis |
 
 ---
 
@@ -148,18 +148,32 @@ npm run dev          # → http://localhost:5173
 
 ## Deployment
 
-EchoPersona is deployed on a Hostinger VPS (Ubuntu 24, 2 vCPU, 8GB RAM)
-at [kishoreai.online](https://kishoreai.online).
+| Service | Platform | Config |
+|---|---|---|
+| Backend (FastAPI) | Render.com | `render.yaml` — rootDir: `backend`, start: `uvicorn main:app --host 0.0.0.0 --port $PORT` |
+| Frontend (React SPA) | Vercel | `frontend/vercel.json` — SPA catch-all rewrite to `index.html` |
+| Database / Auth | Supabase (hosted) | Postgres + Auth + Storage |
+| Redis | Upstash (TLS) | Rate limiting and semantic cache |
 
-Stack:
-- Docker Compose orchestrates backend (FastAPI), frontend (nginx), and Redis
-- nginx reverse proxy handles SSL termination and routes /ws/, /api/, and /audio/
-- SSL via Let's Encrypt
-- Backend serves the real-time WebSocket pipeline
-- Static frontend assets served by nginx with cache headers
+**Backend → Render**
 
-The VPS deployment handles the full production stack with zero managed
-infrastructure — no cloud functions, no managed databases beyond Supabase.
+1. Connect GitHub repo → set Root Directory to `backend`
+2. Build: `pip install -r requirements.txt` · Start: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+3. Set all required env vars in the Render dashboard (see `render.yaml` comments for full list)
+4. Verify: `GET https://<your-backend>.onrender.com/health` → `{"status":"ok"}`
+
+**Frontend → Vercel**
+
+1. Connect GitHub repo → set Root Directory to `frontend`
+2. Framework preset: Vite · Output directory: `dist`
+3. Set these env vars in Vercel Project Settings before the first build:
+   - `VITE_SUPABASE_URL` — Supabase project URL
+   - `VITE_SUPABASE_ANON_KEY` — Supabase anon key
+   - `VITE_API_BASE_URL` — `https://<your-backend>.onrender.com`
+   - `VITE_WS_BASE_URL` — `wss://<your-backend>.onrender.com`
+4. Set `CORS_ORIGINS` on Render to the Vercel deployment URL (e.g. `https://echopersona.vercel.app`)
+
+See `docs/runbook.md` for the full env var checklist and migration steps.
 
 ---
 

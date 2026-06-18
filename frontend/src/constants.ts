@@ -1,6 +1,17 @@
-// Fallback base URLs used when VITE_ env vars are absent
+// Fallback base URLs used when VITE_ env vars are absent (local dev only)
 export const DEFAULT_API_BASE = 'http://localhost:8000'
 export const DEFAULT_WS_BASE = 'ws://localhost:8000'
+
+// In production builds, warn loudly if the backend URLs were not baked in at build time.
+// Missing env vars cause all API calls and WebSocket connections to silently target localhost.
+if (import.meta.env.PROD) {
+  if (!import.meta.env.VITE_API_BASE_URL) {
+    console.error('[EchoPersona] VITE_API_BASE_URL is not set. API calls will target localhost:8000 and fail.')
+  }
+  if (!import.meta.env.VITE_WS_BASE_URL) {
+    console.error('[EchoPersona] VITE_WS_BASE_URL is not set. WebSocket will target localhost and fail.')
+  }
+}
 
 // Server → client WebSocket message types
 export const WS_SERVER_MSG = {

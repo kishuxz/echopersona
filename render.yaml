@@ -11,13 +11,30 @@ services:
       - key: ENVIRONMENT
         value: production
       # Set these in the Render dashboard — never commit secrets:
-      # DEEPGRAM_API_KEY
+      # --- Supabase (required) ---
+      # SUPABASE_URL               ← https://<project-ref>.supabase.co
+      # SUPABASE_SERVICE_ROLE_KEY  ← service role key (backend only)
+      # SUPABASE_ANON_KEY          ← anon key
+      # --- AI services (required for live mode) ---
       # GROQ_API_KEY
       # ELEVENLABS_API_KEY
       # ELEVENLABS_VOICE_ID
-      # SUPABASE_URL
-      # SUPABASE_SERVICE_ROLE_KEY
-      # SUPABASE_ANON_KEY
+      # DEEPGRAM_API_KEY
+      # --- Redis (required; use Upstash TLS URL) ---
+      # REDIS_URL                  ← rediss://default:<password>@<host>:<port>
+      # --- CORS (required; set to your Vercel URL) ---
+      # CORS_ORIGINS               ← https://echopersona.vercel.app
+      # --- Public URL (required; used for D-ID audio file references) ---
+      # PUBLIC_BASE_URL            ← https://echopersona-backend.onrender.com
+      # --- Optional media services ---
       # DID_API_KEY
-      # REDIS_URL
-      # CORS_ORIGINS   ← set to your Vercel URL, e.g. https://echopersona.vercel.app
+      # SIMLI_API_KEY
+      # CARTESIA_API_KEY
+      # TTS_PROVIDER               ← elevenlabs (default) or cartesia
+      # --- Stripe billing (paused — set when activating payments) ---
+      # STRIPE_SECRET_KEY
+      # STRIPE_WEBHOOK_SECRET
+      # STRIPE_PRICE_CREATOR_MONTHLY
+      # STRIPE_PRICE_LEGACY_MONTHLY
+      # FRONTEND_BILLING_SUCCESS_URL  ← https://echopersona.vercel.app/billing/success
+      # FRONTEND_BILLING_CANCEL_URL   ← https://echopersona.vercel.app/billing/cancel

@@ -1,7 +1,7 @@
 # EchoPersona — Build Progress
 
 ## Active feature
-Step 9 — TBD.
+Step 9 — Deployment readiness (Render + Vercel + Supabase env wiring).
 
 ## Last completed step
 Step 8E.2 ✅ — Structural frontend safety polish (2026-06-17)
@@ -83,10 +83,10 @@ Step 7 Slice G ✅ — Minimal frontend billing and upgrade UI (2026-06-17)
 - Step 1 ✅ Question bank loader
 
 ## Current blocker
-None.
+None. Migration 006 (`stripe_entitlements`) must be confirmed applied in Supabase SQL editor before billing demo.
 
 ## Next action
-Plan Step 9 — TBD.
+Step 9 in progress — set env vars in Render and Vercel dashboards, verify health check, test full flow.
 
 ## Last known green verification
 ```bash

@@ -124,6 +124,7 @@ Migrations live in two places:
 | `ELEVENLABS_VOICE_ID` | yes | no | TTS live mode |
 | `REDIS_URL` | yes | no | Rate limiting |
 | `CORS_ORIGINS` | yes | no | Production |
+| `PUBLIC_BASE_URL` | yes | no | D-ID audio URL base (set to Render URL in prod) |
 | `DID_API_KEY` | yes | no | Optional video |
 | `CARTESIA_API_KEY` | yes | no | Optional alt TTS |
 | `TTS_PROVIDER` | yes | no | Optional (default: elevenlabs) |
