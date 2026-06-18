@@ -53,10 +53,10 @@ function StepIndicator({ current }: { current: FormStep }) {
 }
 
 export function PersonaUpload({ onPersona, activePersona, existingPersona }: PersonaUploadProps) {
-  const [name, setName] = useState("Demo Persona");
-  const [stories, setStories] = useState(["They love explaining technical systems clearly and briefly."]);
-  const [traits, setTraits] = useState("warm, direct, technical");
-  const [style, setStyle] = useState("short sentences, calm pacing");
+  const [name, setName] = useState("");
+  const [stories, setStories] = useState([""]);
+  const [traits, setTraits] = useState("");
+  const [style, setStyle] = useState("");
   const [voiceFiles, setVoiceFiles] = useState<File[]>([]);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const avatarFileRef = useRef<File | null>(null);
@@ -64,6 +64,7 @@ export function PersonaUpload({ onPersona, activePersona, existingPersona }: Per
   const [simliId, setSimliId] = useState("");
   const [busy, setBusy] = useState(false);
   const [voiceStatus, setVoiceStatus] = useState<"idle" | "cloning" | "cloned" | "error">("idle");
+  const [avatarError, setAvatarError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(true);
 
@@ -251,8 +252,17 @@ export function PersonaUpload({ onPersona, activePersona, existingPersona }: Per
   // ── Submit ───────────────────────────────────────────────────────────────────
 
   const submit = async () => {
+    if (name.trim().length < 2) {
+      setError("Please enter a name (at least 2 characters).");
+      return;
+    }
+    if (!stories.some((s) => s.trim().length > 0)) {
+      setError("Please add at least one memory story.");
+      return;
+    }
     setBusy(true);
     setError(null);
+    setAvatarError(null);
     try {
       const formData = {
         name,
@@ -281,6 +291,7 @@ export function PersonaUpload({ onPersona, activePersona, existingPersona }: Per
           persona = await uploadAvatar(persona.id, fileToUpload);
         } catch (e) {
           console.error("[AVATAR UPLOAD]", e);
+          setAvatarError("Photo upload failed — persona created without avatar.");
         }
       }
 
@@ -415,7 +426,7 @@ export function PersonaUpload({ onPersona, activePersona, existingPersona }: Per
             {sectionNum("04")}
             <label className={labelCls}>Memory stories</label>
             <p className="mb-2 font-sans text-[10px] text-muted">
-              The more memories you share, the more alive they feel
+              Required — the more memories you share, the more alive they feel
             </p>
             <div className="flex flex-col gap-2">
               {stories.map((story, i) => (
@@ -453,7 +464,7 @@ export function PersonaUpload({ onPersona, activePersona, existingPersona }: Per
             {sectionNum("05")}
             <label className={labelCls}>Voice samples (optional)</label>
             <p className="mb-2 font-sans text-[10px] text-muted">
-              30 seconds of audio is enough to capture a voice forever
+              Quiet room, natural speech — 30 seconds is enough to capture a voice forever
             </p>
 
             {/* Tab switcher */}
@@ -697,6 +708,9 @@ export function PersonaUpload({ onPersona, activePersona, existingPersona }: Per
                 )}
               </>
             )}
+            {avatarError && (
+              <p className="mt-1.5 font-sans text-[11px] text-red">{avatarError}</p>
+            )}
           </div>
 
           {/* 07 Simli Face ID */}
@@ -710,7 +724,15 @@ export function PersonaUpload({ onPersona, activePersona, existingPersona }: Per
               onChange={(e) => setSimliId(e.target.value)}
             />
             <p className="mt-1 font-sans text-[10px] text-muted">
-              Create a face at app.simli.ai/create then paste the ID here
+              Get a face ID at{" "}
+              <a
+                href="https://app.simli.ai/create"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline transition-colors hover:text-textdim"
+              >
+                app.simli.ai/create
+              </a>
             </p>
           </div>
 

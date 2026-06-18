@@ -1,10 +1,15 @@
 # EchoPersona — Build Progress
 
 ## Active feature
-Step 8B — Persona creation and upload UX polish.
+Step 9 — TBD.
 
 ## Last completed step
-Step 8 Slice A ✅ — Landing page and dashboard polish (2026-06-17)
+Step 8 Slice B ✅ — Persona creation and upload UX polish (2026-06-17)
+- `frontend/src/components/PersonaUpload.tsx` — cleared pre-filled demo defaults (name/traits/style/stories now start empty); hard validation blocks submit on empty name (<2 chars) or all-empty stories with inline error; `avatarError` state surfaces photo upload failures inline (was silent console.error); section hints updated ("Required —" prefix on stories, "Quiet room, natural speech —" on voice); Simli Face ID hint upgraded to a clickable `<a>` link
+- `frontend/src/pages/Dashboard.tsx` — `handlePersonaCreated` now navigates to `/dashboard/persona/:id` after creation; cancel button styled with underline + hover color
+- TypeScript: clean; build: clean (`npm run build` succeeded, 2026-06-17)
+
+## Step 8 Slice A ✅ — Landing page and dashboard polish (2026-06-17)
 - `frontend/src/pages/LandingPage.tsx` — stats grid responsive (`grid-cols-1 sm:grid-cols-3`); border-r gated on `sm:` breakpoint; added 3-tier pricing section (Free / Creator / Legacy) between speed section and CTA; footer Dashboard link is now auth-aware (guests see "Sign In"); added Privacy · Terms stub links; footer nav wraps on mobile
 - `frontend/src/pages/Dashboard.tsx` — `displayName` now reads `user.user_metadata.full_name` with email-slug fallback; `handleDelete` now prompts for confirmation and surfaces API errors; header right-side buttons use `gap-3` and "Billing & Plan" label shortened to "Billing" and hidden on xs via `sm:block`
 - TypeScript: clean; build: clean (`npm run build` succeeded, 2026-06-17)
@@ -66,14 +71,14 @@ Step 7 Slice G ✅ — Minimal frontend billing and upgrade UI (2026-06-17)
 None.
 
 ## Next action
-Plan Step 8B (persona creation and upload UX polish) using plan-feature skill.
+Plan Step 9 — TBD.
 
 ## Last known green verification
 ```bash
 cd backend && python -m pytest tests/ -q
 # 228 passed (all Step 7 slices green, 2026-06-17)
 cd frontend && npx tsc --noEmit && npm run build
-# typecheck clean; built in 1.08s (Step 8 Slice A, 2026-06-17)
+# typecheck clean; built in 1.06s (Step 8 Slice B, 2026-06-17)
 ```
 
 ## Do not forget

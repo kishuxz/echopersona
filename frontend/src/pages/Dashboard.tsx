@@ -26,6 +26,7 @@ export function Dashboard() {
   const handlePersonaCreated = (persona: Persona) => {
     setPersonas((prev) => [persona, ...prev])
     setShowCreate(false)
+    navigate(`/dashboard/persona/${persona.id}`)
   }
 
   const handleDelete = async (id: string, name: string) => {
@@ -102,10 +103,10 @@ export function Dashboard() {
                 Create Persona
               </h2>
               <button
-                className="font-sans text-sm text-muted hover:text-textdim"
+                className="font-sans text-sm text-muted underline transition-colors hover:text-text"
                 onClick={() => setShowCreate(false)}
               >
-                cancel
+                Cancel
               </button>
             </div>
             <div className="max-w-lg">
