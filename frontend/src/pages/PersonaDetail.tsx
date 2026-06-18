@@ -56,30 +56,55 @@ export function PersonaDetail() {
 
   return (
     <div className="min-h-screen bg-bg font-sans text-text">
-      {/* Header bar */}
-      <div className="border-b border-border bg-surface px-6 py-3 shadow-card lg:px-10">
-        <div className="mx-auto flex max-w-[1440px] items-center gap-4">
-          <button
-            className="font-sans text-sm text-muted transition-colors hover:text-text"
-            onClick={() => navigate('/dashboard')}
-          >
-            ← Dashboard
-          </button>
-          <span className="text-border">|</span>
-          <div className="flex items-center gap-2">
-            <span className="font-fraunces text-base font-semibold text-text">{persona.name}</span>
+      {/* Header */}
+      <div className="border-b border-border bg-surface shadow-card">
+        {/* Top nav */}
+        <div className="px-6 py-3 lg:px-10">
+          <div className="mx-auto max-w-[1440px]">
             <button
-              className="ml-2 font-sans text-xs text-muted transition-colors hover:text-textdim"
+              className="font-sans text-sm text-muted transition-colors hover:text-text"
+              onClick={() => navigate('/dashboard')}
+            >
+              ← Dashboard
+            </button>
+          </div>
+        </div>
+
+        {/* Persona summary strip */}
+        <div className="border-t border-border/50 px-6 pb-4 pt-3 lg:px-10">
+          <div className="mx-auto flex max-w-[1440px] flex-wrap items-start justify-between gap-4">
+            {/* Left: name + style + badges */}
+            <div className="flex flex-col gap-1.5">
+              <h1 className="font-fraunces text-2xl font-semibold text-text">{persona.name}</h1>
+              {persona.speaking_style && (
+                <p className="font-sans text-sm text-muted">{persona.speaking_style}</p>
+              )}
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                {persona.personality_traits?.slice(0, 3).map((t) => (
+                  <span key={t} className="rounded-full bg-cream px-2.5 py-0.5 font-sans text-[10px] text-textdim">
+                    {t}
+                  </span>
+                ))}
+                {persona.voice_id && (
+                  <span className="rounded-full bg-green/10 px-2.5 py-0.5 font-sans text-[10px] text-green">
+                    Voice Cloned
+                  </span>
+                )}
+                {persona.stories.length > 0 && (
+                  <span className="rounded-full bg-cream px-2.5 py-0.5 font-sans text-[10px] text-textdim">
+                    {persona.stories.length} {persona.stories.length === 1 ? 'memory' : 'memories'}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Right: Consent & Succession button */}
+            <button
+              className="rounded-lg border border-border px-3.5 py-2 font-sans text-sm text-textdim transition-colors hover:border-border-hi hover:text-text"
               onClick={() => navigate(`/dashboard/persona/${personaId}/consent`)}
             >
-              Consent →
+              Consent &amp; Succession →
             </button>
-            {persona.speaking_style && (
-              <>
-                <span className="text-muted">·</span>
-                <span className="font-sans text-sm text-textdim">{persona.speaking_style}</span>
-              </>
-            )}
           </div>
         </div>
       </div>
@@ -92,6 +117,7 @@ export function PersonaDetail() {
           personaName={persona.name}
           personaTraits={persona.personality_traits}
           storyCount={persona.stories.length}
+          hasVoice={Boolean(persona.voice_id)}
           idleVideoUrl={persona.idle_video_url}
           avatarUrl={persona.did_avatar_url}
           onLatencyUpdate={addSnapshot}

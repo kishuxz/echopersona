@@ -41,7 +41,9 @@ export function ConversationLog({
               <path d="M20 4C11.163 4 4 10.268 4 18c0 3.867 1.71 7.36 4.478 9.898L7 36l8.82-3.528A18.08 18.08 0 0 0 20 32c8.837 0 16-6.268 16-14S28.837 4 20 4z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
             <p className="font-sans text-sm text-muted text-center">
-              Start a session and hold the mic button to speak
+              {personaName
+                ? `Hold the mic button to speak with ${personaName}`
+                : "Start a session and hold the mic button to speak"}
             </p>
           </div>
         ) : (

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CONNECT_DELAY_MS, DEFAULT_WS_BASE, RECONNECT_DELAY_MS, WS_CLIENT_MSG, WS_SERVER_MSG } from "../constants";
 import { useAudioRecorder } from "../hooks/useAudioRecorder";
 import { useWebSocket } from "../hooks/useWebSocket";
@@ -12,6 +12,7 @@ interface VoiceInterfaceProps {
   personaName?: string;
   personaTraits?: string[];
   storyCount?: number;
+  hasVoice?: boolean;
   idleVideoUrl?: string | null;
   avatarUrl?: string | null;
   onLatencyUpdate: (latency: LatencySnapshot) => void;
@@ -64,11 +65,12 @@ export function VoiceInterface({
   personaName,
   personaTraits = [],
   storyCount = 0,
+  hasVoice = false,
   idleVideoUrl,
   avatarUrl,
   onLatencyUpdate,
 }: VoiceInterfaceProps) {
-  const { connect, sendJson, sendBinary } = useWebSocket();
+  const { connect, disconnect, sendJson, sendBinary } = useWebSocket();
 
   const [items, setItems]               = useState<TranscriptItem[]>([]);
   const [stage, setStage]               = useState<Stage>("idle");
@@ -81,7 +83,14 @@ export function VoiceInterface({
   const [lastResponseMs, setLastResponseMs] = useState<number | null>(null);
   const [videoGenSeconds, setVideoGenSeconds] = useState<string>("");
   const [playingVideo, setPlayingVideo]       = useState(false);
+  const [wsError, setWsError]                 = useState<string | null>(null);
   const isRecordingRef   = useRef(false);
+
+  useEffect(() => {
+    if (!wsError) return;
+    const t = setTimeout(() => setWsError(null), 5000);
+    return () => clearTimeout(t);
+  }, [wsError]);
   const videoGenStartRef = useRef<number>(0);
 
   // Latency tracing refs
@@ -224,6 +233,7 @@ export function VoiceInterface({
 
       if (message.type === WS_SERVER_MSG.ERROR) {
         console.error("[WS] server error:", message.message);
+        setWsError(message.message ?? "Something went wrong. Please try again.");
         setIsProcessing(false);
       }
 
@@ -285,6 +295,19 @@ export function VoiceInterface({
 
       {/* ── LEFT PANEL — Avatar + Controls (40%) ── */}
       <div className="flex flex-col items-center gap-5 border-b border-border bg-elevated p-6 lg:w-[40%] lg:border-b-0 lg:border-r">
+
+        {/* WS error banner */}
+        {wsError && (
+          <div className="flex w-full items-center justify-between rounded-xl bg-red/10 px-4 py-2.5">
+            <span className="font-sans text-xs text-red">{wsError}</span>
+            <button
+              onClick={() => setWsError(null)}
+              className="ml-3 font-sans text-xs text-red/60 transition-opacity hover:text-red"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         {/* Portrait avatar */}
         <div className="relative w-full max-w-[260px] overflow-hidden rounded-2xl shadow-card-hover" style={{ aspectRatio: '3/4' }}>
@@ -355,6 +378,17 @@ export function VoiceInterface({
 
         {/* Controls */}
         <div className="flex w-full max-w-[260px] flex-col items-center gap-4">
+
+          {/* Capability chips */}
+          <div className="flex flex-wrap justify-center gap-2">
+            <span className={`rounded-full px-2.5 py-0.5 font-sans text-[10px] ${hasVoice ? 'bg-green/10 text-green' : 'bg-cream text-muted'}`}>
+              {hasVoice ? 'Voice: Cloned' : 'Voice: Default'}
+            </span>
+            <span className={`rounded-full px-2.5 py-0.5 font-sans text-[10px] ${(avatarUrl || idleVideoUrl) ? 'bg-green/10 text-green' : 'bg-cream text-muted'}`}>
+              {(avatarUrl || idleVideoUrl) ? 'Avatar: Photo' : 'Avatar: Letter'}
+            </span>
+          </div>
+
           {!connected ? (
             <button
               className="w-full rounded-xl bg-accent py-3 font-sans text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
@@ -424,6 +458,14 @@ export function VoiceInterface({
 
               {/* Pipeline status */}
               <PipelineBar stage={stage} />
+
+              {/* End session */}
+              <button
+                className="font-sans text-[11px] text-muted transition-colors hover:text-red"
+                onClick={disconnect}
+              >
+                End session
+              </button>
             </>
           )}
         </div>
@@ -436,7 +478,7 @@ export function VoiceInterface({
           draft=""
           personaName={personaName}
           lastResponseMs={lastResponseMs}
-          hasVoice={Boolean(personaId)}
+          hasVoice={hasVoice}
           storyCount={storyCount}
         />
 
