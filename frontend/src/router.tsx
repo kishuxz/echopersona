@@ -52,5 +52,7 @@ export const router = createBrowserRouter([
       </ProtectedRoute>
     ),
   },
+  { path: '/billing/success', element: <Navigate to="/dashboard/billing" replace /> },
+  { path: '/billing/cancel', element: <Navigate to="/dashboard/billing" replace /> },
   { path: '*', element: <Navigate to="/" replace /> },
 ])

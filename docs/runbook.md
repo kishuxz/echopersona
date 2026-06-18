@@ -69,6 +69,34 @@ Migrations live in two places:
 
 ---
 
+## Stripe billing
+
+### Local setup
+
+1. Install the Stripe CLI: `brew install stripe/stripe-cli/stripe`
+2. Authenticate: `stripe login`
+3. Forward webhooks to the local backend (run in a separate terminal):
+   ```bash
+   stripe listen --forward-to http://localhost:8000/billing/webhook
+   ```
+   Copy the printed `whsec_*` value into `STRIPE_WEBHOOK_SECRET` in `backend/.env`.
+
+### Stripe Dashboard setup
+
+1. Switch to **Test mode** (toggle in the top-left of the dashboard).
+2. Create two products with recurring monthly prices:
+   - **Creator** (e.g. $9/mo) — copy the `price_*` ID into `STRIPE_PRICE_CREATOR_MONTHLY`.
+   - **Legacy** (e.g. $19/mo) — copy the `price_*` ID into `STRIPE_PRICE_LEGACY_MONTHLY`.
+3. Register a webhook endpoint at `https://your-backend.render.com/billing/webhook` with these events:
+   - `checkout.session.completed`
+   - `customer.subscription.created`
+   - `customer.subscription.updated`
+   - `customer.subscription.deleted`
+4. Copy the endpoint's signing secret into `STRIPE_WEBHOOK_SECRET` on Render.
+5. Set `FRONTEND_BILLING_SUCCESS_URL` and `FRONTEND_BILLING_CANCEL_URL` to the production frontend URLs (e.g. `https://your-frontend.vercel.app/billing/success`).
+
+---
+
 ## Deployment
 
 ### Backend → Render.com
@@ -99,6 +127,12 @@ Migrations live in two places:
 | `DID_API_KEY` | yes | no | Optional video |
 | `CARTESIA_API_KEY` | yes | no | Optional alt TTS |
 | `TTS_PROVIDER` | yes | no | Optional (default: elevenlabs) |
+| `STRIPE_SECRET_KEY` | yes | no | Billing (checkout + customer create) |
+| `STRIPE_WEBHOOK_SECRET` | yes | no | Billing (webhook signature verification) |
+| `STRIPE_PRICE_CREATOR_MONTHLY` | yes | no | Billing (Creator plan price ID) |
+| `STRIPE_PRICE_LEGACY_MONTHLY` | yes | no | Billing (Legacy plan price ID) |
+| `FRONTEND_BILLING_SUCCESS_URL` | yes | no | Billing (Stripe redirect after payment) |
+| `FRONTEND_BILLING_CANCEL_URL` | yes | no | Billing (Stripe redirect on cancel) |
 
 ---
 
@@ -145,3 +179,6 @@ redis-cli -u $REDIS_URL GET groq:rpm:$(date +%s | awk '{print int($1/60)}')
 | Evaluator always advances | Groq rate limit hit | Check Redis RPM counter; wait 60s |
 | `memory_units` insert fails | Migration 004 not applied | Run `004_creation_fields.sql` in Supabase |
 | CORS error | `CORS_ORIGINS` missing or wrong | Set to exact Vercel domain including protocol |
+| `POST /billing/checkout` returns 500 | `STRIPE_PRICE_*` env var is empty | Set the price ID env vars and restart the backend |
+| Webhook returns 400 Invalid Signature | `STRIPE_WEBHOOK_SECRET` mismatched | Use the `whsec_*` from `stripe listen` output (local) or the Dashboard endpoint secret (prod) |
+| `stripe_entitlements` row missing after checkout | Price ID mismatch or subscription events not registered | Confirm price IDs match exactly; add subscription events to the webhook in the Dashboard |
