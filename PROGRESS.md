@@ -4,7 +4,22 @@
 Step 9 — TBD.
 
 ## Last completed step
-Step 8 Slice B ✅ — Persona creation and upload UX polish (2026-06-17)
+Step 8E.2 ✅ — Structural frontend safety polish (2026-06-17)
+- `frontend/src/components/ErrorBoundary.tsx` — new class component; `getDerivedStateFromError` sets hasError; renders "Something went wrong" fallback with Reload button (`window.location.href = '/'`); no sensitive data logged
+- `frontend/src/main.tsx` — `<ErrorBoundary>` wraps `<RouterProvider>`; prevents blank-screen crashes in production
+- `frontend/src/components/ProtectedRoute.tsx` — unauthenticated redirect now passes `state: { returnTo: location.pathname }` so the original URL survives the login round-trip
+- `frontend/src/pages/AuthPage.tsx` — reads `location.state.returnTo` on mount; login and email-confirmation redirect both navigate to `returnTo` (default `/dashboard`); signup flow unaffected
+- `frontend/src/App.tsx` — deleted (confirmed zero imports via grep)
+- TypeScript: clean; build: clean (`npm run build` succeeded, 2026-06-17)
+
+## Step 8E.1 ✅ — Final frontend polish mini-slice (2026-06-17)
+- `frontend/src/components/LatencyDashboard.tsx` — Total metric card now uses `total_ms` (was incorrectly using `tts_first_audio_ms`)
+- `frontend/src/pages/Dashboard.tsx` — Billing link always visible (removed `hidden sm:block`); main content padding `px-4 sm:px-8` for better mobile layout
+- `frontend/src/pages/LandingPage.tsx` — Privacy and Terms footer links changed from `href="#"` to `/privacy` and `/terms`; pricing CTAs softened from "Coming soon" → "Launching soon"
+- `frontend/src/router.tsx` — Added `/privacy` and `/terms` placeholder routes; replaced silent catch-all redirect with a proper 404 page (NotFoundPage component with "Go home" / "Go back" actions)
+- TypeScript: clean; build: clean (`npm run build` succeeded, 2026-06-17)
+
+## Step 8 Slice B ✅ — Persona creation and upload UX polish (2026-06-17)
 - `frontend/src/components/PersonaUpload.tsx` — cleared pre-filled demo defaults (name/traits/style/stories now start empty); hard validation blocks submit on empty name (<2 chars) or all-empty stories with inline error; `avatarError` state surfaces photo upload failures inline (was silent console.error); section hints updated ("Required —" prefix on stories, "Quiet room, natural speech —" on voice); Simli Face ID hint upgraded to a clickable `<a>` link
 - `frontend/src/pages/Dashboard.tsx` — `handlePersonaCreated` now navigates to `/dashboard/persona/:id` after creation; cancel button styled with underline + hover color
 - TypeScript: clean; build: clean (`npm run build` succeeded, 2026-06-17)

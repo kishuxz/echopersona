@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 
 interface AuthPageProps {
@@ -17,11 +17,13 @@ export function AuthPage({ mode: initialMode }: AuthPageProps) {
 
   const { signIn, signUp, user } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  const returnTo = (location.state as { returnTo?: string } | null)?.returnTo ?? '/dashboard'
 
-  // Redirect to dashboard if already logged in, or after email confirmation link is clicked
+  // Redirect if already logged in, or after email confirmation link is clicked
   useEffect(() => {
     if (user) {
-      navigate('/dashboard', { replace: true })
+      navigate(returnTo, { replace: true })
     }
   }, [user])
 
@@ -37,7 +39,7 @@ export function AuthPage({ mode: initialMode }: AuthPageProps) {
     try {
       if (mode === 'login') {
         await signIn(email, password)
-        navigate('/dashboard')
+        navigate(returnTo)
       } else {
         await signUp(email, password, fullName)
         setConfirmMessage(`We sent a confirmation link to ${email}. Click it to activate your account and you'll be signed in automatically.`)
