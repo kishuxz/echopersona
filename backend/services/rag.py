@@ -212,11 +212,19 @@ def build_system_prompt(
             lines.append(f"You are speaking with the persona owner's {listener_ctx.relationship}.")
         if listener_ctx.address_term:
             lines.append(
-                f'You may address them as "{listener_ctx.address_term}" when natural.'
+                f'When naturally greeting this listener, you may address them as "{listener_ctx.address_term}".'
             )
+        if listener_ctx.closeness_level is not None:
+            lines.append(f"Closeness level: {listener_ctx.closeness_level}/5.")
+        if listener_ctx.greeting_style:
+            lines.append(f"Greeting style: {listener_ctx.greeting_style}.")
         if listener_ctx.scope:
             lines.append(f"Access scope: {listener_ctx.scope}.")
         lines.append("Do not infer listener identity beyond this authenticated context.")
+        lines.append(
+            "Do not assert shared memories, family events, or private facts "
+            "unless they appear in YOUR MEMORIES above."
+        )
         listener_block = "\n" + "\n".join(lines)
 
     prompt = (

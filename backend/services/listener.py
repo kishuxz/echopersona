@@ -87,6 +87,8 @@ async def resolve_listener_context(
                         address_term=b.get("address_term") or None,
                         scope=b.get("scope"),
                         allowed_modalities=consent.modality_consent,
+                        closeness_level=b.get("closeness_level"),
+                        greeting_style=b.get("greeting_style"),
                     )
                 # Found but not immediately activated
                 logger.info(

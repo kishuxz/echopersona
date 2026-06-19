@@ -71,8 +71,16 @@ _BENEFICIARY_POSTHUMOUS = {
     "activation_trigger": "posthumous_verified",
 }
 
+# Enriched beneficiary row with optional relationship metadata (MVP addition)
+_BENEFICIARY_ENRICHED = {
+    **_BENEFICIARY_IMMEDIATE,
+    "closeness_level": 4,
+    "greeting_style": "warm and affectionate",
+}
+
 _SUCCESSION_WITH_IMMEDIATE = {"beneficiaries": [_BENEFICIARY_IMMEDIATE]}
 _SUCCESSION_WITH_POSTHUMOUS = {"beneficiaries": [_BENEFICIARY_POSTHUMOUS]}
+_SUCCESSION_WITH_ENRICHED = {"beneficiaries": [_BENEFICIARY_ENRICHED]}
 
 
 # ── DB mock helper (matches test_consent.py pattern) ──────────────────────────
@@ -184,6 +192,22 @@ class TestBeneficiaryAccess:
         result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _BENEFICIARY_ID))
         assert result is None
 
+    def test_enriched_beneficiary_populates_new_fields(self):
+        # JSONB row with closeness_level + greeting_style → fields propagate to ListenerContext
+        db = _make_db([_CONSENT_ROW_FULL, _PERSONA_ROW, _SUCCESSION_WITH_ENRICHED])
+        result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _BENEFICIARY_ID))
+        assert result is not None
+        assert result.closeness_level == 4
+        assert result.greeting_style == "warm and affectionate"
+
+    def test_old_beneficiary_row_backward_compat(self):
+        # Legacy JSONB row without new optional keys → None, no KeyError
+        db = _make_db([_CONSENT_ROW_FULL, _PERSONA_ROW, _SUCCESSION_WITH_IMMEDIATE])
+        result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _BENEFICIARY_ID))
+        assert result is not None
+        assert result.closeness_level is None
+        assert result.greeting_style is None
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # build_system_prompt — listener context injection
@@ -224,6 +248,17 @@ _BENEFICIARY_CTX_MINIMAL = ListenerContext(
     allowed_modalities=_MODALITIES_FULL,
 )
 
+_BENEFICIARY_CTX_ENRICHED = ListenerContext(
+    listener_user_id=_BENEFICIARY_ID,
+    is_owner=False,
+    relationship="daughter",
+    address_term="kiddo",
+    closeness_level=4,
+    greeting_style="warm and affectionate",
+    scope="full",
+    allowed_modalities=_MODALITIES_FULL,
+)
+
 
 class TestBuildSystemPromptListenerInjection:
 
@@ -260,3 +295,20 @@ class TestBuildSystemPromptListenerInjection:
         assert "son" in result
         assert "kiddo" not in result   # address_term absent → not injected
         assert "scope" not in result.lower().split("listener")[1]  # scope line absent
+
+    def test_enriched_ctx_includes_closeness_and_greeting_style(self):
+        # closeness_level + greeting_style present → both appear in listener block
+        result = build_system_prompt(_make_persona(), [], listener_ctx=_BENEFICIARY_CTX_ENRICHED)
+        assert "Closeness level: 4/5" in result
+        assert "warm and affectionate" in result
+
+    def test_anti_fabrication_instruction_present_for_beneficiary(self):
+        # Anti-fabrication guardrail must appear whenever a listener block is injected
+        result = build_system_prompt(_make_persona(), [], listener_ctx=_BENEFICIARY_CTX)
+        assert "Do not assert shared memories" in result
+
+    def test_owner_ctx_has_no_anti_fabrication_listener_block(self):
+        # Owner path → no listener block at all → anti-fabrication line absent
+        result = build_system_prompt(_make_persona(), [], listener_ctx=_OWNER_CTX)
+        assert "LISTENER CONTEXT:" not in result
+        assert "Do not assert shared memories" not in result
