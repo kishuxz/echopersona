@@ -40,7 +40,7 @@ class SuccessionBeneficiary(BaseModel):
     scope: Literal["full", "curated"]
     activation_trigger: Literal["immediate", "posthumous_verified"]
     release_messages: list[str] = Field(default_factory=list)
-    closeness_level: int | None = None
+    closeness_level: int | None = Field(default=None, ge=1, le=5)
     greeting_style: str | None = None
 
 
