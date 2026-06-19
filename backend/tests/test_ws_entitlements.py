@@ -215,3 +215,54 @@ class TestSimliGate:
         ws = self._run_simli(_make_ent("legacy", "active"))
         billing_denials = [e for e in self._simli_errors(ws) if e.get("message") == "Video not permitted"]
         assert len(billing_denials) == 0
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 5. Listener context prompt pass-through (text-turn integration)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestListenerCtxPromptPassthrough:
+    """Prove SESSION_LISTENER[session_id] reaches build_system_prompt on every reply turn."""
+
+    def test_listener_ctx_reaches_build_system_prompt(self):
+        """Enriched ListenerContext seeded in SESSION_LISTENER is forwarded verbatim to build_system_prompt."""
+        from routers.ws import SESSION_HISTORY, SESSION_LISTENER, _run_text_turn
+
+        _session = "sess-ctx-passthrough"
+        _ctx = ListenerContext(
+            listener_user_id="benef-sofia",
+            is_owner=False,
+            relationship="granddaughter",
+            address_term="Sofia dear",
+            closeness_level=5,
+            greeting_style="warm",
+            scope="full",
+            allowed_modalities=ModalityConsent(text_twin=True, voice_clone=False, video_avatar=False),
+        )
+        SESSION_LISTENER[_session] = _ctx
+
+        ws = MagicMock()
+        ws.query_params = {"persona_id": ""}
+        ws.send_json = AsyncMock()
+
+        async def _empty_llm(*args, **kwargs):
+            if False:
+                yield  # async generator that yields nothing
+
+        try:
+            with (
+                patch("routers.ws.build_system_prompt", return_value="fake-prompt") as mock_bsp,
+                patch("routers.ws.stream_llm", new=_empty_llm),
+            ):
+                asyncio.run(_run_text_turn(ws, _session, "hello grandpa"))
+        finally:
+            SESSION_LISTENER.pop(_session, None)
+            SESSION_HISTORY.pop(_session, None)
+
+        mock_bsp.assert_called_once()
+        _persona_arg, _retrieved_arg, ctx_arg = mock_bsp.call_args.args
+        assert ctx_arg is _ctx
+        assert ctx_arg.relationship == "granddaughter"
+        assert ctx_arg.address_term == "Sofia dear"
+        assert ctx_arg.closeness_level == 5
+        assert ctx_arg.greeting_style == "warm"
