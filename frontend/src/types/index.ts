@@ -67,6 +67,8 @@ export interface Beneficiary {
   scope: "full" | "curated";
   activation_trigger: "immediate" | "posthumous_verified";
   address_term?: string;
+  closeness_level?: number | null;
+  greeting_style?: string;
   release_messages?: string[];
 }
 
