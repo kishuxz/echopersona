@@ -198,11 +198,31 @@ def build_system_prompt(
         if parts:
             entity_block = "\nKEY CONTEXT — " + " | ".join(parts) + "."
 
-    # Style exemplars from Stage 4
+    # Style card: tone/avoid-list/length pref from Phase 2 fields + Stage 4 exemplars
+    # Relationship-specific tone overrides the base tone for authenticated non-owner listeners.
+    effective_tone = persona.tone
+    if (
+        listener_ctx is not None
+        and not listener_ctx.is_owner
+        and listener_ctx.relationship
+        and persona.relationship_tone.get(listener_ctx.relationship)
+    ):
+        effective_tone = persona.relationship_tone[listener_ctx.relationship]
+
+    style_instructions: list[str] = []
+    if effective_tone:
+        style_instructions.append(f"Tone: {effective_tone}.")
+    if persona.avoid_phrases:
+        style_instructions.append(f"Prefer not to use: {', '.join(persona.avoid_phrases)}.")
+    if persona.answer_length_pref:
+        style_instructions.append(f"Keep responses {persona.answer_length_pref}.")
+
     style_block = ""
+    if style_instructions:
+        style_block += "\nSTYLE: " + " ".join(style_instructions)
     if persona.style_exemplars:
         ex = persona.style_exemplars[:3]
-        style_block = "\nCHARACTERISTIC PHRASES:\n" + "\n".join(f'  "{e}"' for e in ex)
+        style_block += "\nCHARACTERISTIC PHRASES:\n" + "\n".join(f'  "{e}"' for e in ex)
 
     # Listener context block — only for authenticated non-owner beneficiaries
     listener_block = ""

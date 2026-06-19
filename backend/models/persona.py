@@ -21,4 +21,9 @@ class Persona(PersonaCreate):
     entity_graph: list[dict] = Field(default_factory=list)
     # Stage 4: characteristic speech excerpts for style conditioning
     style_exemplars: list[str] = Field(default_factory=list)
+    # Style card (Phase 2) — populated by Stage 4; empty defaults are safe
+    tone: str = ""
+    avoid_phrases: list[str] = Field(default_factory=list)
+    answer_length_pref: str = ""
+    relationship_tone: dict = Field(default_factory=dict)
     created_at: datetime | None = None
