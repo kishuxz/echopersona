@@ -100,3 +100,4 @@ Total warm: ~520ms (text committed before TTS starts)
 - **Stripe** — checkout, subscriptions, webhooks, entitlements table
 - **Tavus** — video AI (async, non-blocking; same constraint as D-ID)
 - **OpenAI embeddings** — optional upgrade path from sentence-transformers for RAG
+- **Relationship-aware persona context** — listener-identity-driven tone, greeting style, and memory visibility filtering; see `docs/relationship-aware-persona-context.md`
