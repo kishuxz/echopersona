@@ -70,7 +70,7 @@ Migrations live in two places:
 - `007_persona_style_card.sql` ✅ — `tone`, `avoid_phrases`, `answer_length_pref`, `relationship_tone` on `personas`; verified 2026-06-20 (all four columns + defaults confirmed)
 
 **Pending migrations:**
-- None. Stage 4 extraction and `persona_style_card` write-back are code work, not a new migration.
+- None.
 
 ---
 

@@ -83,7 +83,7 @@ Step 7 Slice G ✅ — Minimal frontend billing and upgrade UI (2026-06-17)
 - Step 1 ✅ Question bank loader
 
 ## Current blocker
-None. Migrations 006 and 007 applied and verified (2026-06-20). Next: implement Stage 4 extraction and `persona_style_card` write-back.
+None. Stage 4 persona style-card extraction and write-back complete (2026-06-20). Next: Step 9B production deployment verification (`kishoreai.online` Docker Compose).
 
 ## Next action
 Step 9B.1 done — docs/config reconciled to private VPC Docker. Next: fix docker-compose.yml build arg defaults (CORS_ORIGINS, VITE_API_BASE_URL, VITE_WS_BASE_URL) for production; then SSH to VPS, write production .env, `docker compose up --build -d`, verify `https://kishoreai.online/health`.
@@ -99,7 +99,7 @@ cd frontend && npx tsc --noEmit && npm run build
 ## Do not forget
 - Migrations 004 and 005 are applied in Supabase SQL editor — do not re-run unless schema is reset.
 - Migration 006 (`stripe_entitlements`) **confirmed applied** (2026-06-20) — `stripe_entitlements` table present in Supabase project `acngivwdqttgtalopsjw`.
-- Migration 007 (`persona_style_card`) **confirmed applied and verified** (2026-06-20) — four columns confirmed on `personas`: `tone TEXT NOT NULL DEFAULT ''`, `avoid_phrases TEXT[] NOT NULL DEFAULT '{}'`, `answer_length_pref TEXT NOT NULL DEFAULT 'moderate'`, `relationship_tone JSONB NOT NULL DEFAULT '{}'`. Stage 4 extraction and write-back are **not yet implemented** — next slice.
+- Migration 007 (`persona_style_card`) **confirmed applied and verified** (2026-06-20) — four columns confirmed on `personas`: `tone TEXT NOT NULL DEFAULT ''`, `avoid_phrases TEXT[] NOT NULL DEFAULT '{}'`, `answer_length_pref TEXT NOT NULL DEFAULT 'moderate'`, `relationship_tone JSONB NOT NULL DEFAULT '{}'`. Stage 4 extraction and write-back **complete** (2026-06-20) — 25/25 tests pass.
 - `SESSION_LISTENER` and `SESSION_HISTORY` are not cleaned up on disconnect — known gap, defer to a future cleanup slice.
 - `posthumous_verified` beneficiary activation is explicitly deferred — activation signal not yet wired.
 - Tavus not yet wired in — see `docs/backlog.md`.
