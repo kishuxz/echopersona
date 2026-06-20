@@ -83,7 +83,7 @@ Step 7 Slice G ✅ — Minimal frontend billing and upgrade UI (2026-06-17)
 - Step 1 ✅ Question bank loader
 
 ## Current blocker
-None. Migration 006 (`stripe_entitlements`) must be confirmed applied in Supabase SQL editor before billing demo.
+None. Migrations 006 and 007 applied and verified (2026-06-20). Next: implement Stage 4 extraction and `persona_style_card` write-back.
 
 ## Next action
 Step 9B.1 done — docs/config reconciled to private VPC Docker. Next: fix docker-compose.yml build arg defaults (CORS_ORIGINS, VITE_API_BASE_URL, VITE_WS_BASE_URL) for production; then SSH to VPS, write production .env, `docker compose up --build -d`, verify `https://kishoreai.online/health`.
@@ -98,7 +98,8 @@ cd frontend && npx tsc --noEmit && npm run build
 
 ## Do not forget
 - Migrations 004 and 005 are applied in Supabase SQL editor — do not re-run unless schema is reset.
-- Migration 006 (`stripe_entitlements`) written but **not confirmed applied** — verify in Supabase SQL editor before testing billing in staging.
+- Migration 006 (`stripe_entitlements`) **confirmed applied** (2026-06-20) — `stripe_entitlements` table present in Supabase project `acngivwdqttgtalopsjw`.
+- Migration 007 (`persona_style_card`) **confirmed applied and verified** (2026-06-20) — four columns confirmed on `personas`: `tone TEXT NOT NULL DEFAULT ''`, `avoid_phrases TEXT[] NOT NULL DEFAULT '{}'`, `answer_length_pref TEXT NOT NULL DEFAULT 'moderate'`, `relationship_tone JSONB NOT NULL DEFAULT '{}'`. Stage 4 extraction and write-back are **not yet implemented** — next slice.
 - `SESSION_LISTENER` and `SESSION_HISTORY` are not cleaned up on disconnect — known gap, defer to a future cleanup slice.
 - `posthumous_verified` beneficiary activation is explicitly deferred — activation signal not yet wired.
 - Tavus not yet wired in — see `docs/backlog.md`.

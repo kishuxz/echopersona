@@ -63,9 +63,14 @@ Migrations live in two places:
 2. Run it (idempotent; all migrations use `IF NOT EXISTS` / `IF NOT EXISTS` guards)
 3. Verify in Table Editor that columns/tables exist
 
+**Applied migrations (Supabase project `acngivwdqttgtalopsjw`):**
+- `004_creation_fields.sql` ✅ — `persona_id`, `source_question_id`, `source_type`, `supersedes`, `captured_at`, `media_ref` on `memory_units`
+- `005_*` ✅ — applied; see commit history for details
+- `006_stripe_entitlements.sql` ✅ — `stripe_entitlements` + `stripe_webhook_events` tables; confirmed 2026-06-20
+- `007_persona_style_card.sql` ✅ — `tone`, `avoid_phrases`, `answer_length_pref`, `relationship_tone` on `personas`; verified 2026-06-20 (all four columns + defaults confirmed)
+
 **Pending migrations:**
-- `backend/migrations/004_creation_fields.sql` — adds `persona_id`, `source_question_id`,
-  `source_type`, `supersedes`, `captured_at`, `media_ref` to `memory_units`
+- None. Stage 4 extraction and `persona_style_card` write-back are code work, not a new migration.
 
 ---
 
