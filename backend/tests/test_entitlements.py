@@ -176,6 +176,18 @@ class TestGetEntitlementForUser:
         db.table.assert_called_with("stripe_entitlements")
         q.eq.assert_called_with("user_id", _USER_ID)
 
+    def test_returns_none_when_execute_returns_none_object(self):
+        """Production guard: execute() returning literal None must not raise AttributeError."""
+        db = MagicMock()
+        q = MagicMock()
+        db.table.return_value = q
+        q.select.return_value = q
+        q.eq.return_value = q
+        q.maybe_single.return_value = q
+        q.execute.return_value = None  # literal None, not MagicMock(data=None)
+        result = asyncio.run(get_entitlement_for_user(db, _USER_ID))
+        assert result is None
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 3. upsert_entitlement_from_subscription

@@ -30,7 +30,12 @@ from models.consent import (
     SuccessionRecord,
 )
 from routers.consent import router as consent_router
-from services.consent import write_consent_record, write_succession_record
+from services.consent import (
+    get_active_consent_record,
+    get_active_succession_record,
+    write_consent_record,
+    write_succession_record,
+)
 
 
 # ── Constants ──────────────────────────────────────────────────────────────────
@@ -438,3 +443,50 @@ class TestEnrichedBeneficiaryFields:
             resp = client.post(f"/personas/{_PERSONA_ID}/succession", json=payload)
         # Service returned None → 404, but Pydantic accepted the payload (no 422)
         assert resp.status_code == 404
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 5. None-result guard — production Supabase execute() returning None
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _make_db_none_execute(first_returns_data=None) -> MagicMock:
+    """DB mock where execute() returns literal None (not MagicMock(data=None)).
+
+    first_returns_data: if set, the FIRST execute (persona owner check) returns
+    MagicMock(data=<value>) so ensure_persona_owner passes; subsequent execute
+    calls return literal None, simulating the production Supabase None-result bug.
+    """
+    q = MagicMock()
+    q.select.return_value = q
+    q.eq.return_value = q
+    q.maybe_single.return_value = q
+    if first_returns_data is not None:
+        q.execute.side_effect = [MagicMock(data=first_returns_data), None]
+    else:
+        q.execute.return_value = None
+    db = MagicMock()
+    db.table.return_value = q
+    return db
+
+
+class TestConsentServiceNoneResult:
+    """Service functions return None gracefully when Supabase execute() returns
+    literal None (AttributeError regression guard — production bug 2026-06-20)."""
+
+    def test_get_active_consent_record_none_on_consent_query(self):
+        """Persona ownership check succeeds; consent query returns None — must not crash."""
+        db = _make_db_none_execute(first_returns_data={"id": _PERSONA_ID})
+        result = asyncio.run(get_active_consent_record(db, _PERSONA_ID, _USER_ID))
+        assert result is None
+
+    def test_get_active_succession_record_none_on_succession_query(self):
+        """Persona ownership check succeeds; succession query returns None — must not crash."""
+        db = _make_db_none_execute(first_returns_data={"id": _PERSONA_ID})
+        result = asyncio.run(get_active_succession_record(db, _PERSONA_ID, _USER_ID))
+        assert result is None
+
+    def test_get_active_consent_record_none_on_owner_check(self):
+        """Even if the persona ownership query itself returns None, must not crash."""
+        db = _make_db_none_execute()  # ALL execute() calls return None
+        result = asyncio.run(get_active_consent_record(db, _PERSONA_ID, _USER_ID))
+        assert result is None  # not owner → None, no AttributeError
