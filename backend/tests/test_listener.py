@@ -83,15 +83,31 @@ _SUCCESSION_WITH_POSTHUMOUS = {"beneficiaries": [_BENEFICIARY_POSTHUMOUS]}
 _SUCCESSION_WITH_ENRICHED = {"beneficiaries": [_BENEFICIARY_ENRICHED]}
 
 
-# ── DB mock helper (matches test_consent.py pattern) ──────────────────────────
+# ── DB mock helpers ────────────────────────────────────────────────────────────
 
 def _make_db(execute_returns: list) -> MagicMock:
-    """Build a mock Supabase client whose sequential .execute() calls return items in order."""
+    """Build a mock Supabase client whose sequential .execute() calls return items in order.
+
+    Each value in execute_returns is wrapped as MagicMock(data=value), so None
+    becomes MagicMock(data=None) — simulating an empty Supabase response object.
+    """
     q = MagicMock()
     q.select.return_value = q
     q.eq.return_value = q
     q.maybe_single.return_value = q
     q.execute.side_effect = [MagicMock(data=d) for d in execute_returns]
+    db = MagicMock()
+    db.table.return_value = q
+    return db
+
+
+def _make_db_raw(execute_returns: list) -> MagicMock:
+    """Like _make_db but returns values as-is — use to simulate Supabase returning None directly."""
+    q = MagicMock()
+    q.select.return_value = q
+    q.eq.return_value = q
+    q.maybe_single.return_value = q
+    q.execute.side_effect = execute_returns
     db = MagicMock()
     db.table.return_value = q
     return db
@@ -105,6 +121,12 @@ class TestConsentGate:
 
     def test_no_consent_record_denies(self):
         db = _make_db([None])
+        result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _OWNER_ID))
+        assert result is None
+
+    def test_consent_query_returns_none_directly_denies(self):
+        # Supabase returns None itself (not a response object) → no AttributeError
+        db = _make_db_raw([None])
         result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _OWNER_ID))
         assert result is None
 
@@ -130,6 +152,13 @@ class TestOwnerAccess:
         assert result.relationship is None
         assert result.address_term is None
         assert result.scope is None
+
+    def test_persona_query_returns_none_directly_denies(self):
+        # Consent valid; persona query returns None → graceful denial, no AttributeError
+        # Falls through to Gate 3; succession also None → denied
+        db = _make_db_raw([MagicMock(data=_CONSENT_ROW_FULL), None, None])
+        result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _STRANGER_ID))
+        assert result is None
 
     def test_owner_modalities_match_consent(self):
         # voice_clone=False in consent → reflected in ListenerContext
@@ -183,6 +212,12 @@ class TestBeneficiaryAccess:
     def test_no_succession_record_denies_non_owner(self):
         # no succession record at all → non-owner denied
         db = _make_db([_CONSENT_ROW_FULL, _PERSONA_ROW, None])
+        result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _STRANGER_ID))
+        assert result is None
+
+    def test_succession_query_returns_none_directly_denies(self):
+        # Consent valid, not owner, succession query returns None itself → no AttributeError
+        db = _make_db_raw([MagicMock(data=_CONSENT_ROW_FULL), MagicMock(data=_PERSONA_ROW), None])
         result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _STRANGER_ID))
         assert result is None
 

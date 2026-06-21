@@ -30,7 +30,7 @@ async def get_active_consent_for_persona(db, persona_id: str) -> ConsentRecord |
         .maybe_single()
         .execute()
     )
-    if not result.data:
+    if result is None or not result.data:
         return None
     return ConsentRecord(**result.data)
 
@@ -60,7 +60,7 @@ async def resolve_listener_context(
         .maybe_single()
         .execute()
     )
-    if persona_row.data and persona_row.data["user_id"] == user_id:
+    if persona_row is not None and persona_row.data and persona_row.data["user_id"] == user_id:
         return ListenerContext(
             listener_user_id=user_id,
             is_owner=True,
@@ -76,7 +76,7 @@ async def resolve_listener_context(
         .maybe_single()
         .execute()
     )
-    if succession_row.data:
+    if succession_row is not None and succession_row.data:
         for b in succession_row.data.get("beneficiaries") or []:
             if b.get("user_id") == user_id:
                 if b.get("activation_trigger") == "immediate":

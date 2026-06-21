@@ -710,3 +710,4 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str) -> None:
         if turn_task:
             turn_task.cancel()
         SESSION_ENTITLEMENT.pop(session_id, None)
+        SESSION_LISTENER.pop(session_id, None)
