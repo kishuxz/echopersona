@@ -119,20 +119,22 @@ def _make_db_raw(execute_returns: list) -> MagicMock:
 
 class TestConsentGate:
 
-    def test_no_consent_record_denies(self):
-        db = _make_db([None])
-        result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _OWNER_ID))
+    def test_no_consent_record_denies_non_owner(self):
+        # Non-owner without any consent record must be denied
+        db = _make_db([_PERSONA_ROW, None])
+        result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _STRANGER_ID))
         assert result is None
 
-    def test_consent_query_returns_none_directly_denies(self):
-        # Supabase returns None itself (not a response object) → no AttributeError
-        db = _make_db_raw([None])
-        result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _OWNER_ID))
+    def test_consent_query_returns_none_directly_denies_non_owner(self):
+        # Supabase returns None itself (not a response object) → no AttributeError for non-owner
+        db = _make_db_raw([MagicMock(data=_PERSONA_ROW), None])
+        result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _STRANGER_ID))
         assert result is None
 
-    def test_text_twin_false_denies(self):
-        db = _make_db([_CONSENT_ROW_NO_TEXT])
-        result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _OWNER_ID))
+    def test_text_twin_false_denies_non_owner(self):
+        # Non-owner with text_twin=False consent must be denied
+        db = _make_db([_PERSONA_ROW, _CONSENT_ROW_NO_TEXT])
+        result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _STRANGER_ID))
         assert result is None
 
 
@@ -143,8 +145,8 @@ class TestConsentGate:
 class TestOwnerAccess:
 
     def test_owner_with_full_consent_granted(self):
-        # consent ok → persona.user_id matches → granted as owner
-        db = _make_db([_CONSENT_ROW_FULL, _PERSONA_ROW])
+        # persona found → owner match → consent ok → granted with consent modalities
+        db = _make_db([_PERSONA_ROW, _CONSENT_ROW_FULL])
         result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _OWNER_ID))
         assert isinstance(result, ListenerContext)
         assert result.is_owner is True
@@ -153,22 +155,42 @@ class TestOwnerAccess:
         assert result.address_term is None
         assert result.scope is None
 
-    def test_persona_query_returns_none_directly_denies(self):
-        # Consent valid; persona query returns None → graceful denial, no AttributeError
-        # Falls through to Gate 3; succession also None → denied
-        db = _make_db_raw([MagicMock(data=_CONSENT_ROW_FULL), None, None])
+    def test_persona_not_found_denies(self):
+        # Persona query returns None itself → graceful denial, no AttributeError
+        db = _make_db_raw([None])
         result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _STRANGER_ID))
         assert result is None
 
     def test_owner_modalities_match_consent(self):
         # voice_clone=False in consent → reflected in ListenerContext
-        db = _make_db([_CONSENT_ROW_NO_VOICE, _PERSONA_ROW])
+        db = _make_db([_PERSONA_ROW, _CONSENT_ROW_NO_VOICE])
         result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _OWNER_ID))
         assert result is not None
         assert result.is_owner is True
         assert result.allowed_modalities.voice_clone is False
         assert result.allowed_modalities.video_avatar is False
         assert result.allowed_modalities.text_twin is True
+
+    def test_owner_no_consent_gets_default_modalities(self):
+        # Owner without any active consent record → allowed with safe text-only defaults
+        db = _make_db([_PERSONA_ROW, None])
+        result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _OWNER_ID))
+        assert isinstance(result, ListenerContext)
+        assert result.is_owner is True
+        assert result.allowed_modalities.text_twin is True
+        assert result.allowed_modalities.voice_clone is False
+        assert result.allowed_modalities.video_avatar is False
+
+    def test_owner_no_consent_no_fabrication(self):
+        # Owner context must not carry relationship/address_term/scope/closeness/greeting
+        db = _make_db([_PERSONA_ROW, None])
+        result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _OWNER_ID))
+        assert result is not None
+        assert result.relationship is None
+        assert result.address_term is None
+        assert result.scope is None
+        assert result.closeness_level is None
+        assert result.greeting_style is None
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -178,8 +200,8 @@ class TestOwnerAccess:
 class TestBeneficiaryAccess:
 
     def test_immediate_beneficiary_granted(self):
-        # consent ok → not owner → succession has immediate beneficiary → granted
-        db = _make_db([_CONSENT_ROW_FULL, _PERSONA_ROW, _SUCCESSION_WITH_IMMEDIATE])
+        # persona found → not owner → consent ok → succession has immediate beneficiary → granted
+        db = _make_db([_PERSONA_ROW, _CONSENT_ROW_FULL, _SUCCESSION_WITH_IMMEDIATE])
         result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _BENEFICIARY_ID))
         assert isinstance(result, ListenerContext)
         assert result.is_owner is False
@@ -191,7 +213,7 @@ class TestBeneficiaryAccess:
 
     def test_immediate_beneficiary_modalities_from_consent(self):
         # beneficiary inherits consent modalities, not their own
-        db = _make_db([_CONSENT_ROW_NO_VOICE, _PERSONA_ROW, _SUCCESSION_WITH_IMMEDIATE])
+        db = _make_db([_PERSONA_ROW, _CONSENT_ROW_NO_VOICE, _SUCCESSION_WITH_IMMEDIATE])
         result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _BENEFICIARY_ID))
         assert result is not None
         assert result.allowed_modalities.voice_clone is False
@@ -199,37 +221,37 @@ class TestBeneficiaryAccess:
 
     def test_posthumous_verified_beneficiary_denied(self):
         # found in succession but activation_trigger=posthumous_verified → denied
-        db = _make_db([_CONSENT_ROW_FULL, _PERSONA_ROW, _SUCCESSION_WITH_POSTHUMOUS])
+        db = _make_db([_PERSONA_ROW, _CONSENT_ROW_FULL, _SUCCESSION_WITH_POSTHUMOUS])
         result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _BENEFICIARY_ID))
         assert result is None
 
     def test_stranger_not_in_succession_denied(self):
         # user_id not in beneficiaries list → denied
-        db = _make_db([_CONSENT_ROW_FULL, _PERSONA_ROW, _SUCCESSION_WITH_IMMEDIATE])
+        db = _make_db([_PERSONA_ROW, _CONSENT_ROW_FULL, _SUCCESSION_WITH_IMMEDIATE])
         result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _STRANGER_ID))
         assert result is None
 
     def test_no_succession_record_denies_non_owner(self):
         # no succession record at all → non-owner denied
-        db = _make_db([_CONSENT_ROW_FULL, _PERSONA_ROW, None])
+        db = _make_db([_PERSONA_ROW, _CONSENT_ROW_FULL, None])
         result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _STRANGER_ID))
         assert result is None
 
     def test_succession_query_returns_none_directly_denies(self):
         # Consent valid, not owner, succession query returns None itself → no AttributeError
-        db = _make_db_raw([MagicMock(data=_CONSENT_ROW_FULL), MagicMock(data=_PERSONA_ROW), None])
+        db = _make_db_raw([MagicMock(data=_PERSONA_ROW), MagicMock(data=_CONSENT_ROW_FULL), None])
         result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _STRANGER_ID))
         assert result is None
 
     def test_empty_beneficiaries_list_denies(self):
         # succession record exists but beneficiaries=[] → denied
-        db = _make_db([_CONSENT_ROW_FULL, _PERSONA_ROW, {"beneficiaries": []}])
+        db = _make_db([_PERSONA_ROW, _CONSENT_ROW_FULL, {"beneficiaries": []}])
         result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _BENEFICIARY_ID))
         assert result is None
 
     def test_enriched_beneficiary_populates_new_fields(self):
         # JSONB row with closeness_level + greeting_style → fields propagate to ListenerContext
-        db = _make_db([_CONSENT_ROW_FULL, _PERSONA_ROW, _SUCCESSION_WITH_ENRICHED])
+        db = _make_db([_PERSONA_ROW, _CONSENT_ROW_FULL, _SUCCESSION_WITH_ENRICHED])
         result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _BENEFICIARY_ID))
         assert result is not None
         assert result.closeness_level == 4
@@ -237,7 +259,7 @@ class TestBeneficiaryAccess:
 
     def test_old_beneficiary_row_backward_compat(self):
         # Legacy JSONB row without new optional keys → None, no KeyError
-        db = _make_db([_CONSENT_ROW_FULL, _PERSONA_ROW, _SUCCESSION_WITH_IMMEDIATE])
+        db = _make_db([_PERSONA_ROW, _CONSENT_ROW_FULL, _SUCCESSION_WITH_IMMEDIATE])
         result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _BENEFICIARY_ID))
         assert result is not None
         assert result.closeness_level is None
