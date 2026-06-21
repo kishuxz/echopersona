@@ -1,9 +1,24 @@
 # EchoPersona — Build Progress
 
 ## Active feature
-Step 9B — Deployment reconciliation: private VPS Docker Compose at kishoreai.online (correcting stale Render+Vercel config from Step 9).
+Step 10 — Guided question-led persona creation UI (in progress)
 
 ## Last completed step
+Step 10 ✅ — Guided question-led persona creation UI (2026-06-20)
+- `frontend/src/types/index.ts` — added `CreationSession`, `NextStep`, `StartSessionResponse`, `CaptureResponse`
+- `frontend/src/lib/api.ts` — added `startCreationSession`, `captureTextAnswer`, `finishCreationSession` (all follow `getAuthHeaders()` auth pattern)
+- `frontend/src/components/CreationWizard.tsx` — new guided interview component; renders one question at a time; handles `ask_probe`/`advance`/`steer`/`done` actions; gates Finish on ≥3 answered questions; non-empty answer required to Continue
+- `frontend/src/pages/Dashboard.tsx` — replaced `showCreate` boolean with 3-state `createStep` (`idle`→`shell`→`interview`); new `PersonaShellForm` private component (name-only, calls `/persona/create` with `stories:[]`); `PersonaUpload` import removed from Dashboard (still used by PersonaEdit); `PersonaShellForm` transitions to `CreationWizard` on persona creation
+- TypeScript: clean (`npx tsc --noEmit` 0 errors, 2026-06-20)
+- Build: clean (`npm run build` succeeded, 2026-06-20)
+- Deployment: pending
+
+**Known gaps introduced this slice:**
+- PersonaCard shows "0 memories" for interview-created personas (`stories[]` is empty; memories live in `memory_units`)
+- No session resume if user abandons mid-interview (Redis TTL 7 days)
+- `supabase/migrations/004` mirror still missing (documentation gap only — migration is applied)
+
+**Previous last completed step:**
 Step 8E.2 ✅ — Structural frontend safety polish (2026-06-17)
 - `frontend/src/components/ErrorBoundary.tsx` — new class component; `getDerivedStateFromError` sets hasError; renders "Something went wrong" fallback with Reload button (`window.location.href = '/'`); no sensitive data logged
 - `frontend/src/main.tsx` — `<ErrorBoundary>` wraps `<RouterProvider>`; prevents blank-screen crashes in production
