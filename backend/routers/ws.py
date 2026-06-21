@@ -141,11 +141,14 @@ async def _run_turn_inner(
 
     listener_ctx = SESSION_LISTENER.get(session_id)
     _entitlement = SESSION_ENTITLEMENT.get(session_id)
+    # Persona owner is only gated by billing; consent modality flags restrict
+    # external listeners/beneficiaries, not the owner of the persona.
+    _is_owner = listener_ctx is not None and listener_ctx.is_owner
     _voice_allowed = can_use_voice(_entitlement) and (
-        listener_ctx is None or listener_ctx.allowed_modalities.voice_clone
+        _is_owner or listener_ctx is None or listener_ctx.allowed_modalities.voice_clone
     )
     _video_allowed = can_use_video(_entitlement) and (
-        listener_ctx is None or listener_ctx.allowed_modalities.video_avatar
+        _is_owner or listener_ctx is None or listener_ctx.allowed_modalities.video_avatar
     )
 
     # FAISS encode + search is CPU-bound; run in thread executor so it doesn't
@@ -389,11 +392,12 @@ async def _run_text_turn(websocket: WebSocket, session_id: str, user_text: str) 
 
         listener_ctx = SESSION_LISTENER.get(session_id)
         _entitlement = SESSION_ENTITLEMENT.get(session_id)
+        _is_owner = listener_ctx is not None and listener_ctx.is_owner
         _voice_allowed = can_use_voice(_entitlement) and (
-            listener_ctx is None or listener_ctx.allowed_modalities.voice_clone
+            _is_owner or listener_ctx is None or listener_ctx.allowed_modalities.voice_clone
         )
         _video_allowed = can_use_video(_entitlement) and (
-            listener_ctx is None or listener_ctx.allowed_modalities.video_avatar
+            _is_owner or listener_ctx is None or listener_ctx.allowed_modalities.video_avatar
         )
 
         loop = asyncio.get_running_loop()

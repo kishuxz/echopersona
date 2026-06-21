@@ -58,6 +58,14 @@ def _make_ctx(voice: bool = True, video: bool = True) -> ListenerContext:
     )
 
 
+def _make_non_owner_ctx(voice: bool = True, video: bool = True) -> ListenerContext:
+    return ListenerContext(
+        is_owner=False,
+        listener_user_id="beneficiary-user",
+        allowed_modalities=ModalityConsent(text_twin=True, voice_clone=voice, video_avatar=video),
+    )
+
+
 def _make_ws(extra_messages: list | None = None) -> MagicMock:
     ws = MagicMock()
     ws.query_params = {"token": "tok", "persona_id": ""}
@@ -130,25 +138,50 @@ class TestConnectTimeBillingGate:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class TestVoiceModalityFlag:
-    """Reproduce the _voice_allowed computation from _run_turn_inner / _run_text_turn."""
+    """Reproduce the _voice_allowed computation from _run_turn_inner / _run_text_turn.
+
+    Owner bypasses consent modality gates — only billing entitlement matters.
+    Non-owner (beneficiary) requires both billing AND voice_clone=True in consent.
+    """
 
     @staticmethod
     def _voice_allowed(entitlement: StripeEntitlement | None, ctx: ListenerContext | None) -> bool:
-        return can_use_voice(entitlement) and (ctx is None or ctx.allowed_modalities.voice_clone)
+        is_owner = ctx is not None and ctx.is_owner
+        return can_use_voice(entitlement) and (
+            is_owner or ctx is None or ctx.allowed_modalities.voice_clone
+        )
 
     def test_entitlement_none_denies_voice(self):
-        """Free tier (no row) → voice denied; text reply continues unaffected."""
+        """Free tier (no row) → voice denied regardless of owner status."""
         assert self._voice_allowed(None, _make_ctx()) is False
 
-    def test_creator_active_consent_allows_voice(self):
+    def test_creator_active_owner_allows_voice(self):
         assert self._voice_allowed(_make_ent("creator", "active"), _make_ctx(voice=True)) is True
 
     def test_creator_canceled_denies_voice(self):
         assert self._voice_allowed(_make_ent("creator", "canceled"), _make_ctx(voice=True)) is False
 
-    def test_consent_voice_clone_false_denies_voice(self):
-        """Valid entitlement but consent blocks voice → denied."""
-        assert self._voice_allowed(_make_ent("creator", "active"), _make_ctx(voice=False)) is False
+    def test_owner_bypasses_voice_clone_consent(self):
+        """Owner with creator entitlement gets voice even when voice_clone=False in consent.
+
+        The consent modality flag is for external listeners, not the persona owner.
+        Without this bypass the owner hears nothing when no consent record exists
+        (ModalityConsent() defaults voice_clone=False).
+        """
+        assert self._voice_allowed(_make_ent("creator", "active"), _make_ctx(voice=False)) is True
+
+    def test_non_owner_voice_clone_false_denied(self):
+        """Beneficiary with voice_clone=False in consent → denied even with valid entitlement."""
+        assert self._voice_allowed(_make_ent("creator", "active"), _make_non_owner_ctx(voice=False)) is False
+
+    def test_non_owner_voice_clone_true_allowed(self):
+        """Beneficiary with voice_clone=True and creator entitlement → allowed."""
+        assert self._voice_allowed(_make_ent("creator", "active"), _make_non_owner_ctx(voice=True)) is True
+
+    def test_no_context_freeform_session_uses_billing_only(self):
+        """No listener context (freeform session without persona_id) → billing is sole gate."""
+        assert self._voice_allowed(_make_ent("creator", "active"), None) is True
+        assert self._voice_allowed(None, None) is False
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -156,26 +189,41 @@ class TestVoiceModalityFlag:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class TestVideoModalityFlag:
-    """Reproduce the _video_allowed computation from _run_turn_inner / _run_text_turn."""
+    """Reproduce the _video_allowed computation from _run_turn_inner / _run_text_turn.
+
+    Owner bypasses consent modality gates — only billing entitlement matters.
+    Non-owner (beneficiary) requires both billing AND video_avatar=True in consent.
+    """
 
     @staticmethod
     def _video_allowed(entitlement: StripeEntitlement | None, ctx: ListenerContext | None) -> bool:
-        return can_use_video(entitlement) and (ctx is None or ctx.allowed_modalities.video_avatar)
+        is_owner = ctx is not None and ctx.is_owner
+        return can_use_video(entitlement) and (
+            is_owner or ctx is None or ctx.allowed_modalities.video_avatar
+        )
 
     def test_entitlement_none_denies_video(self):
-        """Free tier (no row) → video denied; text reply continues unaffected."""
+        """Free tier (no row) → video denied regardless of owner status."""
         assert self._video_allowed(None, _make_ctx()) is False
 
     def test_creator_active_denies_video(self):
         """Creator tier does not include video — legacy required."""
         assert self._video_allowed(_make_ent("creator", "active"), _make_ctx(video=True)) is False
 
-    def test_legacy_active_consent_allows_video(self):
+    def test_legacy_active_owner_allows_video(self):
         assert self._video_allowed(_make_ent("legacy", "active"), _make_ctx(video=True)) is True
 
-    def test_consent_video_avatar_false_denies_video(self):
-        """Valid legacy entitlement but consent blocks video → denied."""
-        assert self._video_allowed(_make_ent("legacy", "active"), _make_ctx(video=False)) is False
+    def test_owner_bypasses_video_avatar_consent(self):
+        """Owner with legacy entitlement gets video even when video_avatar=False in consent."""
+        assert self._video_allowed(_make_ent("legacy", "active"), _make_ctx(video=False)) is True
+
+    def test_non_owner_video_avatar_false_denied(self):
+        """Beneficiary with video_avatar=False in consent → denied even with valid entitlement."""
+        assert self._video_allowed(_make_ent("legacy", "active"), _make_non_owner_ctx(video=False)) is False
+
+    def test_non_owner_video_avatar_true_allowed(self):
+        """Beneficiary with video_avatar=True and legacy entitlement → allowed."""
+        assert self._video_allowed(_make_ent("legacy", "active"), _make_non_owner_ctx(video=True)) is True
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
