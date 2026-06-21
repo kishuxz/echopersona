@@ -113,8 +113,10 @@ export function VoiceInterface({
 
   async function playSentence() {
     if (sentenceChunksRef.current.length === 0) return;
-    if (!playbackCtxRef.current) playbackCtxRef.current = new AudioContext();
+    // AudioContext must have been created in handleMicMouseDown (user gesture).
+    // If it's missing here, we're too late for browser autoplay policy.
     const ctx = playbackCtxRef.current;
+    if (!ctx) { console.warn("[AUDIO] no AudioContext — was mic button pressed?"); return; }
     if (ctx.state === "suspended") await ctx.resume();
 
     const totalBytes = sentenceChunksRef.current.reduce((s, a) => s + a.length, 0);
@@ -133,6 +135,7 @@ export function VoiceInterface({
       nextPlayAtRef.current = startAt + audioBuffer.duration;
     } catch (e) {
       console.error("[AUDIO] decodeAudioData failed:", e);
+      setWsError("Audio playback failed — try refreshing the page.");
     }
   }
 
@@ -262,6 +265,13 @@ export function VoiceInterface({
 
   const handleMicMouseDown = async () => {
     if (isRecordingRef.current || isProcessing) return;
+    // Create AudioContext synchronously here, inside the user gesture, so browsers
+    // allow audio output. Lazy creation in playSentence() is too late — autoplay
+    // policy suspends contexts created outside a gesture and resume() is then denied.
+    if (!playbackCtxRef.current) {
+      playbackCtxRef.current = new AudioContext();
+    }
+    playbackCtxRef.current.resume().catch(() => {});
     isRecordingRef.current = true;
     setIsRecording(true);
     setStage("recording");
