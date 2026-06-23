@@ -3,6 +3,11 @@
 ## Active feature
 Step 10 — Guided question-led persona creation UI (in progress)
 
+## Documentation milestone
+- kstack workflow references adopted (2026-06-22)
+  - Updated AGENTS.md: added agents/, review-gates.md, ai-product-quality.md, safety.md, release-process.md, conductor lanes/playbooks, examples/echopersona/ references
+  - Documentation-only; no app code changed
+
 ## Last completed step
 Step 10 ✅ — Guided question-led persona creation UI (2026-06-20)
 - `frontend/src/types/index.ts` — added `CreationSession`, `NextStep`, `StartSessionResponse`, `CaptureResponse`
