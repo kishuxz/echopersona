@@ -123,6 +123,7 @@ async def _run_pipeline(
                     source_id=source_id,
                     source_meta=source_meta,
                     content_first_person=unit_data["content_first_person"],
+                    memory_category=unit_data.get("memory_category", "episodic"),
                     stance=unit_data["stance"],
                     affect=unit_data["affect"],
                     themes=unit_data["themes"],

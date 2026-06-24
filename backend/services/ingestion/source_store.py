@@ -111,6 +111,7 @@ async def write_memory_unit(
     source_id: str,
     source_meta: dict,
     content_first_person: str,
+    memory_category: str,
     stance: str,
     affect: dict,
     themes: list[str],
@@ -122,7 +123,8 @@ async def write_memory_unit(
 
     version/supersedes are §2.3 [add-004] fields: version defaults to 1;
     supersedes is set only for corrections (§6/§7.1, step 5).
-    Requires migration 004 to be applied before use against a live DB.
+    memory_category is the semantic type from Stage 2 — migration 007.
+    Requires migrations 004 and 007 to be applied before use against a live DB.
     """
     db = get_db()
     result = (
@@ -133,6 +135,7 @@ async def write_memory_unit(
             "source_id": source_id,
             "source": source_meta,
             "content_first_person": content_first_person,
+            "memory_category": memory_category,
             "stance": stance,
             "affect": affect,
             "themes": themes,

@@ -19,6 +19,11 @@ logger = logging.getLogger(__name__)
 _GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
 _TRANSFORM_MODEL = "llama-3.1-8b-instant"
 
+_MEMORY_CATEGORIES = frozenset({
+    "episodic", "semantic", "procedural", "relational",
+    "values", "humor", "advice",
+})
+
 _SYSTEM_PROMPT = """\
 You are a persona memory analyst. Given a memory episode and context about the person, \
 transform it into a structured first-person memory unit.
@@ -26,6 +31,7 @@ transform it into a structured first-person memory unit.
 Return a JSON object with exactly these fields:
 {
   "content_first_person": "The memory in natural first-person voice. If already first-person, preserve it. If third-person, rewrite to first-person. Keep it authentic.",
+  "memory_category": "one of: episodic | semantic | procedural | relational | values | humor | advice",
   "stance": "Overall emotional stance, e.g. nostalgic, proud, wistful, regretful, joyful (one or two words)",
   "affect": {
     "emotion": "primary emotion label",
@@ -40,6 +46,15 @@ Return a JSON object with exactly these fields:
   }
 }
 
+memory_category rules:
+  episodic   — a specific event or experience ("The day my father...")
+  semantic   — a general belief or world view ("I always believed...")
+  procedural — a ritual, habit, or skill ("Every Sunday I would...")
+  relational — about a specific person and what they mean ("My sister was...")
+  values     — core convictions or principles ("What mattered most to me...")
+  humor      — a joke, funny story, or running gag ("We used to laugh about...")
+  advice     — wisdom they would pass on ("Here is what I would tell you...")
+
 valence: -1.0 (very negative) to 1.0 (very positive).
 intensity: 0.0 (mild) to 1.0 (overwhelming).
 Keep content_first_person faithful — do not add events or emotions not in the source.\
@@ -53,6 +68,7 @@ def _is_429(exc: BaseException) -> bool:
 def _mock_unit(episode: dict, source_meta: dict) -> dict:
     return {
         "content_first_person": episode["episode_text"],
+        "memory_category": "episodic",
         "stance": "reflective",
         "affect": {"emotion": "nostalgic", "valence": 0.5, "intensity": 0.4},
         "themes": ["memory"],
@@ -102,7 +118,7 @@ def _build_user_message(episode: dict, source_meta: dict) -> str:
 
 
 def _coerce_unit(raw: dict) -> dict:
-    """Normalize Groq output to expected shape."""
+    """Normalize Groq output to expected shape. Invalid memory_category defaults to 'episodic'."""
     affect_raw = raw.get("affect") or {}
     affect = {
         "emotion": str(affect_raw.get("emotion", "")),
@@ -115,8 +131,11 @@ def _coerce_unit(raw: dict) -> dict:
         "places": list(entities_raw.get("places") or []),
         "period": str(entities_raw.get("period", "")),
     }
+    raw_category = str(raw.get("memory_category") or "").strip().lower()
+    memory_category = raw_category if raw_category in _MEMORY_CATEGORIES else "episodic"
     return {
         "content_first_person": str(raw.get("content_first_person", "")).strip(),
+        "memory_category": memory_category,
         "stance": str(raw.get("stance", "")).strip(),
         "affect": affect,
         "themes": list(raw.get("themes") or []),

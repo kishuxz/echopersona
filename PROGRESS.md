@@ -1,10 +1,20 @@
 # EchoPersona — Build Progress
 
 ## Active feature
-Step 9B — Deployment reconciliation: private VPS Docker Compose at kishoreai.online (correcting stale Render+Vercel config from Step 9).
+Step 10 — Persona Memory Engine v1 (Slice A: memory category foundation)
 
 ## Last completed step
-Step 8E.2 ✅ — Structural frontend safety polish (2026-06-17)
+Step 10 Slice A ✅ — Memory category foundation (2026-06-24)
+- `backend/migrations/007_persona_memory_engine.sql` (new) — `memory_category TEXT CHECK (...)` on `memory_units`, `NOT NULL DEFAULT 'episodic'`; index on `(persona_id, memory_category) WHERE supersedes IS NULL`
+- `supabase/migrations/007_persona_memory_engine.sql` (new) — identical copy
+- `backend/models/memory_unit.py` — `MEMORY_CATEGORIES` frozenset exported; `memory_category: str = "episodic"` on `MemoryUnit` + `MemoryUnitCreate`
+- `backend/services/ingestion/stage2.py` — 7-category system prompt; `_coerce_unit()` validates and defaults to `"episodic"` on any invalid/missing value; `_mock_unit()` includes `"episodic"`; zero extra Groq calls
+- `backend/services/ingestion/source_store.py` — `memory_category` param added to `write_memory_unit()` INSERT
+- `backend/worker/tasks/ingestion.py` — passes `unit_data.get("memory_category", "episodic")` to `write_memory_unit()`
+- `backend/tests/test_memory_category.py` (new) — 15 tests: valid categories, invalid/missing/None fallbacks, mock unit, pipeline write
+- Backend: 243 tests passing (228 prior + 15 new); TypeScript clean; build clean
+
+## Step 8E.2 ✅ — Structural frontend safety polish (2026-06-17)
 - `frontend/src/components/ErrorBoundary.tsx` — new class component; `getDerivedStateFromError` sets hasError; renders "Something went wrong" fallback with Reload button (`window.location.href = '/'`); no sensitive data logged
 - `frontend/src/main.tsx` — `<ErrorBoundary>` wraps `<RouterProvider>`; prevents blank-screen crashes in production
 - `frontend/src/components/ProtectedRoute.tsx` — unauthenticated redirect now passes `state: { returnTo: location.pathname }` so the original URL survives the login round-trip
@@ -83,22 +93,23 @@ Step 7 Slice G ✅ — Minimal frontend billing and upgrade UI (2026-06-17)
 - Step 1 ✅ Question bank loader
 
 ## Current blocker
-None. Migration 006 (`stripe_entitlements`) must be confirmed applied in Supabase SQL editor before billing demo.
+None.
 
 ## Next action
-Step 9B.1 done — docs/config reconciled to private VPC Docker. Next: fix docker-compose.yml build arg defaults (CORS_ORIGINS, VITE_API_BASE_URL, VITE_WS_BASE_URL) for production; then SSH to VPS, write production .env, `docker compose up --build -d`, verify `https://kishoreai.online/health`.
+Step 10 Slice B (next): Stage 4 voice card upgrade — structured `voice_card` JSONB on personas.
 
 ## Last known green verification
 ```bash
 cd backend && python -m pytest tests/ -q
-# 228 passed (all Step 7 slices green, 2026-06-17)
+# 243 passed (Step 10 Slice A green, 2026-06-24)
 cd frontend && npx tsc --noEmit && npm run build
-# typecheck clean; built in 1.06s (Step 8 Slice B, 2026-06-17)
+# typecheck clean; built in 1.19s (2026-06-24)
 ```
 
 ## Do not forget
 - Migrations 004 and 005 are applied in Supabase SQL editor — do not re-run unless schema is reset.
 - Migration 006 (`stripe_entitlements`) written but **not confirmed applied** — verify in Supabase SQL editor before testing billing in staging.
+- Migration 007 (`persona_memory_engine`) written but **NOT YET APPLIED** — apply in Supabase SQL editor before testing memory_category against live DB.
 - `SESSION_LISTENER` and `SESSION_HISTORY` are not cleaned up on disconnect — known gap, defer to a future cleanup slice.
 - `posthumous_verified` beneficiary activation is explicitly deferred — activation signal not yet wired.
 - Tavus not yet wired in — see `docs/backlog.md`.
