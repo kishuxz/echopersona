@@ -1,7 +1,28 @@
 # EchoPersona — Build Progress
 
 ## Active feature
-Step 10 — Persona Memory Engine v1 (Slice A: memory category foundation)
+Step 10 — Persona Memory Engine v1 (Slice B: voice card foundation — complete, pending Supabase apply)
+
+## Step 10 — Persona Memory Engine v1 · Slice B: Voice Card Foundation (2026-06-24)
+
+### Slice B: structured voice_card extraction + prompt conditioning
+- **backend/migrations/008_voice_card.sql** (new) — adds `voice_card JSONB NOT NULL DEFAULT '{}'` to `personas`
+- **supabase/migrations/008_voice_card.sql** (new) — identical copy
+- **backend/services/ingestion/stage4.py** — Stage 4 now returns both `style_exemplars` and structured `voice_card` in the existing LLM call
+- **backend/models/persona.py** — adds `voice_card`
+- **backend/services/persona_store.py** — includes `voice_card` in persona SELECTs and adds `update_voice_card()`
+- **backend/worker/tasks/enrichment.py** — persists extracted `voice_card` during enrichment
+- **backend/services/rag.py** — system prompt now includes a `VOICE & STYLE` block before characteristic phrases
+- **backend/tests/test_voice_card.py** — adds 12 tests for voice card extraction/coercion/prompt behavior
+
+### Verification
+- Backend tests passing
+- Frontend TypeScript clean
+- Frontend production build clean
+
+### Do not forget
+- Migration 008 written but **NOT YET APPLIED** in Supabase SQL editor
+- Existing personas will have `voice_card = {}` until re-enriched
 
 ## Last completed step
 Step 10 Slice A ✅ — Memory category foundation (2026-06-24)

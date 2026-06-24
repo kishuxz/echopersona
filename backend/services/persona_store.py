@@ -63,7 +63,7 @@ async def get_persona_by_id(persona_id: str) -> Persona | None:
     result = (
         db.table("personas")
         .select(
-            "id, user_id, name, stories, personality_traits, speaking_style, voice_id, did_avatar_url, idle_video_url, simli_face_id, entity_graph, style_exemplars, created_at"
+            "id, user_id, name, stories, personality_traits, speaking_style, voice_id, did_avatar_url, idle_video_url, simli_face_id, entity_graph, style_exemplars, voice_card, created_at"
         )
         .eq("id", persona_id)
         .maybe_single()
@@ -79,7 +79,7 @@ async def get_persona(persona_id: str, user_id: str) -> Persona | None:
     result = (
         db.table("personas")
         .select(
-            "id, user_id, name, stories, personality_traits, speaking_style, voice_id, did_avatar_url, idle_video_url, simli_face_id, entity_graph, style_exemplars, created_at"
+            "id, user_id, name, stories, personality_traits, speaking_style, voice_id, did_avatar_url, idle_video_url, simli_face_id, entity_graph, style_exemplars, voice_card, created_at"
         )
         .eq("id", persona_id)
         .eq("user_id", user_id)
@@ -96,7 +96,7 @@ async def list_personas(user_id: str) -> list[Persona]:
     result = (
         db.table("personas")
         .select(
-            "id, user_id, name, stories, personality_traits, speaking_style, voice_id, did_avatar_url, idle_video_url, simli_face_id, entity_graph, style_exemplars, created_at"
+            "id, user_id, name, stories, personality_traits, speaking_style, voice_id, did_avatar_url, idle_video_url, simli_face_id, entity_graph, style_exemplars, voice_card, created_at"
         )
         .eq("user_id", user_id)
         .order("created_at", desc=True)
@@ -146,3 +146,8 @@ async def update_entity_graph(persona_id: str, entity_graph: list[dict]) -> None
 async def update_style_exemplars(persona_id: str, style_exemplars: list[str]) -> None:
     db = get_db()
     db.table("personas").update({"style_exemplars": style_exemplars}).eq("id", persona_id).execute()
+
+
+async def update_voice_card(persona_id: str, voice_card: dict) -> None:
+    db = get_db()
+    db.table("personas").update({"voice_card": voice_card}).eq("id", persona_id).execute()

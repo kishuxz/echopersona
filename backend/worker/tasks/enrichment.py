@@ -1,4 +1,4 @@
-"""Per-persona enrichment task: Stage 3 (entity graph) + Stage 4 (style exemplars).
+"""Per-persona enrichment task: Stage 3 (entity graph) + Stage 4 (style exemplars + voice card).
 
 Triggered by the ingestion worker after units are written, and can also be run
 standalone to refresh a persona's entity graph or style bank.
@@ -8,7 +8,7 @@ import logging
 from services.ingestion.source_store import get_memory_units_for_persona
 from services.ingestion.stage3 import build_entity_graph
 from services.ingestion.stage4 import extract_style_exemplars
-from services.persona_store import update_entity_graph, update_style_exemplars
+from services.persona_store import update_entity_graph, update_style_exemplars, update_voice_card
 from services.rag import RAG_INDICES
 
 logger = logging.getLogger(__name__)
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 async def enrich_persona(ctx: dict, persona_id: str) -> dict:
     """Run Stage 3 + Stage 4 for a persona, then invalidate its in-memory RAG index.
 
-    Returns a summary dict with entity and exemplar counts.
+    Returns a summary dict with entity, exemplar, and voice_card counts.
     """
     logger.info("[Enrich] starting persona_id=%s", persona_id)
 
@@ -36,10 +36,15 @@ async def enrich_persona(ctx: dict, persona_id: str) -> dict:
         await update_entity_graph(persona_id, entity_graph)
         logger.info("[Enrich] Stage 3 done — %d entities", len(entity_graph))
 
-        # Stage 4: style exemplar bank
-        exemplars = await extract_style_exemplars(units)
+        # Stage 4: style exemplar bank + voice card (single Groq call)
+        exemplars, voice_card = await extract_style_exemplars(units)
         await update_style_exemplars(persona_id, exemplars)
-        logger.info("[Enrich] Stage 4 done — %d exemplars", len(exemplars))
+        await update_voice_card(persona_id, voice_card)
+        logger.info(
+            "[Enrich] Stage 4 done — %d exemplars, voice_card populated=%s",
+            len(exemplars),
+            bool(any(voice_card.values())),
+        )
 
         # Invalidate in-memory RAG index so the next WS session rebuilds from new units
         RAG_INDICES.pop(persona_id, None)
@@ -50,6 +55,7 @@ async def enrich_persona(ctx: dict, persona_id: str) -> dict:
             "status": "done",
             "entity_count": len(entity_graph),
             "exemplar_count": len(exemplars),
+            "voice_card_populated": bool(any(voice_card.values())),
         }
 
     except Exception as exc:
