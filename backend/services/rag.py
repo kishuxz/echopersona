@@ -160,9 +160,17 @@ def build_system_prompt(
 
     # Memory block
     memory_lines = [_truncate(u["text"]) for u in units] if units else []
-    context_block = (
-        "\n".join(f"- {m}" for m in memory_lines) if memory_lines else "No memories available."
-    )
+    if memory_lines:
+        context_block = "\n".join(f"- {m}" for m in memory_lines)
+        no_memory_fallback = ""
+    else:
+        context_block = "No memories available yet."
+        no_memory_fallback = (
+            "\n\nFALLBACK: Your memories are still being gathered and will be ready soon. "
+            "Warmly greet the listener, let them know your memories are still coming together, "
+            "and invite them to return shortly. "
+            "Do not invent any facts. Do not use outside knowledge about this name."
+        )
 
     # Behavior rules from persona + dominant stance from retrieved units
     stances = [u["stance"] for u in units if u.get("stance")]
@@ -252,6 +260,7 @@ def build_system_prompt(
         f"IMPORTANT: Use ONLY the memories below. Ignore all outside knowledge about this name.\n"
         f"{behavior_block}\n"
         f"\nYOUR MEMORIES:\n{context_block}"
+        f"{no_memory_fallback}"
         f"{entity_block}"
         f"{style_block}"
         f"{listener_block}"

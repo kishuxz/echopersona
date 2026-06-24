@@ -18,6 +18,14 @@ Step 10 ✅ — Guided question-led persona creation UI (2026-06-20)
 - Build: clean (`npm run build` succeeded, 2026-06-20)
 - Deployment: pending
 
+## Hotfix ✅ — No-memory fallback in build_system_prompt (2026-06-24)
+- `backend/services/rag.py` — `build_system_prompt` now injects a `FALLBACK` directive when `retrieved_context` is empty (no memory units yet and no stories). The LLM is instructed to warmly greet the listener, acknowledge memories are still being gathered, and invite them to return shortly. It is explicitly told not to invent facts or use outside knowledge about the persona's name. Previously the prompt said only "No memories available." with no behavioral instruction, causing the LLM to improvise confused blank-slate responses (e.g. "I'm not quite sure who I am yet").
+- Normal memory-backed personas: zero behavior change — `no_memory_fallback` is an empty string when memories are present.
+- **This is not the full persona readiness fix.** The underlying race condition (WS session opening before the ingestion worker finishes) and the cross-process cache invalidation issue are deferred to the next slice.
+- **Next slice:** design Memory Quality / persona readiness gate system (polling endpoint or `persona_ready` flag, PERSONAS cache invalidation, cross-process RAG_INDICES invalidation).
+- Tests: 278 passed, 0 failed
+- TypeScript: clean; build: clean (2026-06-24)
+
 **Known gaps introduced this slice:**
 - PersonaCard shows "0 memories" for interview-created personas (`stories[]` is empty; memories live in `memory_units`)
 - No session resume if user abandons mid-interview (Redis TTL 7 days)
@@ -111,9 +119,9 @@ Step 9B.1 done — docs/config reconciled to private VPC Docker. Next: fix docke
 ## Last known green verification
 ```bash
 cd backend && python -m pytest tests/ -q
-# 228 passed (all Step 7 slices green, 2026-06-17)
+# 278 passed (no-memory fallback hotfix, 2026-06-24)
 cd frontend && npx tsc --noEmit && npm run build
-# typecheck clean; built in 1.06s (Step 8 Slice B, 2026-06-17)
+# typecheck clean; built in 1.11s (no-memory fallback hotfix, 2026-06-24)
 ```
 
 ## Do not forget
