@@ -243,7 +243,9 @@ def test_enrichment_calls_update_voice_card():
               return_value=(exemplars, voice_card)),
         patch("worker.tasks.enrichment.update_style_exemplars", new_callable=AsyncMock),
         patch("worker.tasks.enrichment.update_voice_card", new_callable=AsyncMock) as mock_uvc,
+        patch("worker.tasks.enrichment.update_readiness_status", new_callable=AsyncMock),
         patch("worker.tasks.enrichment.RAG_INDICES", {}),
+        patch("worker.tasks.enrichment.PERSONAS", {}),
     ):
         result = asyncio.run(enrich_persona({}, _PERSONA_ID))
 

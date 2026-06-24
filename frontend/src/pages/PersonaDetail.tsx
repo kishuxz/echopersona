@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { VoiceInterface } from '../components/VoiceInterface'
 import { useKeepAlive } from '../hooks/useKeepAlive'
 import { useLatencyTracker } from '../hooks/useLatencyTracker'
-import { getPersona } from '../lib/api'
+import { getPersona, getPersonaReadiness } from '../lib/api'
 import type { Persona } from '../types'
 
 export function PersonaDetail() {
@@ -15,14 +15,50 @@ export function PersonaDetail() {
   const [persona, setPersona] = useState<Persona | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [readinessStatus, setReadinessStatus] = useState<string | null>(null)
+  const pollCancelRef = useRef(false)
 
   useEffect(() => {
     if (!personaId) return
     getPersona(personaId)
-      .then(setPersona)
+      .then((p) => {
+        setPersona(p)
+        setReadinessStatus(p.readiness_status ?? 'pending')
+      })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
   }, [personaId])
+
+  // Poll readiness until ready or failed
+  useEffect(() => {
+    if (!personaId || readinessStatus === 'ready' || readinessStatus === null) return
+    if (readinessStatus === 'failed') return
+
+    pollCancelRef.current = false
+    let timeoutId: ReturnType<typeof setTimeout>
+
+    const poll = async () => {
+      if (pollCancelRef.current) return
+      try {
+        const r = await getPersonaReadiness(personaId)
+        if (pollCancelRef.current) return
+        setReadinessStatus(r.status)
+        if (!r.ready) {
+          timeoutId = setTimeout(poll, 2000)
+        }
+      } catch {
+        if (!pollCancelRef.current) {
+          timeoutId = setTimeout(poll, 5000)
+        }
+      }
+    }
+
+    poll()
+    return () => {
+      pollCancelRef.current = true
+      clearTimeout(timeoutId)
+    }
+  }, [personaId, readinessStatus])
 
   if (loading) {
     return (
@@ -109,19 +145,44 @@ export function PersonaDetail() {
         </div>
       </div>
 
-      {/* Main content — full width voice interface */}
+      {/* Main content */}
       <div className="mx-auto max-w-[1200px] px-6 py-6 lg:px-10">
-        <VoiceInterface
-          sessionId={sessionId}
-          personaId={persona.id}
-          personaName={persona.name}
-          personaTraits={persona.personality_traits}
-          storyCount={persona.stories.length}
-          hasVoice={Boolean(persona.voice_id)}
-          idleVideoUrl={persona.idle_video_url}
-          avatarUrl={persona.did_avatar_url}
-          onLatencyUpdate={addSnapshot}
-        />
+        {readinessStatus === 'ready' ? (
+          <VoiceInterface
+            sessionId={sessionId}
+            personaId={persona.id}
+            personaName={persona.name}
+            personaTraits={persona.personality_traits}
+            storyCount={persona.stories.length}
+            hasVoice={Boolean(persona.voice_id)}
+            idleVideoUrl={persona.idle_video_url}
+            avatarUrl={persona.did_avatar_url}
+            onLatencyUpdate={addSnapshot}
+          />
+        ) : readinessStatus === 'failed' ? (
+          <div className="flex flex-col items-center gap-4 py-20 text-center">
+            <p className="font-sans text-sm text-red">
+              Something went wrong building {persona.name}'s memories. Please try again later.
+            </p>
+            <button
+              className="font-sans text-sm text-green underline"
+              onClick={() => navigate('/dashboard')}
+            >
+              ← Back to dashboard
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-6 py-20 text-center">
+            <svg className="h-8 w-8 animate-spin text-green" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+              <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            <div className="flex flex-col gap-1">
+              <p className="font-fraunces text-lg text-text">{persona.name} is coming to life…</p>
+              <p className="font-sans text-sm text-muted">Building memories. This takes a moment.</p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

@@ -1,7 +1,32 @@
 # EchoPersona — Build Progress
 
 ## Active feature
-Step 10 — Persona Memory Engine v1 (Slice B: voice card foundation — complete, pending Supabase apply)
+Step 10 — Persona Memory Engine v1 (Slice C: persona readiness gate — complete, pending Supabase apply)
+
+## Step 10 — Persona Memory Engine v1 · Slice C: Persona Readiness Gate (2026-06-24)
+
+### Slice C: readiness_status + processing gate
+- **backend/migrations/009_persona_readiness.sql** (new) — adds `readiness_status TEXT CHECK (...)` to `personas`; backfills existing enriched/story personas to `ready`
+- **supabase/migrations/009_persona_readiness.sql** (new) — identical copy
+- **backend/models/persona.py** — adds `readiness_status`
+- **backend/services/persona_store.py** — includes readiness in persona SELECTs and adds `update_readiness_status()`
+- **backend/worker/tasks/ingestion.py** — marks personas `processing` when ingestion begins and `failed` on ingestion error
+- **backend/worker/tasks/enrichment.py** — marks personas `ready` after Stage 4 completes and `failed` on enrichment error
+- **backend/routers/persona.py** — adds `GET /persona/{id}/readiness`
+- **backend/routers/ws.py** — soft-gates WebSocket sessions for unready personas without static stories
+- **frontend/src/types/index.ts** — adds readiness types
+- **frontend/src/lib/api.ts** — adds `getPersonaReadiness()`
+- **frontend/src/pages/PersonaDetail.tsx** — polls readiness and shows processing UI before rendering `VoiceInterface`
+- **backend/tests/test_persona_readiness.py** — adds readiness tests
+
+### Verification
+- Backend tests passing
+- Frontend TypeScript clean
+- Frontend production build clean
+
+### Do not forget
+- Migration 009 written but **NOT YET APPLIED** in Supabase SQL editor
+- Before live testing, apply migrations 007, 008, and 009 in order if they are not already applied
 
 ## Step 10 — Persona Memory Engine v1 · Slice B: Voice Card Foundation (2026-06-24)
 
@@ -122,15 +147,17 @@ Step 10 Slice B (next): Stage 4 voice card upgrade — structured `voice_card` J
 ## Last known green verification
 ```bash
 cd backend && python -m pytest tests/ -q
-# 243 passed (Step 10 Slice A green, 2026-06-24)
+# 265 passed (Step 10 Slice C green, 2026-06-24)
 cd frontend && npx tsc --noEmit && npm run build
-# typecheck clean; built in 1.19s (2026-06-24)
+# typecheck clean; built in 1.04s (2026-06-24)
 ```
 
 ## Do not forget
 - Migrations 004 and 005 are applied in Supabase SQL editor — do not re-run unless schema is reset.
 - Migration 006 (`stripe_entitlements`) written but **not confirmed applied** — verify in Supabase SQL editor before testing billing in staging.
 - Migration 007 (`persona_memory_engine`) written but **NOT YET APPLIED** — apply in Supabase SQL editor before testing memory_category against live DB.
+- Migration 008 (`voice_card`) written but **NOT YET APPLIED** — apply in Supabase SQL editor before testing voice card against live DB.
+- Migration 009 (`persona_readiness`) written but **NOT YET APPLIED** — apply in Supabase SQL editor before testing readiness gate against live DB.
 - `SESSION_LISTENER` and `SESSION_HISTORY` are not cleaned up on disconnect — known gap, defer to a future cleanup slice.
 - `posthumous_verified` beneficiary activation is explicitly deferred — activation signal not yet wired.
 - Tavus not yet wired in — see `docs/backlog.md`.

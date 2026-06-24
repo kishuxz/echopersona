@@ -26,6 +26,14 @@ export interface Persona extends PersonaCreate {
   idle_video_url?: string | null;
   simli_face_id?: string | null;
   created_at?: string;
+  readiness_status?: 'pending' | 'processing' | 'ready' | 'failed';
+}
+
+export interface PersonaReadiness {
+  ready: boolean;
+  status: 'pending' | 'processing' | 'ready' | 'failed';
+  sources_done: number;
+  sources_total: number;
 }
 
 export interface ModalityConsent {

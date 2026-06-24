@@ -24,3 +24,4 @@ class Persona(PersonaCreate):
     # Stage 4: structured voice/speech style card
     voice_card: dict = Field(default_factory=dict)
     created_at: datetime | None = None
+    readiness_status: str = "pending"

@@ -19,6 +19,7 @@ from services.ingestion.source_store import (
 from services.ingestion.stage0 import normalize_source
 from services.ingestion.stage1 import segment_episodes
 from services.ingestion.stage2 import transform_episode
+from services.persona_store import update_readiness_status
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +74,13 @@ async def _run_pipeline(
     carry supersedes=<replaced_unit_id> and version=replaced.version+1 (§6/§7.1).
     """
     source_id: str = record["id"]
+    persona_id: str = record.get("persona_id", "")
     await update_source_status(source_id, "processing")
+    if persona_id:
+        try:
+            await update_readiness_status(persona_id, "processing")
+        except Exception as rs_exc:
+            logger.warning("[Pipeline] could not update readiness to processing: %s", rs_exc)
 
     try:
         # ── Stage 0: normalize ──────────────────────────────────────────────
@@ -105,7 +112,6 @@ async def _run_pipeline(
         logger.info("[Pipeline] Stage 1 done source_id=%s episodes=%d", source_id, len(episodes))
 
         # ── Stage 2 + Fidelity: per-episode ─────────────────────────────────
-        persona_id: str = record.get("persona_id", "")
         source_meta = _source_meta(record, timestamp_range)
         units_created: list[str] = []
 
@@ -177,6 +183,11 @@ async def _run_pipeline(
     except Exception as exc:
         logger.error("Pipeline failed source_id=%s: %s", source_id, exc, exc_info=True)
         await update_source_status(source_id, "error")
+        if persona_id:
+            try:
+                await update_readiness_status(persona_id, "failed")
+            except Exception as rs_exc:
+                logger.warning("[Pipeline] could not update readiness to failed: %s", rs_exc)
         return {"source_id": source_id, "status": "error", "reason": str(exc)}
 
 

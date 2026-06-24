@@ -1,6 +1,6 @@
 import { DEFAULT_API_BASE, DEFAULT_WS_BASE } from '../constants'
 import { supabase } from './supabase'
-import type { Persona, PersonaCreate, ConsentRecord, ConsentCreate, SuccessionRecord, SuccessionCreate, BillingStatus } from '../types'
+import type { Persona, PersonaCreate, PersonaReadiness, ConsentRecord, ConsentCreate, SuccessionRecord, SuccessionCreate, BillingStatus } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? DEFAULT_API_BASE
 
@@ -48,6 +48,13 @@ export async function getPersona(personaId: string): Promise<Persona> {
   const headers = await getAuthHeaders()
   const res = await fetch(`${API_BASE}/persona/${personaId}`, { headers })
   if (!res.ok) throw new Error('Persona not found')
+  return res.json()
+}
+
+export async function getPersonaReadiness(personaId: string): Promise<PersonaReadiness> {
+  const headers = await getAuthHeaders()
+  const res = await fetch(`${API_BASE}/persona/${personaId}/readiness`, { headers })
+  if (!res.ok) throw new Error('Failed to fetch readiness')
   return res.json()
 }
 

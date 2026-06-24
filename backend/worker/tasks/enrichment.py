@@ -8,8 +8,13 @@ import logging
 from services.ingestion.source_store import get_memory_units_for_persona
 from services.ingestion.stage3 import build_entity_graph
 from services.ingestion.stage4 import extract_style_exemplars
-from services.persona_store import update_entity_graph, update_style_exemplars, update_voice_card
-from services.rag import RAG_INDICES
+from services.persona_store import (
+    update_entity_graph,
+    update_readiness_status,
+    update_style_exemplars,
+    update_voice_card,
+)
+from services.rag import PERSONAS, RAG_INDICES
 
 logger = logging.getLogger(__name__)
 
@@ -46,9 +51,13 @@ async def enrich_persona(ctx: dict, persona_id: str) -> dict:
             bool(any(voice_card.values())),
         )
 
-        # Invalidate in-memory RAG index so the next WS session rebuilds from new units
+        # Invalidate in-memory caches so the next WS session sees fresh data
         RAG_INDICES.pop(persona_id, None)
-        logger.info("[Enrich] RAG index invalidated for persona_id=%s", persona_id)
+        PERSONAS.pop(persona_id, None)
+        logger.info("[Enrich] caches invalidated for persona_id=%s", persona_id)
+
+        await update_readiness_status(persona_id, "ready")
+        logger.info("[Enrich] readiness_status=ready for persona_id=%s", persona_id)
 
         return {
             "persona_id": persona_id,
@@ -60,4 +69,8 @@ async def enrich_persona(ctx: dict, persona_id: str) -> dict:
 
     except Exception as exc:
         logger.error("[Enrich] failed persona_id=%s: %s", persona_id, exc, exc_info=True)
+        try:
+            await update_readiness_status(persona_id, "failed")
+        except Exception as rs_exc:
+            logger.warning("[Enrich] could not update readiness to failed: %s", rs_exc)
         return {"persona_id": persona_id, "status": "error", "reason": str(exc)}
