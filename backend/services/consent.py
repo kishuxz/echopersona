@@ -20,7 +20,7 @@ def ensure_persona_owner(db, persona_id: str, user_id: str) -> bool:
         .maybe_single()
         .execute()
     )
-    return bool(result.data)
+    return bool(result and result.data)
 
 
 async def get_active_consent_record(
@@ -37,7 +37,7 @@ async def get_active_consent_record(
         .maybe_single()
         .execute()
     )
-    if not result.data:
+    if result is None or not result.data:
         return None
     return ConsentRecord(**result.data)
 
@@ -103,7 +103,7 @@ async def get_active_succession_record(
         .maybe_single()
         .execute()
     )
-    if not result.data:
+    if result is None or not result.data:
         return None
     return SuccessionRecord(**result.data)
 

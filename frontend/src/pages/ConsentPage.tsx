@@ -72,6 +72,9 @@ export function ConsentPage() {
   const [benefTrigger, setBenefTrigger] = useState<'immediate' | 'posthumous_verified'>(
     'posthumous_verified',
   )
+  const [benefAddressTerm, setBenefAddressTerm] = useState('')
+  const [benefClosenessLevel, setBenefClosenessLevel] = useState<number | null>(null)
+  const [benefGreetingStyle, setBenefGreetingStyle] = useState('')
   const [succBusy, setSuccBusy] = useState(false)
   const [succSaveError, setSuccSaveError] = useState<string | null>(null)
   const [succSaved, setSuccSaved] = useState(false)
@@ -94,6 +97,9 @@ export function ConsentPage() {
           setBenefRelationship(b.relationship)
           setBenefScope(b.scope)
           setBenefTrigger(b.activation_trigger)
+          if (b.address_term) setBenefAddressTerm(b.address_term)
+          if (b.closeness_level != null) setBenefClosenessLevel(b.closeness_level)
+          if (b.greeting_style) setBenefGreetingStyle(b.greeting_style)
           setShowSuccessionForm(true)
         }
       })
@@ -137,11 +143,24 @@ export function ConsentPage() {
       setSuccSaveError('Email and relationship are required.')
       return
     }
+    const closeness = benefClosenessLevel
+    if (closeness != null && (!Number.isFinite(closeness) || closeness < 1 || closeness > 5 || !Number.isInteger(closeness))) {
+      setSuccSaveError('Closeness level must be a whole number between 1 and 5.')
+      return
+    }
     setSuccBusy(true)
     setSuccSaveError(null)
     try {
       const record = await saveSuccession(personaId, {
-        beneficiaries: [{ user_id: userId, relationship, scope: benefScope, activation_trigger: benefTrigger }],
+        beneficiaries: [{
+          user_id: userId,
+          relationship,
+          scope: benefScope,
+          activation_trigger: benefTrigger,
+          ...(benefAddressTerm.trim() ? { address_term: benefAddressTerm.trim() } : {}),
+          ...(closeness != null ? { closeness_level: closeness } : {}),
+          ...(benefGreetingStyle.trim() ? { greeting_style: benefGreetingStyle.trim() } : {}),
+        }],
       })
       setSuccessionRecord(record)
       setSuccSaved(true)
@@ -325,6 +344,21 @@ export function ConsentPage() {
                   <span className="ml-1 font-sans text-xs text-muted">
                     · {successionRecord.beneficiaries[0].activation_trigger === 'immediate' ? 'Immediately' : 'After verified passing'}
                   </span>
+                  {successionRecord.beneficiaries[0].address_term && (
+                    <span className="ml-1 font-sans text-xs text-muted">
+                      · "{successionRecord.beneficiaries[0].address_term}"
+                    </span>
+                  )}
+                  {successionRecord.beneficiaries[0].closeness_level != null && (
+                    <span className="ml-1 font-sans text-xs text-muted">
+                      · closeness {successionRecord.beneficiaries[0].closeness_level}/5
+                    </span>
+                  )}
+                  {successionRecord.beneficiaries[0].greeting_style && (
+                    <span className="ml-1 font-sans text-xs text-muted">
+                      · {successionRecord.beneficiaries[0].greeting_style}
+                    </span>
+                  )}
                 </div>
                 <button
                   onClick={() => setShowSuccessionForm(true)}
@@ -366,6 +400,63 @@ export function ConsentPage() {
                     placeholder="e.g. spouse, child, close friend"
                     className={inputCls}
                   />
+                </div>
+
+                {/* Address term */}
+                <div>
+                  <label className="font-sans text-[10px] font-medium uppercase tracking-[0.2em] text-muted">
+                    Address term
+                  </label>
+                  <input
+                    type="text"
+                    value={benefAddressTerm}
+                    onChange={(e) => setBenefAddressTerm(e.target.value)}
+                    placeholder="e.g. Sofia dear, my dear"
+                    className={inputCls}
+                  />
+                  <p className="mt-1 font-sans text-xs text-muted">
+                    How this persona should naturally address this person, e.g. "Hello Sofia dear."
+                  </p>
+                </div>
+
+                {/* Closeness level */}
+                <div>
+                  <label className="font-sans text-[10px] font-medium uppercase tracking-[0.2em] text-muted">
+                    Closeness level
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={5}
+                    step={1}
+                    value={benefClosenessLevel ?? ''}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      setBenefClosenessLevel(v === '' ? null : Number(v))
+                    }}
+                    placeholder="1–5 (optional)"
+                    className={inputCls}
+                  />
+                  <p className="mt-1 font-sans text-xs text-muted">
+                    1 = acquaintance, 5 = extremely close. Leave blank to omit.
+                  </p>
+                </div>
+
+                {/* Greeting style */}
+                <div>
+                  <label className="font-sans text-[10px] font-medium uppercase tracking-[0.2em] text-muted">
+                    Greeting style
+                  </label>
+                  <input
+                    type="text"
+                    value={benefGreetingStyle}
+                    onChange={(e) => setBenefGreetingStyle(e.target.value)}
+                    placeholder="e.g. warm, formal, playful"
+                    className={inputCls}
+                  />
+                  <p className="mt-1 font-sans text-xs text-muted">
+                    Tone the persona uses when greeting this person.
+                  </p>
                 </div>
 
                 {/* Scope */}

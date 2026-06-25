@@ -55,3 +55,15 @@ before implementation. Do not implement from this list without confirmation.
 - Consent and succession UI (spec §7.2, §7.3)
 - Listener conversation UI (voice-first, text fallback)
 - Persona gallery / management for subjects
+
+---
+
+## Relationship-aware persona context
+
+Phased plan — see `docs/relationship-aware-persona-context.md` for full spec. Do not implement without explicit prioritization.
+
+- [ ] Phase 1 — Relationship-aware context from logged-in identity (`persona_relationships` table + RAG prompt injection)
+- [ ] Phase 2 — Structured memory metadata + persona style cards (memory unit schema expansion + Stage 4 update)
+- [ ] Phase 3 — No-fabrication validator improvements + `scope: curated` enforcement
+- [ ] Phase 4 — Speaker recognition with enrollment, consent, and confidence thresholds
+- [ ] Phase 5 — Multimodal ingestion (transcripts/captions/summaries) + graph-style relationship memory

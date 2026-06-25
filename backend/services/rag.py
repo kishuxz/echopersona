@@ -206,7 +206,7 @@ def build_system_prompt(
         if parts:
             entity_block = "\nKEY CONTEXT — " + " | ".join(parts) + "."
 
-    # Voice card from Stage 4 — structured style instructions
+    # Voice card from Stage 4 — structured speech style (migration 008)
     voice_block = ""
     if persona.voice_card:
         vc = persona.voice_card
@@ -238,11 +238,30 @@ def build_system_prompt(
         if vc_lines:
             voice_block = "\nVOICE & STYLE:\n" + "\n".join(vc_lines)
 
-    # Style exemplars from Stage 4 — ground style instructions in actual speech
+    # Phase 2 style fields — relationship-aware tone override for non-owner listeners
+    effective_tone = persona.tone
+    if (
+        listener_ctx is not None
+        and not listener_ctx.is_owner
+        and listener_ctx.relationship
+        and persona.relationship_tone.get(listener_ctx.relationship)
+    ):
+        effective_tone = persona.relationship_tone[listener_ctx.relationship]
+
+    style_instructions: list[str] = []
+    if effective_tone:
+        style_instructions.append(f"Tone: {effective_tone}.")
+    if persona.avoid_phrases:
+        style_instructions.append(f"Prefer not to use: {', '.join(persona.avoid_phrases)}.")
+    if persona.answer_length_pref:
+        style_instructions.append(f"Keep responses {persona.answer_length_pref}.")
+
     style_block = ""
+    if style_instructions:
+        style_block += "\nSTYLE: " + " ".join(style_instructions)
     if persona.style_exemplars:
         ex = persona.style_exemplars[:3]
-        style_block = "\nCHARACTERISTIC PHRASES:\n" + "\n".join(f'  "{e}"' for e in ex)
+        style_block += "\nCHARACTERISTIC PHRASES:\n" + "\n".join(f'  "{e}"' for e in ex)
 
     # Listener context block — only for authenticated non-owner beneficiaries
     listener_block = ""
@@ -252,11 +271,19 @@ def build_system_prompt(
             lines.append(f"You are speaking with the persona owner's {listener_ctx.relationship}.")
         if listener_ctx.address_term:
             lines.append(
-                f'You may address them as "{listener_ctx.address_term}" when natural.'
+                f'When naturally greeting this listener, you may address them as "{listener_ctx.address_term}".'
             )
+        if listener_ctx.closeness_level is not None:
+            lines.append(f"Closeness level: {listener_ctx.closeness_level}/5.")
+        if listener_ctx.greeting_style:
+            lines.append(f"Greeting style: {listener_ctx.greeting_style}.")
         if listener_ctx.scope:
             lines.append(f"Access scope: {listener_ctx.scope}.")
         lines.append("Do not infer listener identity beyond this authenticated context.")
+        lines.append(
+            "Do not assert shared memories, family events, or private facts "
+            "unless they appear in YOUR MEMORIES above."
+        )
         listener_block = "\n" + "\n".join(lines)
 
     prompt = (

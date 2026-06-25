@@ -1,6 +1,6 @@
 import { DEFAULT_API_BASE, DEFAULT_WS_BASE } from '../constants'
 import { supabase } from './supabase'
-import type { Persona, PersonaCreate, PersonaReadiness, ConsentRecord, ConsentCreate, SuccessionRecord, SuccessionCreate, BillingStatus } from '../types'
+import type { Persona, PersonaCreate, PersonaReadiness, ConsentRecord, ConsentCreate, SuccessionRecord, SuccessionCreate, BillingStatus, StartSessionResponse, CaptureResponse } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? DEFAULT_API_BASE
 
@@ -181,6 +181,47 @@ export async function startCheckout(plan_tier: 'creator' | 'legacy'): Promise<vo
   if (!res.ok) throw new Error(await res.text())
   const { checkout_url } = await res.json()
   window.location.href = checkout_url
+}
+
+export async function startCreationSession(personaId: string): Promise<StartSessionResponse> {
+  const headers = await getAuthHeaders()
+  const res = await fetch(`${API_BASE}/creation/session`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ persona_id: personaId }),
+  })
+  if (!res.ok) {
+    const err = await res.json()
+    throw new Error(err.detail || 'Failed to start creation session')
+  }
+  return res.json()
+}
+
+export async function captureTextAnswer(sessionId: string, answerText: string): Promise<CaptureResponse> {
+  const headers = await getAuthHeaders()
+  const res = await fetch(`${API_BASE}/creation/session/${sessionId}/capture/text`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ answer_text: answerText }),
+  })
+  if (!res.ok) {
+    const err = await res.json()
+    throw new Error(err.detail || 'Failed to capture answer')
+  }
+  return res.json()
+}
+
+export async function finishCreationSession(sessionId: string): Promise<{ enqueued_source_ids: string[]; total: number }> {
+  const headers = await getAuthHeaders()
+  const res = await fetch(`${API_BASE}/creation/session/${sessionId}/finish`, {
+    method: 'POST',
+    headers,
+  })
+  if (!res.ok) {
+    const err = await res.json()
+    throw new Error(err.detail || 'Failed to finish creation session')
+  }
+  return res.json()
 }
 
 export async function buildWsUrl(

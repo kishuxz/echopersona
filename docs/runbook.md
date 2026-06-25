@@ -55,17 +55,25 @@ cd frontend && npm run build
 ## Database migrations
 
 Migrations live in two places:
-- `backend/migrations/` — numbered `NNN_description.sql`
-- `supabase/migrations/` — Supabase CLI format
+- `supabase/migrations/` — canonical set; Supabase CLI format; must be complete for fresh Supabase reconstruction
+- `backend/migrations/` — numbered `NNN_description.sql`; both directories must stay in sync
 
 **To apply a migration:**
 1. Copy SQL to Supabase SQL editor at https://supabase.com/dashboard
-2. Run it (idempotent; all migrations use `IF NOT EXISTS` / `IF NOT EXISTS` guards)
+2. Run it (idempotent; all migrations use `IF NOT EXISTS` guards)
 3. Verify in Table Editor that columns/tables exist
 
+**Applied migrations (Supabase project `acngivwdqttgtalopsjw`):**
+- `004_creation_fields.sql` ✅ — `persona_id`, `source_question_id`, `source_type`, `supersedes`, `captured_at`, `media_ref` on `memory_units`
+- `005_*` ✅ — applied; see commit history for details
+- `006_stripe_entitlements.sql` ✅ — `stripe_entitlements` + `stripe_webhook_events` tables; confirmed 2026-06-20
+- `007_persona_style_card.sql` ✅ — `tone`, `avoid_phrases`, `answer_length_pref`, `relationship_tone` on `personas`; confirmed 2026-06-20
+- `007_persona_memory_engine.sql` ✅ — `memory_category` on `memory_units`; confirmed 2026-06-24
+- `008_voice_card.sql` ✅ — `voice_card JSONB` on `personas`; confirmed 2026-06-24
+- `009_persona_readiness.sql` ✅ — `readiness_status TEXT CHECK (...)` on `personas`; confirmed 2026-06-24
+
 **Pending migrations:**
-- `backend/migrations/004_creation_fields.sql` — adds `persona_id`, `source_question_id`,
-  `source_type`, `supersedes`, `captured_at`, `media_ref` to `memory_units`
+- None.
 
 ---
 
@@ -114,14 +122,21 @@ server {
     ssl_certificate     /etc/letsencrypt/live/kishoreai.online/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/kishoreai.online/privkey.pem;
 
+    # Allow audio file uploads (voice answers, avatars).
+    client_max_body_size 50m;
+
     location / {
         proxy_pass http://localhost:3000;
         proxy_http_version 1.1;
+        # Required for WebSocket upgrade (wss:// live chat).
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-Proto $scheme;
+        # Keep WebSocket connections alive for up to 1 hour.
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
     }
 }
 
@@ -132,13 +147,30 @@ server {
 }
 ```
 
+**Pre-deploy static verification (run on VPS or locally — no Docker, no secrets required):**
+
+```bash
+python3 scripts/verify_vpc_config.py
+# Expected: all [PASS], exit 0. Fix any [FAIL] before proceeding.
+```
+
 **Docker Compose deploy steps:**
 1. SSH into VPS
 2. `cd /opt/echopersona && git pull origin main`
 3. Ensure root `.env` has all production values (see env var checklist below)
 4. `docker compose up --build -d`
-5. Verify: `curl https://kishoreai.online/health` → `{"status":"ok"}`
-6. WebSocket: connect to `wss://kishoreai.online/ws/<session_id>?token=<jwt>`
+5. Verify health: `curl https://kishoreai.online/health` → `{"status":"ok"}`
+6. Verify nginx routes to backend (not React SPA):
+   ```bash
+   curl -s https://kishoreai.online/openapi.json | python3 -c "import sys,json; d=json.load(sys.stdin); print('API title:', d['info']['title'])"
+   # Expected: API title: EchoPersona (JSON response — not an HTML page)
+   ```
+7. Verify Docker port bindings are local-only:
+   ```bash
+   ss -tlnp | grep -E ':(3000|8000|6379)\b'
+   # All entries must show 127.0.0.1:PORT — none should show 0.0.0.0:PORT
+   ```
+8. WebSocket: connect to `wss://kishoreai.online/ws/<session_id>?token=<jwt>`
 
 **Rollback:**
 ```bash
@@ -146,7 +178,12 @@ git checkout <previous-commit>
 docker compose up --build -d
 ```
 
-**Important — `VITE_*` vars are baked in at build time.** If the root `.env` does not set `VITE_API_BASE_URL` and `VITE_WS_BASE_URL`, the Docker Compose defaults apply (`https://kishoreai.online` / `wss://kishoreai.online`). Local devs must set these in their local `.env` to point at localhost; production `.env` should leave them unset or explicitly set to the production values.
+**Important — `VITE_*` vars are baked in at build time.** Docker Compose defaults `VITE_API_BASE_URL` to `https://kishoreai.online` and `VITE_WS_BASE_URL` to `wss://kishoreai.online`. For local dev with Docker, override both in the root `.env`:
+```
+VITE_API_BASE_URL=http://localhost:8000
+VITE_WS_BASE_URL=ws://localhost:8000
+```
+Production `.env` can leave them unset (the compose defaults apply) or set them explicitly.
 
 ### Secondary/Alternative: Render (backend) + Vercel (frontend)
 
@@ -219,7 +256,7 @@ redis-cli -u $REDIS_URL GET groq:rpm:$(date +%s | awk '{print int($1/60)}')
 | 401 on API call | Expired or invalid Supabase JWT | Re-login; check `SUPABASE_ANON_KEY` |
 | Ingestion stuck | arq worker not running | `arq worker.WorkerSettings` in backend dir |
 | Evaluator always advances | Groq rate limit hit | Check Redis RPM counter; wait 60s |
-| `memory_units` insert fails | Migration 004 not applied | Run `004_creation_fields.sql` in Supabase |
+| `memory_units` insert fails | Migration 004 not applied on this Supabase project | Verify `source_type` column exists; apply `supabase/migrations/004_creation_fields.sql` if missing |
 | CORS error | `CORS_ORIGINS` missing or wrong | Set to `https://kishoreai.online` (no trailing slash) |
 | `POST /billing/checkout` returns 500 | `STRIPE_PRICE_*` env var is empty | Set the price ID env vars and restart the backend |
 | Webhook returns 400 Invalid Signature | `STRIPE_WEBHOOK_SECRET` mismatched | Use the `whsec_*` from `stripe listen` output (local) or the Dashboard endpoint secret (prod) |

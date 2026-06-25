@@ -30,7 +30,12 @@ from models.consent import (
     SuccessionRecord,
 )
 from routers.consent import router as consent_router
-from services.consent import write_consent_record, write_succession_record
+from services.consent import (
+    get_active_consent_record,
+    get_active_succession_record,
+    write_consent_record,
+    write_succession_record,
+)
 
 
 # ── Constants ──────────────────────────────────────────────────────────────────
@@ -59,6 +64,21 @@ _SUCCESSION_PAYLOAD = {
             "scope": "full",
             "activation_trigger": "posthumous_verified",
             "release_messages": [],
+        }
+    ]
+}
+
+_SUCCESSION_PAYLOAD_ENRICHED = {
+    "beneficiaries": [
+        {
+            "user_id": "beneficiary-user",
+            "relationship": "granddaughter",
+            "address_term": "Sofia dear",
+            "scope": "full",
+            "activation_trigger": "immediate",
+            "release_messages": [],
+            "closeness_level": 4,
+            "greeting_style": "warm and affectionate",
         }
     ]
 }
@@ -94,6 +114,11 @@ _SUCCESSION_ROW_V1 = {
     "ended_at": None,
     "supersedes": None,
     "beneficiaries": _SUCCESSION_PAYLOAD["beneficiaries"],
+}
+
+_SUCCESSION_ROW_ENRICHED = {
+    **_SUCCESSION_ROW_V1,
+    "beneficiaries": _SUCCESSION_PAYLOAD_ENRICHED["beneficiaries"],
 }
 
 _SUCCESSION_ROW_V2 = {
@@ -329,3 +354,139 @@ class TestWriteSuccessionService:
         assert record.supersedes == _OLD_SUCCESSION_ID
         assert record.status == "active"
         assert q.execute.call_count == 4
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 4. Enriched beneficiary fields — validation and JSONB write
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestEnrichedBeneficiaryFields:
+
+    def test_enriched_fields_reach_jsonb_insert(self):
+        """closeness_level + greeting_style + address_term are serialized into the JSONB insert."""
+        db = _make_db([
+            {"id": _PERSONA_ID},        # ensure_persona_owner
+            None,                        # no existing active succession
+            [_SUCCESSION_ROW_ENRICHED], # insert result
+        ])
+        q = db.table.return_value
+
+        payload = SuccessionCreate(**_SUCCESSION_PAYLOAD_ENRICHED)
+        record = asyncio.run(write_succession_record(db, _PERSONA_ID, _USER_ID, payload))
+
+        assert record is not None
+        assert record.status == "active"
+        inserted_ben = q.insert.call_args.args[0]["beneficiaries"][0]
+        assert inserted_ben["closeness_level"] == 4
+        assert inserted_ben["greeting_style"] == "warm and affectionate"
+        assert inserted_ben["address_term"] == "Sofia dear"
+
+    def test_old_payload_without_enriched_fields_accepted(self):
+        """Backward compat: a payload without the new optional fields is still valid."""
+        db = _make_db([
+            {"id": _PERSONA_ID},
+            None,
+            [_SUCCESSION_ROW_V1],
+        ])
+        payload = SuccessionCreate(**_SUCCESSION_PAYLOAD)
+        record = asyncio.run(write_succession_record(db, _PERSONA_ID, _USER_ID, payload))
+        assert record is not None
+        assert record.status == "active"
+
+    def test_closeness_level_zero_rejected(self):
+        """closeness_level=0 is below ge=1 — Pydantic returns 422 before the service runs."""
+        client = _make_client()
+        payload = {
+            "beneficiaries": [{
+                "user_id": "some-user",
+                "relationship": "son",
+                "scope": "full",
+                "activation_trigger": "immediate",
+                "closeness_level": 0,
+            }]
+        }
+        resp = client.post(f"/personas/{_PERSONA_ID}/succession", json=payload)
+        assert resp.status_code == 422
+
+    def test_closeness_level_six_rejected(self):
+        """closeness_level=6 exceeds le=5 — Pydantic returns 422 before the service runs."""
+        client = _make_client()
+        payload = {
+            "beneficiaries": [{
+                "user_id": "some-user",
+                "relationship": "son",
+                "scope": "full",
+                "activation_trigger": "immediate",
+                "closeness_level": 6,
+            }]
+        }
+        resp = client.post(f"/personas/{_PERSONA_ID}/succession", json=payload)
+        assert resp.status_code == 422
+
+    def test_closeness_level_null_accepted(self):
+        """closeness_level=null is valid (field is optional); 404 here means Pydantic passed."""
+        client = _make_client()
+        payload = {
+            "beneficiaries": [{
+                "user_id": "some-user",
+                "relationship": "son",
+                "scope": "full",
+                "activation_trigger": "immediate",
+                "closeness_level": None,
+            }]
+        }
+        with patch(
+            "routers.consent.write_succession_record",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            resp = client.post(f"/personas/{_PERSONA_ID}/succession", json=payload)
+        # Service returned None → 404, but Pydantic accepted the payload (no 422)
+        assert resp.status_code == 404
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 5. None-result guard — production Supabase execute() returning None
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _make_db_none_execute(first_returns_data=None) -> MagicMock:
+    """DB mock where execute() returns literal None (not MagicMock(data=None)).
+
+    first_returns_data: if set, the FIRST execute (persona owner check) returns
+    MagicMock(data=<value>) so ensure_persona_owner passes; subsequent execute
+    calls return literal None, simulating the production Supabase None-result bug.
+    """
+    q = MagicMock()
+    q.select.return_value = q
+    q.eq.return_value = q
+    q.maybe_single.return_value = q
+    if first_returns_data is not None:
+        q.execute.side_effect = [MagicMock(data=first_returns_data), None]
+    else:
+        q.execute.return_value = None
+    db = MagicMock()
+    db.table.return_value = q
+    return db
+
+
+class TestConsentServiceNoneResult:
+    """Service functions return None gracefully when Supabase execute() returns
+    literal None (AttributeError regression guard — production bug 2026-06-20)."""
+
+    def test_get_active_consent_record_none_on_consent_query(self):
+        """Persona ownership check succeeds; consent query returns None — must not crash."""
+        db = _make_db_none_execute(first_returns_data={"id": _PERSONA_ID})
+        result = asyncio.run(get_active_consent_record(db, _PERSONA_ID, _USER_ID))
+        assert result is None
+
+    def test_get_active_succession_record_none_on_succession_query(self):
+        """Persona ownership check succeeds; succession query returns None — must not crash."""
+        db = _make_db_none_execute(first_returns_data={"id": _PERSONA_ID})
+        result = asyncio.run(get_active_succession_record(db, _PERSONA_ID, _USER_ID))
+        assert result is None
+
+    def test_get_active_consent_record_none_on_owner_check(self):
+        """Even if the persona ownership query itself returns None, must not crash."""
+        db = _make_db_none_execute()  # ALL execute() calls return None
+        result = asyncio.run(get_active_consent_record(db, _PERSONA_ID, _USER_ID))
+        assert result is None  # not owner → None, no AttributeError

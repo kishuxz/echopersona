@@ -3,7 +3,7 @@ services:
     image: redis:7-alpine
     command: redis-server --appendonly yes
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -16,7 +16,7 @@ services:
   backend:
     build: ./backend
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     env_file:
       - .env
     environment:
@@ -44,16 +44,18 @@ services:
   frontend:
     build:
       context: ./frontend
-      # VITE_ vars are baked into the JS bundle at build time.
-      # WS base must match the public host so browsers can reach the socket.
-      # Supabase client vars come from the same .env as the backend.
       args:
-        - VITE_API_BASE_URL=${VITE_API_BASE_URL:-}
-        - VITE_WS_BASE_URL=${VITE_WS_BASE_URL:-ws://localhost}
+        # VITE_ vars are baked into the JS bundle at build time.
+        # Defaults to production values (kishoreai.online).
+        # Override in root .env for local dev with Docker:
+        #   VITE_API_BASE_URL=http://localhost:8000
+        #   VITE_WS_BASE_URL=ws://localhost:8000
+        - VITE_API_BASE_URL=${VITE_API_BASE_URL:-https://kishoreai.online}
+        - VITE_WS_BASE_URL=${VITE_WS_BASE_URL:-wss://kishoreai.online}
         - VITE_SUPABASE_URL=${SUPABASE_URL}
         - VITE_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
     ports:
-      - "3000:80"
+      - "127.0.0.1:3000:80"
     depends_on:
       - backend
     restart: always

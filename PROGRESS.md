@@ -1,7 +1,7 @@
 # EchoPersona — Build Progress
 
 ## Active feature
-Step 10 — Persona Memory Engine v1 (Slice C: persona readiness gate — complete, pending Supabase apply)
+Step 10 — Persona Memory Engine v1 (Slice C: persona readiness gate + guided creation UI integrated)
 
 ## Step 10 — Persona Memory Engine v1 · Slice C: Persona Readiness Gate (2026-06-24)
 
@@ -59,6 +59,15 @@ Step 10 Slice A ✅ — Memory category foundation (2026-06-24)
 - `backend/worker/tasks/ingestion.py` — passes `unit_data.get("memory_category", "episodic")` to `write_memory_unit()`
 - `backend/tests/test_memory_category.py` (new) — 15 tests: valid categories, invalid/missing/None fallbacks, mock unit, pipeline write
 - Backend: 243 tests passing (228 prior + 15 new); TypeScript clean; build clean
+
+## Step 10 ✅ — Guided question-led persona creation UI (2026-06-20)
+- `frontend/src/components/CreationWizard.tsx` — guided interview; auto-finish on `action=done`; ref guard prevents double-finish race
+- `frontend/src/pages/Dashboard.tsx` — 3-state `createStep` flow (`idle`→`shell`→`interview`)
+- `frontend/src/lib/api.ts` — added `startCreationSession`, `captureTextAnswer`, `finishCreationSession`
+- `frontend/src/types/index.ts` — added `CreationSession`, `StartSessionResponse`, `CaptureResponse`
+
+## Hotfix ✅ — No-memory fallback in build_system_prompt (2026-06-24)
+- `backend/services/rag.py` — `FALLBACK` directive injected when context empty; prevents blank-slate LLM improvisation
 
 ## Step 8E.2 ✅ — Structural frontend safety polish (2026-06-17)
 - `frontend/src/components/ErrorBoundary.tsx` — new class component; `getDerivedStateFromError` sets hasError; renders "Something went wrong" fallback with Reload button (`window.location.href = '/'`); no sensitive data logged
@@ -142,22 +151,23 @@ Step 7 Slice G ✅ — Minimal frontend billing and upgrade UI (2026-06-17)
 None.
 
 ## Next action
-Step 10 Slice B (next): Stage 4 voice card upgrade — structured `voice_card` JSONB on personas.
+Browser verification of full Guided Q&A → readiness gate flow (merged integration).
 
 ## Last known green verification
 ```bash
 cd backend && python -m pytest tests/ -q
-# 265 passed (Step 10 Slice C green, 2026-06-24)
+# TBD — post-merge run pending
 cd frontend && npx tsc --noEmit && npm run build
-# typecheck clean; built in 1.04s (2026-06-24)
+# TBD — post-merge run pending
 ```
 
 ## Do not forget
 - Migrations 004 and 005 are applied in Supabase SQL editor — do not re-run unless schema is reset.
-- Migration 006 (`stripe_entitlements`) written but **not confirmed applied** — verify in Supabase SQL editor before testing billing in staging.
-- Migration 007 (`persona_memory_engine`) written but **NOT YET APPLIED** — apply in Supabase SQL editor before testing memory_category against live DB.
-- Migration 008 (`voice_card`) written but **NOT YET APPLIED** — apply in Supabase SQL editor before testing voice card against live DB.
-- Migration 009 (`persona_readiness`) written but **NOT YET APPLIED** — apply in Supabase SQL editor before testing readiness gate against live DB.
+- Migration 006 (`stripe_entitlements`) **confirmed applied** (2026-06-20).
+- Migration 007 (`persona_style_card`) **confirmed applied** (2026-06-20) — `tone`, `avoid_phrases`, `answer_length_pref`, `relationship_tone` on `personas`.
+- Migration 007 (`persona_memory_engine`) **confirmed applied** (2026-06-24) — `memory_category` on `memory_units`.
+- Migration 008 (`voice_card`) **confirmed applied** (2026-06-24) — `voice_card JSONB` on `personas`.
+- Migration 009 (`persona_readiness`) **confirmed applied** (2026-06-24) — `readiness_status` on `personas`.
 - `SESSION_LISTENER` and `SESSION_HISTORY` are not cleaned up on disconnect — known gap, defer to a future cleanup slice.
 - `posthumous_verified` beneficiary activation is explicitly deferred — activation signal not yet wired.
 - Tavus not yet wired in — see `docs/backlog.md`.

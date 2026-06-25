@@ -1,11 +1,11 @@
 import { Pencil } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { PersonaUpload } from '../components/PersonaUpload'
+import { CreationWizard } from '../components/CreationWizard'
 import { useAuth } from '../hooks/useAuth'
 import { useKeepAlive } from '../hooks/useKeepAlive'
-import { deletePersona, listPersonas } from '../lib/api'
-import type { Persona } from '../types'
+import { createPersona, deletePersona, listPersonas } from '../lib/api'
+import type { Persona, PersonaCreate } from '../types'
 
 export function Dashboard() {
   useKeepAlive()
@@ -13,7 +13,8 @@ export function Dashboard() {
   const navigate = useNavigate()
   const [personas, setPersonas] = useState<Persona[]>([])
   const [loading, setLoading] = useState(true)
-  const [showCreate, setShowCreate] = useState(false)
+  const [createStep, setCreateStep] = useState<'idle' | 'shell' | 'interview'>('idle')
+  const [newPersonaId, setNewPersonaId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -22,12 +23,6 @@ export function Dashboard() {
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
   }, [])
-
-  const handlePersonaCreated = (persona: Persona) => {
-    setPersonas((prev) => [persona, ...prev])
-    setShowCreate(false)
-    navigate(`/dashboard/persona/${persona.id}`)
-  }
 
   const handleDelete = async (id: string, name: string) => {
     if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) return
@@ -76,7 +71,7 @@ export function Dashboard() {
         <div className="flex items-center gap-3">
           <button
             className="btn-shimmer rounded-lg px-4 py-2 font-sans text-sm font-medium text-white"
-            onClick={() => setShowCreate(true)}
+            onClick={() => setCreateStep('shell')}
           >
             + New Persona
           </button>
@@ -96,21 +91,40 @@ export function Dashboard() {
       </div>
 
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-8">
-        {showCreate && (
+        {createStep !== 'idle' && (
           <div className="mb-10">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="font-fraunces text-lg font-semibold text-text">
-                Create Persona
+                {createStep === 'shell' ? 'Create Persona' : 'Share their story'}
               </h2>
-              <button
-                className="font-sans text-sm text-muted underline transition-colors hover:text-text"
-                onClick={() => setShowCreate(false)}
-              >
-                Cancel
-              </button>
+              {createStep === 'shell' && (
+                <button
+                  className="font-sans text-sm text-muted underline transition-colors hover:text-text"
+                  onClick={() => setCreateStep('idle')}
+                >
+                  Cancel
+                </button>
+              )}
             </div>
             <div className="max-w-lg">
-              <PersonaUpload onPersona={handlePersonaCreated} />
+              {createStep === 'shell' && (
+                <PersonaShellForm
+                  onCreated={(personaId) => {
+                    setNewPersonaId(personaId)
+                    setCreateStep('interview')
+                  }}
+                  onCancel={() => setCreateStep('idle')}
+                />
+              )}
+              {createStep === 'interview' && newPersonaId && (
+                <CreationWizard
+                  personaId={newPersonaId}
+                  onComplete={(personaId) => {
+                    setCreateStep('idle')
+                    navigate(`/dashboard/persona/${personaId}`)
+                  }}
+                />
+              )}
             </div>
           </div>
         )}
@@ -132,7 +146,7 @@ export function Dashboard() {
             <span className="font-sans text-sm text-textdim">Loading personas…</span>
           </div>
         ) : personas.length === 0 ? (
-          <EmptyState onCreate={() => setShowCreate(true)} />
+          <EmptyState onCreate={() => setCreateStep('shell')} />
         ) : (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {personas.map((p) => (
@@ -322,5 +336,73 @@ function PersonaCard({
         </button>
       </div>
     </div>
+  )
+}
+
+function PersonaShellForm({
+  onCreated,
+  onCancel,
+}: {
+  onCreated: (personaId: string) => void
+  onCancel: () => void
+}) {
+  const [name, setName] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (name.trim().length < 2) {
+      setError('Please enter a name (at least 2 characters).')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      const data: PersonaCreate = { name: name.trim(), stories: [], personality_traits: [], speaking_style: '' }
+      const persona = await createPersona(data)
+      onCreated(persona.id)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to create persona')
+      setBusy(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="rounded-2xl border border-border bg-surface p-6 shadow-card">
+      <p className="mb-4 font-sans text-sm text-textdim">
+        Give this persona a name to get started. You'll share their stories next.
+      </p>
+      <label className="mb-1 block font-sans text-xs font-medium uppercase tracking-widest text-muted">
+        Name
+      </label>
+      <input
+        type="text"
+        className="w-full rounded-lg border border-border bg-bg px-3 py-2.5 font-sans text-sm text-text placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/30"
+        placeholder="e.g. Grandma Rose"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        autoFocus
+        disabled={busy}
+      />
+      {error && <p className="mt-2 font-sans text-xs text-red">{error}</p>}
+      <div className="mt-4 flex items-center gap-3">
+        <button
+          type="submit"
+          className="rounded-lg bg-accent px-5 py-2.5 font-sans text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+          disabled={busy || name.trim().length < 2}
+        >
+          {busy ? 'Creating…' : 'Create →'}
+        </button>
+        <button
+          type="button"
+          className="font-sans text-sm text-muted transition-colors hover:text-text"
+          onClick={onCancel}
+          disabled={busy}
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
   )
 }

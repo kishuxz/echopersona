@@ -23,7 +23,7 @@ async def get_entitlement_for_user(db: "Client", user_id: str) -> StripeEntitlem
         .maybe_single()
         .execute()
     )
-    if not result.data:
+    if result is None or not result.data:
         return None
     return StripeEntitlement(**result.data)
 

@@ -12,7 +12,7 @@ Access rules:
 """
 import logging
 
-from models.consent import ConsentRecord, ListenerContext
+from models.consent import ConsentRecord, ListenerContext, ModalityConsent
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ async def get_active_consent_for_persona(db, persona_id: str) -> ConsentRecord |
         .maybe_single()
         .execute()
     )
-    if not result.data:
+    if result is None or not result.data:
         return None
     return ConsentRecord(**result.data)
 
@@ -42,7 +42,33 @@ async def resolve_listener_context(
 
     Called once at WebSocket handshake time; result is stored per-session in ws.py.
     """
-    # Gate 1: active consent with text_twin enabled
+    # Gate 1: resolve persona; deny if not found
+    persona_row = (
+        db.table("personas")
+        .select("user_id")
+        .eq("id", persona_id)
+        .maybe_single()
+        .execute()
+    )
+    if persona_row is None or not persona_row.data:
+        logger.info("[listener] denied %s on %s: persona not found", user_id, persona_id)
+        return None
+
+    # Gate 2: persona owner always allowed; consent used for modalities only
+    if persona_row.data["user_id"] == user_id:
+        consent = await get_active_consent_for_persona(db, persona_id)
+        modalities = (
+            consent.modality_consent
+            if consent is not None and consent.modality_consent.text_twin
+            else ModalityConsent()
+        )
+        return ListenerContext(
+            listener_user_id=user_id,
+            is_owner=True,
+            allowed_modalities=modalities,
+        )
+
+    # Gate 3: non-owner requires active consent with text_twin=True
     consent = await get_active_consent_for_persona(db, persona_id)
     if consent is None or not consent.modality_consent.text_twin:
         logger.info(
@@ -52,22 +78,7 @@ async def resolve_listener_context(
         )
         return None
 
-    # Gate 2: persona owner always allowed
-    persona_row = (
-        db.table("personas")
-        .select("user_id")
-        .eq("id", persona_id)
-        .maybe_single()
-        .execute()
-    )
-    if persona_row.data and persona_row.data["user_id"] == user_id:
-        return ListenerContext(
-            listener_user_id=user_id,
-            is_owner=True,
-            allowed_modalities=consent.modality_consent,
-        )
-
-    # Gate 3: immediate beneficiary in active succession record
+    # Gate 4: immediate beneficiary in active succession record
     succession_row = (
         db.table("succession_records")
         .select("beneficiaries")
@@ -76,7 +87,7 @@ async def resolve_listener_context(
         .maybe_single()
         .execute()
     )
-    if succession_row.data:
+    if succession_row is not None and succession_row.data:
         for b in succession_row.data.get("beneficiaries") or []:
             if b.get("user_id") == user_id:
                 if b.get("activation_trigger") == "immediate":
@@ -87,6 +98,8 @@ async def resolve_listener_context(
                         address_term=b.get("address_term") or None,
                         scope=b.get("scope"),
                         allowed_modalities=consent.modality_consent,
+                        closeness_level=b.get("closeness_level"),
+                        greeting_style=b.get("greeting_style"),
                     )
                 # Found but not immediately activated
                 logger.info(

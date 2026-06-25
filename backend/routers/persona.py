@@ -152,6 +152,10 @@ class PersonaUpdate(BaseModel):
     stories: list[str] | None = None
     personality_traits: list[str] | None = None
     speaking_style: str | None = None
+    tone: str | None = None
+    avoid_phrases: list[str] | None = None
+    answer_length_pref: str | None = None
+    relationship_tone: dict | None = None
 
 
 @router.patch("/{persona_id}", response_model=Persona)
