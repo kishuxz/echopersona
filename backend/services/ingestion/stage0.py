@@ -195,6 +195,17 @@ async def normalize_source(
     if m == "text":
         return text_content.strip(), (0.0, 0.0)
 
+    if m == "video_audio":
+        # Typed answer stored with video_audio modality (Guided Q&A flow).
+        # Prefer text_content when present (typed path); fall back to media transcription
+        # when file_bytes are provided; otherwise return empty cleanly.
+        if text_content and text_content.strip():
+            return text_content.strip(), (0.0, 0.0)
+        if file_bytes:
+            transcript, duration = await _transcribe_media(file_bytes, filename, content_type)
+            return transcript, (0.0, duration)
+        return "", (0.0, 0.0)
+
     if m in _AUDIO_VIDEO_MODALITIES:
         if not file_bytes:
             raise ValueError(f"File bytes required for modality '{modality}'")

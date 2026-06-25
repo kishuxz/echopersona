@@ -238,6 +238,38 @@ def test_ingest_missing_source_record_returns_error():
     assert result["reason"] == "record_not_found"
 
 
+def test_ingest_video_audio_with_text_content_completes():
+    """video_audio source with typed text_content ingests successfully (APJ failure path)."""
+    record = _source_record(
+        modality="video_audio",
+        text_content="I grew up in Chennai, near the Marina beach.",
+    )
+    write_mock = AsyncMock(return_value="unit-uuid-va-001")
+    result = _run_ingest(record, write_mock)
+
+    assert result["status"] == "done"
+    assert result["units_created"] == 1
+    assert result["unit_ids"] == ["unit-uuid-va-001"]
+
+
+def test_ingest_video_audio_empty_text_no_file_returns_zero_units():
+    """video_audio source with empty text and no file completes cleanly with 0 units (no crash)."""
+    record = _source_record(modality="video_audio", text_content="")
+    with (
+        patch("worker.tasks.ingestion.get_source_record", new_callable=AsyncMock, return_value=record),
+        patch("worker.tasks.ingestion.update_source_status", new_callable=AsyncMock),
+        patch(
+            "worker.tasks.ingestion.normalize_source",
+            new_callable=AsyncMock,
+            return_value=("", (0.0, 0.0)),
+        ),
+    ):
+        result = asyncio.run(ingest_memory_unit(_mock_ctx(), record["id"], record["user_id"]))
+
+    assert result["status"] == "done"
+    assert result["units_created"] == 0
+
+
 def test_ingest_episode_failure_skips_episode_but_continues():
     """A per-episode transform error should not abort the whole pipeline."""
     record = _source_record()

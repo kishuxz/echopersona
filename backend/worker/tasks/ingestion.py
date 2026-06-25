@@ -23,7 +23,7 @@ from services.persona_store import update_readiness_status
 
 logger = logging.getLogger(__name__)
 
-_FILE_MODALITIES = {"audio", "video", "document", "photo", "letter"}
+_FILE_MODALITIES = {"audio", "video", "video_audio", "document", "photo", "letter"}
 
 _EXT_TO_MIME: dict[str, str] = {
     "mp4": "video/mp4",
