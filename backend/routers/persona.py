@@ -101,6 +101,33 @@ async def upload_avatar(
     return persona
 
 
+class ReadinessResponse(BaseModel):
+    ready: bool
+    status: str
+    sources_done: int
+    sources_total: int
+
+
+@router.get("/{persona_id}/readiness", response_model=ReadinessResponse)
+async def get_readiness(
+    persona_id: str,
+    user_id: str = Depends(get_current_user),
+) -> ReadinessResponse:
+    persona = await persona_store.get_persona(persona_id, user_id)
+    if not persona:
+        raise HTTPException(status_code=404, detail="Persona not found")
+    db = get_db()
+    result = db.table("memory_sources").select("status").eq("persona_id", persona_id).execute()
+    total = len(result.data)
+    done = sum(1 for r in result.data if r["status"] == "done")
+    return ReadinessResponse(
+        ready=persona.readiness_status == "ready",
+        status=persona.readiness_status,
+        sources_done=done,
+        sources_total=total,
+    )
+
+
 class SimliFacePayload(BaseModel):
     face_id: str
 

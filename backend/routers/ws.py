@@ -635,6 +635,13 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str) -> None:
         await websocket.close(code=4002, reason="Subscription required")
         return
 
+    # Readiness gate: block personas that have no stories and haven't finished ingestion
+    if persona_id:
+        _p = PERSONAS.get(persona_id)
+        if _p and _p.readiness_status not in ("ready",) and not _p.stories:
+            await websocket.close(code=4010, reason="memories_processing")
+            return
+
     await websocket.accept()
     SESSION_LISTENER[session_id] = listener_ctx
     SESSION_ENTITLEMENT[session_id] = entitlement

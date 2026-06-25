@@ -1,38 +1,75 @@
 # EchoPersona — Build Progress
 
 ## Active feature
-Step 10 — Guided question-led persona creation UI (in progress)
+Step 10 — Persona Memory Engine v1 (Slice C: persona readiness gate + guided creation UI integrated)
 
-## Documentation milestone
-- kstack workflow references adopted (2026-06-22)
-  - Updated AGENTS.md: added agents/, review-gates.md, ai-product-quality.md, safety.md, release-process.md, conductor lanes/playbooks, examples/echopersona/ references
-  - Documentation-only; no app code changed
+## Step 10 — Persona Memory Engine v1 · Slice C: Persona Readiness Gate (2026-06-24)
+
+### Slice C: readiness_status + processing gate
+- **backend/migrations/009_persona_readiness.sql** (new) — adds `readiness_status TEXT CHECK (...)` to `personas`; backfills existing enriched/story personas to `ready`
+- **supabase/migrations/009_persona_readiness.sql** (new) — identical copy
+- **backend/models/persona.py** — adds `readiness_status`
+- **backend/services/persona_store.py** — includes readiness in persona SELECTs and adds `update_readiness_status()`
+- **backend/worker/tasks/ingestion.py** — marks personas `processing` when ingestion begins and `failed` on ingestion error
+- **backend/worker/tasks/enrichment.py** — marks personas `ready` after Stage 4 completes and `failed` on enrichment error
+- **backend/routers/persona.py** — adds `GET /persona/{id}/readiness`
+- **backend/routers/ws.py** — soft-gates WebSocket sessions for unready personas without static stories
+- **frontend/src/types/index.ts** — adds readiness types
+- **frontend/src/lib/api.ts** — adds `getPersonaReadiness()`
+- **frontend/src/pages/PersonaDetail.tsx** — polls readiness and shows processing UI before rendering `VoiceInterface`
+- **backend/tests/test_persona_readiness.py** — adds readiness tests
+
+### Verification
+- Backend tests passing
+- Frontend TypeScript clean
+- Frontend production build clean
+
+### Do not forget
+- Migration 009 written but **NOT YET APPLIED** in Supabase SQL editor
+- Before live testing, apply migrations 007, 008, and 009 in order if they are not already applied
+
+## Step 10 — Persona Memory Engine v1 · Slice B: Voice Card Foundation (2026-06-24)
+
+### Slice B: structured voice_card extraction + prompt conditioning
+- **backend/migrations/008_voice_card.sql** (new) — adds `voice_card JSONB NOT NULL DEFAULT '{}'` to `personas`
+- **supabase/migrations/008_voice_card.sql** (new) — identical copy
+- **backend/services/ingestion/stage4.py** — Stage 4 now returns both `style_exemplars` and structured `voice_card` in the existing LLM call
+- **backend/models/persona.py** — adds `voice_card`
+- **backend/services/persona_store.py** — includes `voice_card` in persona SELECTs and adds `update_voice_card()`
+- **backend/worker/tasks/enrichment.py** — persists extracted `voice_card` during enrichment
+- **backend/services/rag.py** — system prompt now includes a `VOICE & STYLE` block before characteristic phrases
+- **backend/tests/test_voice_card.py** — adds 12 tests for voice card extraction/coercion/prompt behavior
+
+### Verification
+- Backend tests passing
+- Frontend TypeScript clean
+- Frontend production build clean
+
+### Do not forget
+- Migration 008 written but **NOT YET APPLIED** in Supabase SQL editor
+- Existing personas will have `voice_card = {}` until re-enriched
 
 ## Last completed step
-Step 10 ✅ — Guided question-led persona creation UI (2026-06-20)
-- `frontend/src/types/index.ts` — added `CreationSession`, `NextStep`, `StartSessionResponse`, `CaptureResponse`
-- `frontend/src/lib/api.ts` — added `startCreationSession`, `captureTextAnswer`, `finishCreationSession` (all follow `getAuthHeaders()` auth pattern)
-- `frontend/src/components/CreationWizard.tsx` — new guided interview component; renders one question at a time; handles `ask_probe`/`advance`/`steer`/`done` actions; gates Finish on ≥3 answered questions; non-empty answer required to Continue
-- `frontend/src/pages/Dashboard.tsx` — replaced `showCreate` boolean with 3-state `createStep` (`idle`→`shell`→`interview`); new `PersonaShellForm` private component (name-only, calls `/persona/create` with `stories:[]`); `PersonaUpload` import removed from Dashboard (still used by PersonaEdit); `PersonaShellForm` transitions to `CreationWizard` on persona creation
-- TypeScript: clean (`npx tsc --noEmit` 0 errors, 2026-06-20)
-- Build: clean (`npm run build` succeeded, 2026-06-20)
-- Deployment: pending
+Step 10 Slice A ✅ — Memory category foundation (2026-06-24)
+- `backend/migrations/007_persona_memory_engine.sql` (new) — `memory_category TEXT CHECK (...)` on `memory_units`, `NOT NULL DEFAULT 'episodic'`; index on `(persona_id, memory_category) WHERE supersedes IS NULL`
+- `supabase/migrations/007_persona_memory_engine.sql` (new) — identical copy
+- `backend/models/memory_unit.py` — `MEMORY_CATEGORIES` frozenset exported; `memory_category: str = "episodic"` on `MemoryUnit` + `MemoryUnitCreate`
+- `backend/services/ingestion/stage2.py` — 7-category system prompt; `_coerce_unit()` validates and defaults to `"episodic"` on any invalid/missing value; `_mock_unit()` includes `"episodic"`; zero extra Groq calls
+- `backend/services/ingestion/source_store.py` — `memory_category` param added to `write_memory_unit()` INSERT
+- `backend/worker/tasks/ingestion.py` — passes `unit_data.get("memory_category", "episodic")` to `write_memory_unit()`
+- `backend/tests/test_memory_category.py` (new) — 15 tests: valid categories, invalid/missing/None fallbacks, mock unit, pipeline write
+- Backend: 243 tests passing (228 prior + 15 new); TypeScript clean; build clean
+
+## Step 10 ✅ — Guided question-led persona creation UI (2026-06-20)
+- `frontend/src/components/CreationWizard.tsx` — guided interview; auto-finish on `action=done`; ref guard prevents double-finish race
+- `frontend/src/pages/Dashboard.tsx` — 3-state `createStep` flow (`idle`→`shell`→`interview`)
+- `frontend/src/lib/api.ts` — added `startCreationSession`, `captureTextAnswer`, `finishCreationSession`
+- `frontend/src/types/index.ts` — added `CreationSession`, `StartSessionResponse`, `CaptureResponse`
 
 ## Hotfix ✅ — No-memory fallback in build_system_prompt (2026-06-24)
-- `backend/services/rag.py` — `build_system_prompt` now injects a `FALLBACK` directive when `retrieved_context` is empty (no memory units yet and no stories). The LLM is instructed to warmly greet the listener, acknowledge memories are still being gathered, and invite them to return shortly. It is explicitly told not to invent facts or use outside knowledge about the persona's name. Previously the prompt said only "No memories available." with no behavioral instruction, causing the LLM to improvise confused blank-slate responses (e.g. "I'm not quite sure who I am yet").
-- Normal memory-backed personas: zero behavior change — `no_memory_fallback` is an empty string when memories are present.
-- **This is not the full persona readiness fix.** The underlying race condition (WS session opening before the ingestion worker finishes) and the cross-process cache invalidation issue are deferred to the next slice.
-- **Next slice:** design Memory Quality / persona readiness gate system (polling endpoint or `persona_ready` flag, PERSONAS cache invalidation, cross-process RAG_INDICES invalidation).
-- Tests: 278 passed, 0 failed
-- TypeScript: clean; build: clean (2026-06-24)
+- `backend/services/rag.py` — `FALLBACK` directive injected when context empty; prevents blank-slate LLM improvisation
 
-**Known gaps introduced this slice:**
-- PersonaCard shows "0 memories" for interview-created personas (`stories[]` is empty; memories live in `memory_units`)
-- No session resume if user abandons mid-interview (Redis TTL 7 days)
-- `supabase/migrations/004` mirror still missing (documentation gap only — migration is applied)
-
-**Previous last completed step:**
-Step 8E.2 ✅ — Structural frontend safety polish (2026-06-17)
+## Step 8E.2 ✅ — Structural frontend safety polish (2026-06-17)
 - `frontend/src/components/ErrorBoundary.tsx` — new class component; `getDerivedStateFromError` sets hasError; renders "Something went wrong" fallback with Reload button (`window.location.href = '/'`); no sensitive data logged
 - `frontend/src/main.tsx` — `<ErrorBoundary>` wraps `<RouterProvider>`; prevents blank-screen crashes in production
 - `frontend/src/components/ProtectedRoute.tsx` — unauthenticated redirect now passes `state: { returnTo: location.pathname }` so the original URL survives the login round-trip
@@ -111,23 +148,26 @@ Step 7 Slice G ✅ — Minimal frontend billing and upgrade UI (2026-06-17)
 - Step 1 ✅ Question bank loader
 
 ## Current blocker
-None. Stage 4 persona style-card extraction and write-back complete (2026-06-20). Next: Step 9B production deployment verification (`kishoreai.online` Docker Compose).
+None.
 
 ## Next action
-Step 9B.1 done — docs/config reconciled to private VPC Docker. Next: fix docker-compose.yml build arg defaults (CORS_ORIGINS, VITE_API_BASE_URL, VITE_WS_BASE_URL) for production; then SSH to VPS, write production .env, `docker compose up --build -d`, verify `https://kishoreai.online/health`.
+Browser verification of full Guided Q&A → readiness gate flow (merged integration).
 
 ## Last known green verification
 ```bash
 cd backend && python -m pytest tests/ -q
-# 278 passed (no-memory fallback hotfix, 2026-06-24)
+# TBD — post-merge run pending
 cd frontend && npx tsc --noEmit && npm run build
-# typecheck clean; built in 1.11s (no-memory fallback hotfix, 2026-06-24)
+# TBD — post-merge run pending
 ```
 
 ## Do not forget
 - Migrations 004 and 005 are applied in Supabase SQL editor — do not re-run unless schema is reset.
-- Migration 006 (`stripe_entitlements`) **confirmed applied** (2026-06-20) — `stripe_entitlements` table present in Supabase project `acngivwdqttgtalopsjw`.
-- Migration 007 (`persona_style_card`) **confirmed applied and verified** (2026-06-20) — four columns confirmed on `personas`: `tone TEXT NOT NULL DEFAULT ''`, `avoid_phrases TEXT[] NOT NULL DEFAULT '{}'`, `answer_length_pref TEXT NOT NULL DEFAULT 'moderate'`, `relationship_tone JSONB NOT NULL DEFAULT '{}'`. Stage 4 extraction and write-back **complete** (2026-06-20) — 25/25 tests pass.
+- Migration 006 (`stripe_entitlements`) **confirmed applied** (2026-06-20).
+- Migration 007 (`persona_style_card`) **confirmed applied** (2026-06-20) — `tone`, `avoid_phrases`, `answer_length_pref`, `relationship_tone` on `personas`.
+- Migration 007 (`persona_memory_engine`) **confirmed applied** (2026-06-24) — `memory_category` on `memory_units`.
+- Migration 008 (`voice_card`) **confirmed applied** (2026-06-24) — `voice_card JSONB` on `personas`.
+- Migration 009 (`persona_readiness`) **confirmed applied** (2026-06-24) — `readiness_status` on `personas`.
 - `SESSION_LISTENER` and `SESSION_HISTORY` are not cleaned up on disconnect — known gap, defer to a future cleanup slice.
 - `posthumous_verified` beneficiary activation is explicitly deferred — activation signal not yet wired.
 - Tavus not yet wired in — see `docs/backlog.md`.

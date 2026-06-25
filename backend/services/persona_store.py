@@ -36,6 +36,8 @@ async def upload_avatar_image(
 
 async def create_persona(user_id: str, data: PersonaCreate) -> Persona:
     db = get_db()
+    # Personas created with stories can immediately serve the RAG fallback path.
+    initial_readiness = "ready" if data.stories else "pending"
     result = (
         db.table("personas")
         .insert(
@@ -45,6 +47,7 @@ async def create_persona(user_id: str, data: PersonaCreate) -> Persona:
                 "stories": data.stories,
                 "personality_traits": data.personality_traits,
                 "speaking_style": data.speaking_style,
+                "readiness_status": initial_readiness,
             }
         )
         .execute()
@@ -65,7 +68,8 @@ async def get_persona_by_id(persona_id: str) -> Persona | None:
         .select(
             "id, user_id, name, stories, personality_traits, speaking_style, voice_id,"
             " did_avatar_url, idle_video_url, simli_face_id, entity_graph, style_exemplars,"
-            " tone, avoid_phrases, answer_length_pref, relationship_tone, created_at"
+            " voice_card, readiness_status, tone, avoid_phrases, answer_length_pref,"
+            " relationship_tone, created_at"
         )
         .eq("id", persona_id)
         .maybe_single()
@@ -83,7 +87,8 @@ async def get_persona(persona_id: str, user_id: str) -> Persona | None:
         .select(
             "id, user_id, name, stories, personality_traits, speaking_style, voice_id,"
             " did_avatar_url, idle_video_url, simli_face_id, entity_graph, style_exemplars,"
-            " tone, avoid_phrases, answer_length_pref, relationship_tone, created_at"
+            " voice_card, readiness_status, tone, avoid_phrases, answer_length_pref,"
+            " relationship_tone, created_at"
         )
         .eq("id", persona_id)
         .eq("user_id", user_id)
@@ -102,7 +107,8 @@ async def list_personas(user_id: str) -> list[Persona]:
         .select(
             "id, user_id, name, stories, personality_traits, speaking_style, voice_id,"
             " did_avatar_url, idle_video_url, simli_face_id, entity_graph, style_exemplars,"
-            " tone, avoid_phrases, answer_length_pref, relationship_tone, created_at"
+            " voice_card, readiness_status, tone, avoid_phrases, answer_length_pref,"
+            " relationship_tone, created_at"
         )
         .eq("user_id", user_id)
         .order("created_at", desc=True)
@@ -154,8 +160,18 @@ async def update_style_exemplars(persona_id: str, style_exemplars: list[str]) ->
     db.table("personas").update({"style_exemplars": style_exemplars}).eq("id", persona_id).execute()
 
 
+async def update_voice_card(persona_id: str, voice_card: dict) -> None:
+    db = get_db()
+    db.table("personas").update({"voice_card": voice_card}).eq("id", persona_id).execute()
+
+
+async def update_readiness_status(persona_id: str, status: str) -> None:
+    db = get_db()
+    db.table("personas").update({"readiness_status": status}).eq("id", persona_id).execute()
+
+
 async def update_style_card(persona_id: str, style_card: dict) -> None:
-    """Write all five style card fields to the persona row in one update."""
+    """Write Phase 2 style card fields (tone, avoid_phrases, answer_length_pref, relationship_tone)."""
     db = get_db()
     db.table("personas").update({
         "style_exemplars": style_card.get("style_exemplars", []),

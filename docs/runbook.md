@@ -55,19 +55,22 @@ cd frontend && npm run build
 ## Database migrations
 
 Migrations live in two places:
-- `backend/migrations/` — numbered `NNN_description.sql`
-- `supabase/migrations/` — Supabase CLI format
+- `supabase/migrations/` — canonical set; Supabase CLI format; must be complete for fresh Supabase reconstruction
+- `backend/migrations/` — numbered `NNN_description.sql`; both directories must stay in sync
 
 **To apply a migration:**
 1. Copy SQL to Supabase SQL editor at https://supabase.com/dashboard
-2. Run it (idempotent; all migrations use `IF NOT EXISTS` / `IF NOT EXISTS` guards)
+2. Run it (idempotent; all migrations use `IF NOT EXISTS` guards)
 3. Verify in Table Editor that columns/tables exist
 
 **Applied migrations (Supabase project `acngivwdqttgtalopsjw`):**
 - `004_creation_fields.sql` ✅ — `persona_id`, `source_question_id`, `source_type`, `supersedes`, `captured_at`, `media_ref` on `memory_units`
 - `005_*` ✅ — applied; see commit history for details
 - `006_stripe_entitlements.sql` ✅ — `stripe_entitlements` + `stripe_webhook_events` tables; confirmed 2026-06-20
-- `007_persona_style_card.sql` ✅ — `tone`, `avoid_phrases`, `answer_length_pref`, `relationship_tone` on `personas`; verified 2026-06-20 (all four columns + defaults confirmed)
+- `007_persona_style_card.sql` ✅ — `tone`, `avoid_phrases`, `answer_length_pref`, `relationship_tone` on `personas`; confirmed 2026-06-20
+- `007_persona_memory_engine.sql` ✅ — `memory_category` on `memory_units`; confirmed 2026-06-24
+- `008_voice_card.sql` ✅ — `voice_card JSONB` on `personas`; confirmed 2026-06-24
+- `009_persona_readiness.sql` ✅ — `readiness_status TEXT CHECK (...)` on `personas`; confirmed 2026-06-24
 
 **Pending migrations:**
 - None.
@@ -253,7 +256,7 @@ redis-cli -u $REDIS_URL GET groq:rpm:$(date +%s | awk '{print int($1/60)}')
 | 401 on API call | Expired or invalid Supabase JWT | Re-login; check `SUPABASE_ANON_KEY` |
 | Ingestion stuck | arq worker not running | `arq worker.WorkerSettings` in backend dir |
 | Evaluator always advances | Groq rate limit hit | Check Redis RPM counter; wait 60s |
-| `memory_units` insert fails | Migration 004 not applied | Run `004_creation_fields.sql` in Supabase |
+| `memory_units` insert fails | Migration 004 not applied on this Supabase project | Verify `source_type` column exists; apply `supabase/migrations/004_creation_fields.sql` if missing |
 | CORS error | `CORS_ORIGINS` missing or wrong | Set to `https://kishoreai.online` (no trailing slash) |
 | `POST /billing/checkout` returns 500 | `STRIPE_PRICE_*` env var is empty | Set the price ID env vars and restart the backend |
 | Webhook returns 400 Invalid Signature | `STRIPE_WEBHOOK_SECRET` mismatched | Use the `whsec_*` from `stripe listen` output (local) or the Dashboard endpoint secret (prod) |

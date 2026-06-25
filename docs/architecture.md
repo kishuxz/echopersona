@@ -67,9 +67,9 @@ Total warm: ~520ms (text committed before TTS starts)
 | `personas` | persona metadata, entity_graph JSON |
 | `memory_units` | all verified memory; content_first_person, affect, themes, provenance |
 | `conversations` | session records |
-| `consent_records` | subject modality consent (planned — step 5b) |
-| `succession_records` | beneficiary intent (planned — step 5b) |
-| `stripe_entitlements` | billing/access tier (planned — step 7+) |
+| `consent_records` | subject modality consent (migration 005) |
+| `succession_records` | beneficiary intent (migration 005) |
+| `stripe_entitlements` | billing/access tier (migration 006 — confirm applied before billing demo) |
 
 ## Services map
 
@@ -97,7 +97,6 @@ Total warm: ~520ms (text committed before TTS starts)
 
 ## Planned additions
 
-- **Stripe** — checkout, subscriptions, webhooks, entitlements table
 - **Tavus** — video AI (async, non-blocking; same constraint as D-ID)
 - **OpenAI embeddings** — optional upgrade path from sentence-transformers for RAG
 - **Relationship-aware persona context** — listener-identity-driven tone, greeting style, and memory visibility filtering; see `docs/relationship-aware-persona-context.md`

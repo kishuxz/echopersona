@@ -187,7 +187,7 @@ class TestExtractStyleCard:
         card = asyncio.run(extract_style_card([]))
         assert card == _SAFE_DEFAULTS
 
-    @patch("services.ingestion.stage4._call_groq", new_callable=AsyncMock)
+    @patch("services.ingestion.stage4._call_groq_style_card", new_callable=AsyncMock)
     def test_returns_all_five_style_card_fields(self, mock_call):
         mock_call.return_value = {
             "style_exemplars": ["Summer was everything."],
@@ -204,7 +204,7 @@ class TestExtractStyleCard:
         assert card["relationship_tone"] == {"child": "gentle"}
 
     @patch(
-        "services.ingestion.stage4._call_groq",
+        "services.ingestion.stage4._call_groq_style_card",
         new_callable=AsyncMock,
         side_effect=Exception("network timeout"),
     )
@@ -216,7 +216,7 @@ class TestExtractStyleCard:
         assert isinstance(card["avoid_phrases"], list)
         assert isinstance(card["relationship_tone"], dict)
 
-    @patch("services.ingestion.stage4._call_groq", new_callable=AsyncMock)
+    @patch("services.ingestion.stage4._call_groq_style_card", new_callable=AsyncMock)
     def test_missing_fields_in_groq_response_fall_back_to_defaults(self, mock_call):
         # _call_groq already calls _parse_style_card internally, but this tests
         # that the dict returned by _call_groq passes through unchanged to caller.

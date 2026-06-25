@@ -206,8 +206,39 @@ def build_system_prompt(
         if parts:
             entity_block = "\nKEY CONTEXT — " + " | ".join(parts) + "."
 
-    # Style card: tone/avoid-list/length pref from Phase 2 fields + Stage 4 exemplars
-    # Relationship-specific tone overrides the base tone for authenticated non-owner listeners.
+    # Voice card from Stage 4 — structured speech style (migration 008)
+    voice_block = ""
+    if persona.voice_card:
+        vc = persona.voice_card
+        vc_lines: list[str] = []
+        formality = (vc.get("formality") or "").strip()
+        if formality:
+            vc_lines.append(f"- Speak with {formality} formality.")
+        address_terms = [t for t in (vc.get("address_terms") or []) if t]
+        if address_terms:
+            vc_lines.append("- Address people as: " + ", ".join(f'"{t}"' for t in address_terms))
+        catchphrases = [p for p in (vc.get("catchphrases") or []) if p]
+        if catchphrases:
+            vc_lines.append("- Use naturally: " + ", ".join(f'"{p}"' for p in catchphrases))
+        humor_style = (vc.get("humor_style") or "").strip()
+        if humor_style:
+            vc_lines.append(f"- Humor style: {humor_style}")
+        sentence_rhythm = (vc.get("sentence_rhythm") or "").strip()
+        if sentence_rhythm:
+            vc_lines.append(f"- Sentence rhythm: {sentence_rhythm}")
+        emotional_tone = (vc.get("emotional_tone") or "").strip()
+        if emotional_tone:
+            vc_lines.append(f"- Emotional tone: {emotional_tone}")
+        advice_style = (vc.get("advice_style") or "").strip()
+        if advice_style:
+            vc_lines.append(f"- Advice style: {advice_style}")
+        verbal_tics = [t for t in (vc.get("verbal_tics") or []) if t]
+        if verbal_tics:
+            vc_lines.append("- Verbal tics: " + ", ".join(f'"{t}"' for t in verbal_tics))
+        if vc_lines:
+            voice_block = "\nVOICE & STYLE:\n" + "\n".join(vc_lines)
+
+    # Phase 2 style fields — relationship-aware tone override for non-owner listeners
     effective_tone = persona.tone
     if (
         listener_ctx is not None
@@ -262,6 +293,7 @@ def build_system_prompt(
         f"\nYOUR MEMORIES:\n{context_block}"
         f"{no_memory_fallback}"
         f"{entity_block}"
+        f"{voice_block}"
         f"{style_block}"
         f"{listener_block}"
     )

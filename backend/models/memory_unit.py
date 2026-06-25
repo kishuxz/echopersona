@@ -33,12 +33,19 @@ class FidelityFlag(BaseModel):
     reason: str
 
 
+MEMORY_CATEGORIES = frozenset({
+    "episodic", "semantic", "procedural", "relational",
+    "values", "humor", "advice",
+})
+
+
 class MemoryUnit(BaseModel):
     unit_id: UUID = Field(default_factory=uuid4)
     user_id: str
     persona_id: str = ""           # §2.3 [add-004] — present in DB, now on model
     source: MemorySource
     content_first_person: str
+    memory_category: str = "episodic"  # semantic type — migration 007
     stance: str = ""
     affect: MemoryAffect = Field(default_factory=MemoryAffect)
     themes: list[str] = Field(default_factory=list)
@@ -56,6 +63,7 @@ class MemoryUnitCreate(BaseModel):
     user_id: str
     source: MemorySource
     content_first_person: str
+    memory_category: str = "episodic"  # semantic type — migration 007
     stance: str = ""
     affect: MemoryAffect = Field(default_factory=MemoryAffect)
     themes: list[str] = Field(default_factory=list)
