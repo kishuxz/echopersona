@@ -117,7 +117,9 @@ async def _run_turn_inner(
             break
         pcm_chunks.append(chunk)
 
-    user_text = await stt.transcribe_audio(b"".join(pcm_chunks))
+    audio_bytes = b"".join(pcm_chunks)
+    logger.info("[WS] STT audio: %d chunks, %d bytes", len(pcm_chunks), len(audio_bytes))
+    user_text = await stt.transcribe_audio(audio_bytes)
     if not user_text:
         logger.warning("STT returned empty transcript, skipping turn")
         with contextlib.suppress(Exception):
@@ -664,7 +666,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str) -> None:
             # Binary frame — raw Int16 PCM audio, forward directly to STT queue
             raw = data.get("bytes")
             if raw:
-                logger.debug("Binary frame: %d bytes", len(raw))
+                logger.info("[WS] received binary chunk: %d bytes", len(raw))
                 if turn_task is None or turn_task.done():
                     turn_task = asyncio.create_task(
                         _run_turn(websocket, session_id, audio_queue, release_time_ref)

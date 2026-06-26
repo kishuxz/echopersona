@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     cartesia_api_key: str = Field(default="", alias="CARTESIA_API_KEY")
     cartesia_voice_id: str = Field(default="", alias="CARTESIA_VOICE_ID")
 
+    stt_provider: str = Field(default="groq", alias="STT_PROVIDER")  # "groq" | "deepgram"
+    deepgram_api_key: str = Field(default="", alias="DEEPGRAM_API_KEY")
+
     public_base_url: str = Field(default="https://kishoreai.online", alias="PUBLIC_BASE_URL")
 
     stripe_secret_key: str = Field(default="", alias="STRIPE_SECRET_KEY")

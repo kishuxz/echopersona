@@ -6,6 +6,7 @@ export function useAudioRecorder(onChunk: (pcm: ArrayBuffer) => void) {
   const streamRef = useRef<MediaStream | null>(null);
 
   const start = async () => {
+    console.debug('[AUDIO_DEBUG] mic start');
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         channelCount: 1,
@@ -26,6 +27,21 @@ export function useAudioRecorder(onChunk: (pcm: ArrayBuffer) => void) {
           super();
           this.buffer = [];
           this.bufferSize = 4096;
+          this.port.onmessage = (e) => {
+            if (e.data === 'flush') {
+              if (this.buffer.length > 0) {
+                const pcm = new Int16Array(this.buffer.length);
+                for (let i = 0; i < this.buffer.length; i++) {
+                  pcm[i] = Math.max(-32768, Math.min(32767, this.buffer[i] * 32768));
+                }
+                this.buffer = [];
+                // Tagged so main thread can distinguish this from a regular process() chunk
+                this.port.postMessage({ type: 'flush', buffer: pcm.buffer }, [pcm.buffer]);
+              } else {
+                this.port.postMessage({ type: 'flush', buffer: null });
+              }
+            }
+          };
         }
         downsample(input, inputRate, outputRate) {
           if (inputRate === outputRate) return input;
@@ -68,7 +84,10 @@ export function useAudioRecorder(onChunk: (pcm: ArrayBuffer) => void) {
     const source = context.createMediaStreamSource(stream);
     const worklet = new AudioWorkletNode(context, 'pcm-processor');
     workletRef.current = worklet;
-    worklet.port.onmessage = (e) => onChunk(e.data);
+    worklet.port.onmessage = (e) => {
+      console.debug('[AUDIO_DEBUG] worklet chunk: byteLength=' + (e.data as ArrayBuffer).byteLength);
+      onChunk(e.data);
+    };
 
     // Silent gain keeps the worklet in the active audio graph without playback
     const silentGain = context.createGain();
@@ -78,14 +97,44 @@ export function useAudioRecorder(onChunk: (pcm: ArrayBuffer) => void) {
     silentGain.connect(context.destination);
   };
 
-  const stop = () => {
-    workletRef.current?.port.close();
-    workletRef.current?.disconnect();
-    workletRef.current = null;
-    contextRef.current?.close();
-    contextRef.current = null;
-    streamRef.current?.getTracks().forEach(t => t.stop());
-    streamRef.current = null;
+  const stop = (onFlushed?: () => void) => {
+    const worklet = workletRef.current;
+    const context = contextRef.current;
+    const stream = streamRef.current;
+
+    const cleanup = () => {
+      worklet?.port.close();
+      worklet?.disconnect();
+      workletRef.current = null;
+      context?.close();
+      contextRef.current = null;
+      stream?.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+      onFlushed?.();
+    };
+
+    if (!worklet) { onFlushed?.(); return; }
+
+    let done = false;
+    const finish = () => { if (!done) { done = true; cleanup(); } };
+
+    // Override onmessage: pass through in-flight regular chunks; close on tagged flush response
+    worklet.port.onmessage = (e) => {
+      if (e.data instanceof ArrayBuffer) {
+        console.debug('[AUDIO_DEBUG] in-flight chunk during flush: byteLength=' + e.data.byteLength);
+        onChunk(e.data);
+      } else if (e.data && typeof e.data === 'object' && e.data.type === 'flush') {
+        const bl = e.data.buffer ? (e.data.buffer as ArrayBuffer).byteLength : 0;
+        console.debug('[AUDIO_DEBUG] flush response received: byteLength=' + bl);
+        if (e.data.buffer) onChunk(e.data.buffer);
+        finish();
+      }
+    };
+
+    console.debug('[AUDIO_DEBUG] flush requested');
+    worklet.port.postMessage('flush');
+    // Failsafe: fires if worklet never responds (suspended context, browser bug, etc.)
+    setTimeout(finish, 100);
   };
 
   return { start, stop };

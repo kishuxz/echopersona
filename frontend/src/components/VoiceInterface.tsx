@@ -85,6 +85,8 @@ export function VoiceInterface({
   const [playingVideo, setPlayingVideo]       = useState(false);
   const [wsError, setWsError]                 = useState<string | null>(null);
   const isRecordingRef   = useRef(false);
+  const chunkCountRef    = useRef(0);
+  const byteCountRef     = useRef(0);
 
   useEffect(() => {
     if (!wsError) return;
@@ -261,7 +263,12 @@ export function VoiceInterface({
     doConnect(0);
   };
 
-  const recorder = useAudioRecorder((pcm) => sendBinary(pcm));
+  const recorder = useAudioRecorder((pcm) => {
+    chunkCountRef.current += 1;
+    byteCountRef.current += pcm.byteLength;
+    console.debug('[AUDIO_DEBUG] chunk sent to WS: byteLength=' + pcm.byteLength);
+    sendBinary(pcm);
+  });
 
   const handleMicMouseDown = async () => {
     if (isRecordingRef.current || isProcessing) return;
@@ -293,8 +300,14 @@ export function VoiceInterface({
     isRecordingRef.current = false;
     setIsRecording(false);
     setIsProcessing(true);
-    recorder.stop();
-    sendJson({ type: WS_CLIENT_MSG.AUDIO_END });
+    const snapChunks = chunkCountRef.current;
+    const snapBytes  = byteCountRef.current;
+    chunkCountRef.current = 0;
+    byteCountRef.current  = 0;
+    recorder.stop(() => {
+      console.debug('[AUDIO_DEBUG] audio_end sent — total chunks=' + snapChunks + ' total bytes=' + snapBytes);
+      sendJson({ type: WS_CLIENT_MSG.AUDIO_END });
+    });
     setStage("STT");
   };
 
