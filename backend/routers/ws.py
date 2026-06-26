@@ -120,6 +120,9 @@ async def _run_turn_inner(
     user_text = await stt.transcribe_audio(b"".join(pcm_chunks))
     if not user_text:
         logger.warning("STT returned empty transcript, skipping turn")
+        with contextlib.suppress(Exception):
+            await websocket.send_json({"type": "error", "message": "Could not transcribe audio — please try again."})
+            await websocket.send_json({"type": "audio_end"})
         return
 
     t_release = release_time_ref[0]
