@@ -206,6 +206,7 @@ Production `.env` can leave them unset (the compose defaults apply) or set them 
 | `DID_API_KEY` | yes | no | Optional video |
 | `CARTESIA_API_KEY` | yes | no | Optional alt TTS |
 | `TTS_PROVIDER` | yes | no | Optional (default: elevenlabs) |
+| `VOICE_ALWAYS_ON` | yes | no | Set `true` to bypass Stripe entitlement gate for local voice testing |
 | `STRIPE_SECRET_KEY` | yes | no | Billing (checkout + customer create) |
 | `STRIPE_WEBHOOK_SECRET` | yes | no | Billing (webhook signature verification) |
 | `STRIPE_PRICE_CREATOR_MONTHLY` | yes | no | Billing (Creator plan price ID) |
@@ -249,6 +250,24 @@ redis-cli -u $REDIS_URL GET groq:rpm:$(date +%s | awk '{print int($1/60)}')
 ---
 
 ## Common issues
+
+### Local voice baseline — start order
+
+If the local audible voice loop ever breaks, check in this order:
+
+1. Correct repo: `/Users/kishorekumar/echopersona` (not a worktree branch)
+2. Redis: `docker ps | grep redis` — must be healthy; `docker compose up -d redis` if not
+3. Python env: `python -c "import groq, elevenlabs, cartesia, sentence_transformers"` — all must import
+4. `backend/.env`: `GROQ_API_KEY` present and valid (test: `curl https://api.groq.com/openai/v1/models -H "Authorization: Bearer $GROQ_API_KEY"`)
+5. `backend/.env`: `ELEVENLABS_API_KEY` present; `ELEVENLABS_VOICE_ID` set to a real voice ID (not `your_default_voice_id_here`)
+6. `backend/.env`: `VOICE_ALWAYS_ON=true` for local testing before Stripe entitlement is wired
+7. Backend start: `/opt/homebrew/Caskroom/miniforge/base/bin/python -m uvicorn main:app --port 8000 --reload` — note: **do not inherit stale shell env vars** for `GROQ_API_KEY`, `ELEVENLABS_VOICE_ID`, or `ELEVENLABS_API_KEY`; if those are exported in your shell with old values, unset them first or start the backend with `env -u GROQ_API_KEY -u ELEVENLABS_VOICE_ID uvicorn ...`
+8. Frontend: `cd frontend && npm run dev` — must point to `VITE_API_BASE_URL=http://localhost:8000`
+9. Browser: hard refresh (Cmd+Shift+R), check console for `voice_not_found` / Groq 401 / missing module errors
+
+**Verified baseline (2026-06-27):** User said "Hello"; APJ Abdul Kalam persona replied in chat and audible ElevenLabs TTS played.
+
+---
 
 | Symptom | Likely cause | Fix |
 |---|---|---|

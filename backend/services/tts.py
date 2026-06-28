@@ -110,6 +110,7 @@ async def tts_audio_chunks(text: str, voice_id: str | None = None) -> AsyncGener
     from elevenlabs import VoiceSettings
 
     client = AsyncElevenLabs(api_key=settings.elevenlabs_api_key)
+    _total_bytes = 0
     try:
         async for chunk in client.text_to_speech.convert_as_stream(
             voice_id=voice_id or settings.elevenlabs_voice_id,
@@ -125,12 +126,13 @@ async def tts_audio_chunks(text: str, voice_id: str | None = None) -> AsyncGener
             ),
         ):
             if chunk:
+                _total_bytes += len(chunk)
                 yield chunk
     except Exception as e:
         logger.error("TTS stream error: %s", e)
         raise
     finally:
-        logger.debug("TTS stream complete")
+        logger.debug("TTS total_audio_bytes=%d", _total_bytes)
 
 
 async def stream_tts(text: str, websocket, first_audio_cb=None, voice_id: str | None = None, send_end: bool = False) -> None:

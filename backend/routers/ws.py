@@ -155,6 +155,15 @@ async def _run_turn_inner(
     _video_allowed = can_use_video(_entitlement) and (
         _is_owner or listener_ctx is None or listener_ctx.allowed_modalities.video_avatar
     )
+    logger.debug(
+        "[TTS_GATE] voice_always_on=%s entitlement_present=%s is_owner=%s "
+        "listener_voice_clone=%s voice_allowed=%s",
+        settings.voice_always_on,
+        _entitlement is not None,
+        _is_owner,
+        listener_ctx.allowed_modalities.voice_clone if listener_ctx else "N/A",
+        _voice_allowed,
+    )
 
     # FAISS encode + search is CPU-bound; run in thread executor so it doesn't
     # block the event loop, and gather concurrently with the history fetch.
@@ -626,10 +635,13 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str) -> None:
                 units = await get_memory_units_for_persona(persona_id, verified_only=True)
                 if not units:
                     units = await get_memory_units_for_persona(persona_id, verified_only=False)
-                if units:
-                    await loop.run_in_executor(None, rag.build_index_from_units, units)
-                else:
-                    await loop.run_in_executor(None, rag.build_index, PERSONAS[persona_id].stories)
+                try:
+                    if units:
+                        await loop.run_in_executor(None, rag.build_index_from_units, units)
+                    else:
+                        await loop.run_in_executor(None, rag.build_index, PERSONAS[persona_id].stories)
+                except Exception as _rag_err:
+                    logger.warning("[WS] RAG index build failed (%s) — continuing without FAISS", _rag_err)
                 RAG_INDICES[persona_id] = rag
 
     # Billing gate: check persona owner's entitlement (or connecting user's for freeform sessions).

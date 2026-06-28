@@ -1,7 +1,49 @@
 # EchoPersona — Build Progress
 
 ## Active feature
-Step 10 — Persona Memory Engine v1 (Slice C: persona readiness gate + guided creation UI integrated)
+Local audible voice loop baseline locked — next priority: Tavus/video integration
+
+## 2026-06-27 — Local audible voice loop baseline locked
+
+Status: completed locally.
+
+### Verified
+- Local backend/frontend run from `/Users/kishorekumar/echopersona` (not hanoi/conductor worktree).
+- Redis uses local Docker Redis (`redis://localhost:6379`).
+- Python runtime has required voice/RAG dependencies: `groq`, `elevenlabs`, `cartesia`, `sentence_transformers`.
+- Groq STT/LLM auth works with current local key (`GROQ_API_KEY` in `backend/.env`).
+- `VOICE_ALWAYS_ON=true` in `backend/.env` enables local voice testing before Stripe entitlement production flow is complete.
+- ElevenLabs uses a real valid voice ID (not `your_default_voice_id_here`); `ELEVENLABS_VOICE_ID` in `backend/.env`.
+- APJ local voice test completed: user said "Hello"; APJ replied in chat and audible TTS played.
+- `.env` path fix in `config.py`: changed from `".env"` (cwd-relative) to `Path(__file__).parent / ".env"` (always resolves correctly regardless of launch directory).
+- Groq STT retry: `_transcribe_groq` now retries up to 3× on transient HTTP errors.
+- RAG index build now wrapped in try/except — logs warning and continues without FAISS on failure.
+- Diagnostic logs (`[TTS_CALL]`, `[TTS_WORKER]`, `[TTS_QUEUE]`, `[WS_AUDIO]`, `[AUDIO_PLAYBACK]`) removed after baseline confirmed.
+
+### .claude OS update (same slice)
+- Added agents: `debugger`; updated `deploy-vercel-reviewer`
+- Added skills: `ai-quality-review`, `interrupted-session`, `investigate`, `memory-safety-review`, `persona-fidelity-review`, `vpc-deploy-check`
+- `AGENTS.md` and `CLAUDE.md` updated with operating rules
+
+### Regression guard
+If local voice breaks again, check in this order:
+1. Correct worktree: `/Users/kishorekumar/echopersona`
+2. Redis local Docker healthy
+3. Python env imports: `groq`, `elevenlabs`, `cartesia`, `sentence_transformers`
+4. `backend/.env` has valid `GROQ_API_KEY` (not stale shell override)
+5. `backend/.env` has valid `ELEVENLABS_VOICE_ID` (not placeholder)
+6. `backend/.env` has `VOICE_ALWAYS_ON=true`
+7. Backend started without stale shell env vars: `env -u GROQ_API_KEY -u ELEVENLABS_VOICE_ID python -m uvicorn main:app --port 8000 --reload`
+8. Browser hard refresh (Cmd+Shift+R) — no `voice_not_found` / Groq 401 in console
+
+See `docs/runbook.md` → **Local voice baseline — start order** for full steps.
+
+### Tests after this slice
+- `backend/tests/test_entitlements.py` — 45 tests pass
+- `frontend/npx tsc --noEmit` — 0 errors
+
+### Next priority
+Tavus/video integration (persona reply includes video avatar). See `docs/backlog.md`.
 
 ## Step 10 — Persona Memory Engine v1 · Slice C: Persona Readiness Gate (2026-06-24)
 

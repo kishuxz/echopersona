@@ -1,11 +1,12 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(env_file=Path(__file__).parent / ".env", env_file_encoding="utf-8", extra="ignore")
 
     groq_api_key: str = Field(default="", alias="GROQ_API_KEY")
     elevenlabs_api_key: str = Field(default="", alias="ELEVENLABS_API_KEY")
@@ -54,6 +55,7 @@ class Settings(BaseSettings):
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
+    voice_always_on: bool = Field(default=False, alias="VOICE_ALWAYS_ON")
     force_mock_mode: bool = Field(default=False, alias="MOCK_MODE")
 
     @property

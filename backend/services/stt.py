@@ -1,3 +1,4 @@
+import asyncio
 import httpx
 import logging
 import struct
@@ -23,24 +24,27 @@ def _pcm_to_wav(pcm_bytes: bytes, sample_rate: int = 16000) -> bytes:
 
 
 async def _transcribe_groq(wav_bytes: bytes) -> str | None:
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(
-                "https://api.groq.com/openai/v1/audio/transcriptions",
-                headers={"Authorization": f"Bearer {settings.groq_api_key}"},
-                files={"file": ("audio.wav", wav_bytes, "audio/wav")},
-                data={"model": "whisper-large-v3-turbo", "language": "en", "response_format": "text"},
-            )
-            response.raise_for_status()
-            transcript = response.text.strip()
-            logger.info("[STT] Groq transcript_len=%d", len(transcript))
-            return transcript if transcript else None
-    except httpx.HTTPStatusError as e:
-        logger.error("[STT] Groq HTTP %d: %s", e.response.status_code, e.response.text[:200])
-        return None
-    except Exception as e:
-        logger.error("[STT] Groq error (%s): %s", type(e).__name__, e)
-        return None
+    for attempt in range(3):
+        if attempt:
+            await asyncio.sleep(0.3 * attempt)
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(
+                    "https://api.groq.com/openai/v1/audio/transcriptions",
+                    headers={"Authorization": f"Bearer {settings.groq_api_key}"},
+                    files={"file": ("audio.wav", wav_bytes, "audio/wav")},
+                    data={"model": "whisper-large-v3-turbo", "language": "en", "response_format": "text"},
+                )
+                response.raise_for_status()
+                transcript = response.text.strip()
+                logger.info("[STT] Groq transcript_len=%d", len(transcript))
+                return transcript if transcript else None
+        except httpx.HTTPStatusError as e:
+            logger.error("[STT] Groq HTTP %d (attempt %d/3): %s", e.response.status_code, attempt + 1, e.response.text[:200])
+        except Exception as e:
+            logger.error("[STT] Groq error (%s): %s", type(e).__name__, e)
+            return None
+    return None
 
 
 async def _transcribe_deepgram(wav_bytes: bytes) -> str | None:

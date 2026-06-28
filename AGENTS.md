@@ -43,3 +43,44 @@ These narrow or override the generic kstack workflow for this product.
 ### Infrastructure
 - Redis and the arq worker are real, required components of the ingestion deployment.
 - Do not remove, stub out, or mock them in any plan or implementation.
+
+---
+
+## Conductor rules (when parallel agents are used)
+
+**Unsafe lanes — require human approval before any parallel execution:**
+- Migrations (RLS, schema, Supabase)
+- Auth / JWT middleware
+- Billing / Stripe webhooks
+- WebSocket live-path changes (`routers/ws.py`)
+- Persona memory schema
+- Ingestion worker (`worker/tasks/`)
+- Any operation touching production data
+
+**Safe independent lanes (read-only — can run in parallel):**
+- Browser QA / screenshot verification
+- Docs drift audit
+- Security review
+- Deployment checklist (read-only)
+- Test gap review
+
+**Implementation rule:** Only one implementation lane at a time after diagnosis.
+`/batch` only for independent read-only review lanes.
+
+---
+
+## EchoPersona review gates
+
+Before merging any change in these areas, run the corresponding skill:
+
+| Area | Skill |
+|---|---|
+| Ingestion pipeline | `/ingestion-pipeline-review` |
+| TTS/STT/video | `/media-latency-review` |
+| RAG retrieval + grounding | `/rag-fidelity-review` |
+| Persona reply quality | `/persona-fidelity-review` |
+| Supabase migration | `/supabase-rls-review` |
+| Stripe webhook | `/stripe-webhook-review` |
+| Pre-deploy | `/predeploy-check` or `/vpc-deploy-check` |
+| AI output quality | `/ai-quality-review` |
+| Memory access / family rules | `/memory-safety-review` |

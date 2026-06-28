@@ -24,6 +24,22 @@ vetted question bank; chosen family talk to the twin. Chat + chat-twin now; vide
 
 ---
 
+## Operating rules — never violate
+
+| Rule | Detail |
+|---|---|
+| **Source of truth** | `/Users/kishorekumar/echopersona` is authoritative. `/Users/kishorekumar/kstack` is reference only — do not copy wholesale. |
+| **No secrets in output** | Never print API keys, JWTs, Supabase service-role keys, Stripe webhook secrets, or full WebSocket URLs. |
+| **No deploy/SSH/VPS** | Never deploy, SSH, or touch the VPS without explicit human approval per-operation. |
+| **No co-author attribution** | Never add "Co-Authored-By: Claude" or any AI attribution to commits. |
+| **Narrow slices** | One concern per slice: no combining backend + frontend + migrations. Implement only after diagnosis. |
+| **PROGRESS.md required** | Update PROGRESS.md at the end of every session. Run `/update-project-context` before starting new work. |
+| **Worktree caution** | If working in a git worktree (split path), do not merge back to main without confirming which worktree is active. |
+| **Plan before code** | Use `/plan` for any non-trivial feature or audit. Get approval before editing. |
+| **Investigation first** | For bugs: reproduce first, identify root cause, then fix. Use `/investigate` or delegate to `debugger` agent. |
+
+---
+
 ## Architecture rules
 
 - **Persona work at ingestion, never at query time.** Live path retrieves already-persona-conditioned

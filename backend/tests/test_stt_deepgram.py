@@ -113,3 +113,96 @@ class TestDeepgramHTTP:
                 assert result is None
 
         asyncio.run(go())
+
+
+class TestGroqHTTP:
+
+    def _mock_groq_http_ctx(self, status: int, text: str) -> MagicMock:
+        resp = MagicMock()
+        resp.status_code = status
+        resp.text = text
+        if status >= 400:
+            resp.raise_for_status.side_effect = httpx.HTTPStatusError(
+                f"HTTP {status}", request=MagicMock(), response=resp
+            )
+        else:
+            resp.raise_for_status.return_value = None
+
+        client_inst = AsyncMock()
+        client_inst.post = AsyncMock(return_value=resp)
+
+        ctx = MagicMock()
+        ctx.__aenter__ = AsyncMock(return_value=client_inst)
+        ctx.__aexit__ = AsyncMock(return_value=None)
+        return ctx
+
+    def test_groq_200_returns_transcript(self):
+        async def go():
+            ctx = self._mock_groq_http_ctx(200, "hello world")
+            with (
+                patch("services.stt.settings", _mock_settings("groq")),
+                patch("services.stt.httpx.AsyncClient", return_value=ctx),
+            ):
+                result = await stt._transcribe_groq(b"\x00" * 100)
+                assert result == "hello world"
+
+        asyncio.run(go())
+
+    def test_groq_transient_401_retries_and_succeeds(self):
+        """Single transient 401 followed by 200 should return the transcript."""
+        async def go():
+            resp_401 = MagicMock()
+            resp_401.status_code = 401
+            resp_401.text = '{"error":{"message":"Invalid API Key"}}'
+            resp_401.raise_for_status.side_effect = httpx.HTTPStatusError(
+                "HTTP 401", request=MagicMock(), response=resp_401
+            )
+            resp_200 = MagicMock()
+            resp_200.status_code = 200
+            resp_200.text = "hello"
+            resp_200.raise_for_status.return_value = None
+
+            client_inst = AsyncMock()
+            client_inst.post = AsyncMock(side_effect=[resp_401, resp_200])
+
+            ctx = MagicMock()
+            ctx.__aenter__ = AsyncMock(return_value=client_inst)
+            ctx.__aexit__ = AsyncMock(return_value=None)
+
+            with (
+                patch("services.stt.settings", _mock_settings("groq")),
+                patch("services.stt.httpx.AsyncClient", return_value=ctx),
+                patch("services.stt.asyncio.sleep", AsyncMock()),
+            ):
+                result = await stt._transcribe_groq(b"\x00" * 100)
+                assert result == "hello"
+                assert client_inst.post.call_count == 2
+
+        asyncio.run(go())
+
+    def test_groq_persistent_401_returns_none_after_three_attempts(self):
+        async def go():
+            resp = MagicMock()
+            resp.status_code = 401
+            resp.text = '{"error":{"message":"Invalid API Key"}}'
+            resp.raise_for_status.side_effect = httpx.HTTPStatusError(
+                "HTTP 401", request=MagicMock(), response=resp
+            )
+
+            client_inst = AsyncMock()
+            client_inst.post = AsyncMock(return_value=resp)
+
+            ctx = MagicMock()
+            ctx.__aenter__ = AsyncMock(return_value=client_inst)
+            ctx.__aexit__ = AsyncMock(return_value=None)
+
+            with (
+                patch("services.stt.settings", _mock_settings("groq")),
+                patch("services.stt.httpx.AsyncClient", return_value=ctx),
+                patch("services.stt.asyncio.sleep", AsyncMock()),
+            ):
+                result = await stt._transcribe_groq(b"\x00" * 100)
+                assert result is None
+                assert client_inst.post.call_count == 3
+
+        asyncio.run(go())

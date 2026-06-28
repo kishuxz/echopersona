@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from config import settings
 from models.entitlements import StripeEntitlement
 
 if TYPE_CHECKING:
@@ -100,6 +101,8 @@ def can_use_chat(entitlement: StripeEntitlement | None) -> bool:
 
 def can_use_voice(entitlement: StripeEntitlement | None) -> bool:
     """Voice replies require Creator or Legacy on an active/trialing subscription."""
+    if settings.voice_always_on:
+        return True
     if entitlement is None:
         return False
     return entitlement.plan_tier in ("creator", "legacy") and entitlement.status in _PAID_STATUSES

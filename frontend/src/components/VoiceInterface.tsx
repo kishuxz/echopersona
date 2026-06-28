@@ -115,9 +115,9 @@ export function VoiceInterface({
 
   async function playSentence() {
     if (sentenceChunksRef.current.length === 0) return;
+    const ctx = playbackCtxRef.current;
     // AudioContext must have been created in handleMicMouseDown (user gesture).
     // If it's missing here, we're too late for browser autoplay policy.
-    const ctx = playbackCtxRef.current;
     if (!ctx) { console.warn("[AUDIO] no AudioContext — was mic button pressed?"); return; }
     if (ctx.state === "suspended") await ctx.resume();
 
@@ -135,8 +135,9 @@ export function VoiceInterface({
       const startAt = Math.max(nextPlayAtRef.current, ctx.currentTime);
       source.start(startAt);
       nextPlayAtRef.current = startAt + audioBuffer.duration;
-    } catch (e) {
-      console.error("[AUDIO] decodeAudioData failed:", e);
+    } catch (e: unknown) {
+      const err = e as Error;
+      console.error("[AUDIO] decodeAudioData failed:", err?.name, err?.message ?? String(e));
       setWsError("Audio playback failed — try refreshing the page.");
     }
   }

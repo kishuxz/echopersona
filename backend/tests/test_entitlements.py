@@ -15,8 +15,10 @@ All DB calls are mocked — no Supabase, no network.
 """
 import asyncio
 from datetime import datetime, timezone
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
+import pytest
+import config as _config_module
 from models.entitlements import StripeEntitlement
 from services.entitlements import (
     can_use_chat,
@@ -74,6 +76,12 @@ def _make_db(execute_returns: list) -> MagicMock:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class TestAccessPredicates:
+
+    @pytest.fixture(autouse=True)
+    def _disable_voice_always_on(self):
+        """Ensure VOICE_ALWAYS_ON bypass is off so predicates test normal paywall logic."""
+        with patch.object(_config_module.settings, "voice_always_on", False):
+            yield
 
     # can_use_chat
 
@@ -305,3 +313,27 @@ class TestGetEntitlementByCustomerOrSubscription:
         )
         assert result is not None
         assert result.plan_tier == "creator"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 5. VOICE_ALWAYS_ON bypass
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestVoiceAlwaysOn:
+
+    def test_voice_always_on_false_none_entitlement_returns_false(self):
+        with patch.object(_config_module.settings, "voice_always_on", False):
+            assert can_use_voice(None) is False
+
+    def test_voice_always_on_true_none_entitlement_returns_true(self):
+        with patch.object(_config_module.settings, "voice_always_on", True):
+            assert can_use_voice(None) is True
+
+    def test_voice_always_on_true_paid_entitlement_still_returns_true(self):
+        with patch.object(_config_module.settings, "voice_always_on", True):
+            assert can_use_voice(StripeEntitlement(**_row("creator", "active"))) is True
+
+    def test_voice_always_on_false_paid_entitlement_respects_tier(self):
+        with patch.object(_config_module.settings, "voice_always_on", False):
+            assert can_use_voice(StripeEntitlement(**_row("creator", "active"))) is True
+            assert can_use_voice(StripeEntitlement(**_row("free", "active"))) is False
