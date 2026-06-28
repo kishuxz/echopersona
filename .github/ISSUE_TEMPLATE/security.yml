@@ -1,0 +1,59 @@
+name: Security
+description: Auth, JWT, RLS, secret handling, or OWASP-shaped concern.
+title: "security: "
+labels: ["security"]
+assignees: ["kishuxz"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Do not paste secrets, JWTs, full WebSocket URLs, or session tokens** anywhere in this issue.
+        If the issue itself involves a sensitive disclosure, consider opening a GitHub Security Advisory instead.
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: One sentence — redacted.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: ["auth / JWT", "RLS / Supabase", "secrets handling", "Stripe webhook", "logging / redaction", "CORS / WS", "supply chain", "other"]
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options: ["low", "medium", "high", "critical"]
+    validations:
+      required: true
+  - type: dropdown
+    id: data_classification
+    attributes:
+      label: Data classification
+      description: What kind of data is at risk?
+      options: ["none", "non-PII operational", "PII", "family-member memory (regulated)", "billing", "credentials / secrets"]
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction (redacted)
+      description: Steps to reproduce with all secrets / tokens / PII removed.
+    validations:
+      required: true
+  - type: textarea
+    id: mitigation_proposal
+    attributes:
+      label: Mitigation proposal
+      description: Smallest change that closes the gap.
+    validations:
+      required: true
+  - type: textarea
+    id: coordinated_disclosure_notes
+    attributes:
+      label: Coordinated disclosure notes (optional)
+      description: If this is reported by a third party, capture the channel and timing here.

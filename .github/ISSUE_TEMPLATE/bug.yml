@@ -1,0 +1,78 @@
+name: Bug
+description: A regression or broken behavior in EchoPersona.
+title: "bug: "
+labels: ["bug"]
+assignees: ["kishuxz"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Do not paste secrets, JWTs, or full WebSocket URLs (with `?token=…`).** Redact first.
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: One sentence — what is broken.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: When did this start, which persona, last known good commit, environment (local / VPC).
+    validations:
+      required: true
+  - type: textarea
+    id: steps_to_reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Exact steps. A `/browser-test` scenario row is ideal.
+      placeholder: |
+        1. Open APJ persona
+        2. Click Start Session
+        3. Say "Hello"
+        4. …
+    validations:
+      required: true
+  - type: textarea
+    id: expected_vs_actual
+    attributes:
+      label: Expected vs actual
+      placeholder: |
+        Expected: audible reply in ~600ms warm
+        Actual: text reply appears, no audio
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance criteria
+      description: Testable bullets. Each should be confirmable in a browser or pytest run.
+    validations:
+      required: true
+  - type: textarea
+    id: test_plan
+    attributes:
+      label: Test plan
+      description: Exact pytest path or `/browser-test` scenario rows.
+    validations:
+      required: true
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Risk
+      options: ["low", "medium", "high"]
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: ["voice", "video", "rag", "ingestion", "billing", "auth", "frontend", "infra", "other"]
+    validations:
+      required: true
+  - type: input
+    id: regression_of
+    attributes:
+      label: Regression of (optional)
+      description: Commit SHA or PR # that introduced this, if known.

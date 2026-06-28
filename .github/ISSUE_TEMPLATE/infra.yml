@@ -1,0 +1,53 @@
+name: Infra
+description: Docker, nginx, Redis, Supabase, runbook, or env-template work.
+title: "infra: "
+labels: ["infra"]
+assignees: ["kishuxz"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Infra changes that touch the VPC or production data require **explicit human approval per operation**.
+        Never paste `.env` values or secrets — only key names.
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: One sentence.
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      options: ["local", "VPC (production)", "Supabase", "GitHub Actions / CI"]
+    validations:
+      required: true
+  - type: textarea
+    id: change_required
+    attributes:
+      label: Change required
+      description: What gets edited (file paths) and what command sequence executes it.
+    validations:
+      required: true
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Risk
+      options: ["low", "medium", "high"]
+    validations:
+      required: true
+  - type: textarea
+    id: approval_path
+    attributes:
+      label: Approval path
+      description: Who/how does this get approved? Default for VPC changes is "Kishore runs manually".
+    validations:
+      required: true
+  - type: textarea
+    id: rollback
+    attributes:
+      label: Rollback
+      description: Exact commands to undo this change.
+    validations:
+      required: true
