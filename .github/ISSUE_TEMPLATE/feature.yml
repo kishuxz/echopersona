@@ -1,0 +1,83 @@
+name: Feature
+description: A new capability or user-visible improvement.
+title: "feat: "
+labels: ["feature"]
+assignees: ["kishuxz"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Keep slices narrow — one feature, one issue. Split if scope spans ≥2 lanes.
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: One sentence — what changes for the user.
+    validations:
+      required: true
+  - type: textarea
+    id: user_value
+    attributes:
+      label: User value
+      description: Why does a grieving family member benefit? Be specific.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: In-scope / out-of-scope bullets. Out-of-scope matters as much as in-scope.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance criteria
+      description: Testable bullets.
+    validations:
+      required: true
+  - type: textarea
+    id: test_plan
+    attributes:
+      label: Test plan
+      description: Pytest paths + `/browser-test` scenarios.
+    validations:
+      required: true
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Risk
+      options: ["low", "medium", "high"]
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: ["voice", "video", "rag", "ingestion", "billing", "auth", "frontend", "infra", "other"]
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: Other issues, migrations, API keys, env vars. List "none" if none.
+  - type: dropdown
+    id: agent_owner
+    attributes:
+      label: Implementing agent
+      options:
+        - frontend-react-engineer
+        - media-pipeline-engineer
+        - rag-persona-engineer
+        - supabase-architect
+        - stripe-entitlements-engineer
+        - product-architect
+        - cto
+        - debugger
+        - claude
+  - type: input
+    id: recommended_skill
+    attributes:
+      label: Recommended skill before code
+      description: e.g. /plan-feature, /investigate, /persona-fidelity-review

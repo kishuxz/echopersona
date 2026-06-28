@@ -1,0 +1,59 @@
+name: Quality
+description: Refactor, tech debt, or test coverage with no behavior change.
+title: "chore: "
+labels: ["quality"]
+assignees: ["kishuxz"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Quality issues are **behavior-preserving**. If behavior changes, open a `feature` or `bug` instead.
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: One sentence — what's being cleaned up.
+    validations:
+      required: true
+  - type: textarea
+    id: current_pain
+    attributes:
+      label: Current pain
+      description: Why does this hurt today? Onboarding friction, repeated bugs, latency, etc.
+    validations:
+      required: true
+  - type: textarea
+    id: proposed_change
+    attributes:
+      label: Proposed change
+      description: What gets renamed / extracted / deleted / consolidated.
+    validations:
+      required: true
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Risk
+      options: ["low", "medium", "high"]
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: ["voice", "video", "rag", "ingestion", "billing", "auth", "frontend", "infra", "docs", "tests", "other"]
+    validations:
+      required: true
+  - type: dropdown
+    id: is_no_op
+    attributes:
+      label: Is this behavior-preserving?
+      options: ["yes — pure refactor / cleanup", "no — opens a different issue"]
+    validations:
+      required: true
+  - type: textarea
+    id: test_plan
+    attributes:
+      label: Test plan
+      description: Existing tests still green + any added contract tests proving no behavior change.
+    validations:
+      required: true

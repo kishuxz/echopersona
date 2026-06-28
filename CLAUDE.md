@@ -161,3 +161,78 @@ docker compose up --build
 
 Query the CodeGraph MCP server to locate definitions, find callers, and trace dependency edges
 BEFORE editing. Use `codegraph_explore` for most questions. Do not blind-grep.
+
+---
+
+## Source of truth — worktree rules
+
+- `/Users/kishorekumar/echopersona` is the **live local app worktree** on `main`. Run `uvicorn`,
+  `npm run dev`, and `docker compose` from here. Treat it as production-of-local — do not edit it
+  casually.
+- `/Users/kishorekumar/conductor/workspaces/echopersona/<city>` are **Conductor planning / feature
+  worktrees**. Edit `.claude/`, `.github/`, docs, and feature slices here. Open PRs from these
+  branches into `main`. After merge, `git pull` inside the live worktree so it picks up the change.
+- `/Users/kishorekumar/kstack` and `/Users/kishorekumar/conductor/repos/gstack-kishore` are
+  **reference-only**. Read patterns, never copy wholesale, never vendor files.
+- The **hanoi worktree no longer exists**. Any doc/code reference to it is stale — flag for removal.
+- Before any edit, confirm `pwd` matches the intended worktree. Mismatched-worktree edits are the
+  single biggest source of "but I fixed that already" loops.
+
+---
+
+## Token / Ponytail policy
+
+- If Ponytail is installed locally, use it per its documented invocation (`/ponytail-context` runs
+  the detection). Never invent flags.
+- If Ponytail is not installed, enforce manual token hygiene:
+  - Use `rg` before `cat`/`Read` for any file larger than ~400 lines.
+  - Read narrow ranges (`Read offset/limit`, `sed -n 'A,Bp'` capped to ~200 lines).
+  - Summarise tool outputs over ~50 lines before quoting them back.
+  - Never paste full logs, full WebSocket URLs, or `.env` contents into chat.
+  - Use `PROGRESS.md` as durable cross-session memory. Write a checkpoint there when context starts
+    to feel noisy, then continue.
+  - When handing off between agents, write a one-paragraph handoff first; don't dump the prior
+    chat into the subagent prompt.
+
+---
+
+## Secrets policy
+
+- Never print API keys, JWTs, Supabase service-role keys, Stripe webhook secrets, or full
+  WebSocket URLs that contain tokens.
+- Never `cat`/`Read` `.env` files. Report key *presence* only (e.g. via
+  `awk -F= '/^[A-Z_]+=/ {print $1}' backend/.env`).
+- Logs pasted into chat must redact `?token=…`, `Authorization:` headers, and any host string that
+  contains a session token. Keep only `host:port` + path.
+- The same rule applies to GitHub issue/PR bodies, screenshots, and `.context/` artifacts.
+
+---
+
+## Command routing
+
+| Trigger | Skill | When |
+|---|---|---|
+| Session start | `/start-session` | First command after `cd` into a worktree. |
+| Before voice/persona/Tavus work | `/anti-loop-check` | Catches the 8 known regression triggers. |
+| New feature / architecture | `/plan-feature` | Use plan mode; require approval before edits. |
+| Bug | `/investigate` | Reproduce first; do not "fix forward" without root cause. |
+| Crashed / inherited session | `/interrupted-session` | Classify git state before continuing. |
+| User-visible change | `/browser-test` | Walk the APJ voice loop end-to-end. |
+| Before commit/PR | `/pr-readiness` | 12-row GO/NO-GO check. |
+| Fuzzy work → ticket | `/github-issue-triage` | One concern per issue. |
+| Context bloat | `/ponytail-context` | Compact, summarise, checkpoint. |
+| Pre-deploy | `/predeploy-check` or `/vpc-deploy-check` | Read-only review only. |
+
+**Conductor `/batch` is for read-only review lanes only. Max one implementation lane at a time,
+after diagnosis.** Unsafe lanes (migrations, `routers/ws.py`, `middleware/auth.py`,
+`worker/tasks/*`, `services/rag.py`, RLS, Stripe webhooks) are serial only — never parallel.
+
+---
+
+## Current project priority
+
+Rotate this section as priorities shift. Every agent reads it.
+
+- **P0** — Lock local voice/persona baseline; run APJ persona fidelity live test; fix Tavus/video path.
+- **P1** — Anti-loop guard live; WebSocket / JWT log redaction; GitHub issue/PR workflow in use.
+- **P2 (later)** — Relationship-aware listener/persona quality; production hardening on the VPC.

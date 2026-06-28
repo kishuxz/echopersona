@@ -1,7 +1,49 @@
 # EchoPersona — Build Progress
 
 ## Active feature
-Local audible voice loop baseline locked — next priority: Tavus/video integration
+Loop-engineering OS layer in place (gstack/kstack-style); next product priority: APJ persona fidelity live test → Tavus/video path
+
+## 2026-06-28 — Loop-engineering OS upgrade (gstack/kstack-style)
+
+Status: scaffolding ready in `plan-loop-engineering-os` branch (seattle worktree). Implementation slice; no backend/frontend/migration code touched.
+
+### Added
+- Skills (`.claude/skills/<name>/SKILL.md`):
+  - `start-session` — safe session opener (worktree, branch, dirty state, services, shell GROQ override)
+  - `anti-loop-check` — 11-row preflight covering every known regression trigger
+  - `pr-readiness` — 12-row GO/NO-GO before commit/PR; refuses AI co-author attribution
+  - `browser-test` — manual-browser script for APJ voice + Tavus video loop, redacts tokens
+  - `github-issue-triage` — fuzzy chat → clean issue; one concern per ticket
+  - `ponytail-context` — detects Ponytail; enforces manual token policy when absent
+- Agents (`.claude/agents/<name>.md`):
+  - `ceo-office-hours` — product priority advisor, read-only
+  - `cto` — architecture memos with allowed-files list, read-only
+  - `browser-qa` — runs `/browser-test` and routes failures
+  - `test-engineer` — test plan + mocks at service boundary
+  - `release-manager` — GO/NO-GO + manual deploy steps; never SSH/VPC
+  - `devex-reviewer` — recommends edits to runbook, anti-loop-check, `.env.example`
+- GitHub workflow:
+  - `.github/ISSUE_TEMPLATE/{bug,feature,quality,infra,security}.yml`
+  - `.github/pull_request_template.md`
+- CLAUDE.md sections appended: Source of truth (worktree rules), Token/Ponytail policy, Secrets policy, Command routing, Current project priority
+
+### Worktree rule (now binding)
+- Live app worktree: `/Users/kishorekumar/echopersona` on `main` — run `uvicorn` / `vite` / Docker here
+- Planning/feature worktrees: `/Users/kishorekumar/conductor/workspaces/echopersona/<city>` — edit here, PR to `main`, then `git pull` in live worktree
+- hanoi worktree no longer exists — treat any doc reference to it as stale
+- `kstack` and `gstack-kishore`: reference-only
+
+### Ponytail / token policy (in effect)
+- Ponytail not installed today. `/ponytail-context` enforces manual hygiene (rg-before-Read, narrow ranges, summarised tool output, no env/log/token dumps, PROGRESS.md as durable memory). Auto-switches when Ponytail is installed.
+
+### Anti-loop checklist (now in /anti-loop-check)
+worktree → Redis Docker → Python imports (groq, elevenlabs, cartesia, sentence_transformers) → shell GROQ override → backend/.env key presence → ElevenLabs voice id not placeholder → VOICE_ALWAYS_ON → backend start command shape → frontend localhost target → no tokenized WS URL in staged diff → APJ enrichment reminder.
+
+### Open item — live worktree diff (Slice 0)
+`/Users/kishorekumar/echopersona` has 8 uncommitted product files (layered persona prompt with emotional-register detection + per-persona cache namespacing + Stage 4 secondary style-card). Plan recommends shipping this as its own branch `feat/persona-prompt-emotional-register` via PR before pulling the merged OS layer over. Not part of this slice.
+
+### Next product milestone
+APJ persona fidelity live test (P0) → Tavus/video path fix (P0).
 
 ## 2026-06-27 — Local audible voice loop baseline locked
 
