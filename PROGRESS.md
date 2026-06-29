@@ -1,7 +1,27 @@
 # EchoPersona — Build Progress
 
 ## Active feature
-Slice 7 (Three Chat Modes) complete — next: Slice 8 (Cloned Voice Only gate)
+Slice 8 (Cloned Voice Only) complete — next: Slice 9 (Tavus Video Mode)
+
+## 2026-06-29 — Slice 8: Cloned Voice Only Gate ✅
+
+Branch: `slice-8-cloned-voice-only`
+
+### What changed
+- **`backend/services/entitlements.py`** — `can_use_voice`: moved `voice_id` falsy check BEFORE `voice_always_on` early return. The no-stock-voice rule is a product-integrity invariant, not a billing rule — `voice_always_on` (dev billing bypass) must not override it.
+- **`backend/services/tts.py`** — `tts_audio_chunks`: raises `ValueError("voice_id is required — stock voice fallback is disabled")` at top of function before any I/O or mock path. Removed `voice_id or settings.elevenlabs_voice_id` fallback.
+- **`backend/services/tts_cartesia.py`** — `tts_audio_chunks_cartesia`: same guard at top. Removed `_DEFAULT_VOICE` constant and `voice_id or settings.cartesia_voice_id or _DEFAULT_VOICE` fallback. `vid = voice_id` (no fallback).
+- **`backend/tests/test_cloned_voice_gate.py`** (new) — 14 tests: `TestClonedVoiceGate` (can_use_voice gate with/without voice_id across all plan tiers and `voice_always_on` flag) + `TestTTSGuard` (ElevenLabs and Cartesia raise ValueError on null/empty voice_id)
+
+### Existing gate (already in place from Slice 7, no change)
+- `ws.py:585-594` — connection-time negotiation already correctly downgrades to text + `"voice_not_configured"` reason when `persona.voice_id` is null. Slice 8 hardens the downstream paths as defense-in-depth.
+
+### Quality gates
+- pytest: 494 passed, 0 failures; /media-latency-review: PASS; /anti-loop-check: GO
+
+### Do not forget
+- Slice 9: Tavus Video Mode — `media-pipeline-engineer`; `tavus_replica_id` must be set per persona before video mode activates
+- `TAVUS_API_KEY` required in production `.env`
 
 ## 2026-06-28 — Slice 7: Three Chat Modes ✅
 
