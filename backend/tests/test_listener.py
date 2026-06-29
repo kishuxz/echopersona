@@ -201,7 +201,8 @@ class TestBeneficiaryAccess:
 
     def test_immediate_beneficiary_granted(self):
         # persona found → not owner → consent ok → succession has immediate beneficiary → granted
-        db = _make_db([_PERSONA_ROW, _CONSENT_ROW_FULL, _SUCCESSION_WITH_IMMEDIATE])
+        # 4th execute: persona_relationships query (Slice 4) returns None (no row registered)
+        db = _make_db([_PERSONA_ROW, _CONSENT_ROW_FULL, _SUCCESSION_WITH_IMMEDIATE, None])
         result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _BENEFICIARY_ID))
         assert isinstance(result, ListenerContext)
         assert result.is_owner is False
@@ -210,10 +211,12 @@ class TestBeneficiaryAccess:
         assert result.address_term == "kiddo"
         assert result.scope == "full"
         assert result.allowed_modalities.text_twin is True
+        assert result.entity_canonical is None  # no row in persona_relationships
 
     def test_immediate_beneficiary_modalities_from_consent(self):
         # beneficiary inherits consent modalities, not their own
-        db = _make_db([_PERSONA_ROW, _CONSENT_ROW_NO_VOICE, _SUCCESSION_WITH_IMMEDIATE])
+        # 4th execute: persona_relationships query returns None
+        db = _make_db([_PERSONA_ROW, _CONSENT_ROW_NO_VOICE, _SUCCESSION_WITH_IMMEDIATE, None])
         result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _BENEFICIARY_ID))
         assert result is not None
         assert result.allowed_modalities.voice_clone is False
@@ -251,7 +254,8 @@ class TestBeneficiaryAccess:
 
     def test_enriched_beneficiary_populates_new_fields(self):
         # JSONB row with closeness_level + greeting_style → fields propagate to ListenerContext
-        db = _make_db([_PERSONA_ROW, _CONSENT_ROW_FULL, _SUCCESSION_WITH_ENRICHED])
+        # 4th execute: persona_relationships query returns None
+        db = _make_db([_PERSONA_ROW, _CONSENT_ROW_FULL, _SUCCESSION_WITH_ENRICHED, None])
         result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _BENEFICIARY_ID))
         assert result is not None
         assert result.closeness_level == 4
@@ -259,11 +263,20 @@ class TestBeneficiaryAccess:
 
     def test_old_beneficiary_row_backward_compat(self):
         # Legacy JSONB row without new optional keys → None, no KeyError
-        db = _make_db([_PERSONA_ROW, _CONSENT_ROW_FULL, _SUCCESSION_WITH_IMMEDIATE])
+        # 4th execute: persona_relationships query returns None
+        db = _make_db([_PERSONA_ROW, _CONSENT_ROW_FULL, _SUCCESSION_WITH_IMMEDIATE, None])
         result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _BENEFICIARY_ID))
         assert result is not None
         assert result.closeness_level is None
         assert result.greeting_style is None
+
+    def test_entity_canonical_populated_from_relationship_row(self):
+        # persona_relationships row exists → entity_canonical set on ListenerContext (§9.3)
+        rel_row = {"entity_canonical": "Grandma Rose", "relationship": "granddaughter", "address_term": ""}
+        db = _make_db([_PERSONA_ROW, _CONSENT_ROW_FULL, _SUCCESSION_WITH_IMMEDIATE, rel_row])
+        result = asyncio.run(resolve_listener_context(db, _PERSONA_ID, _BENEFICIARY_ID))
+        assert result is not None
+        assert result.entity_canonical == "Grandma Rose"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

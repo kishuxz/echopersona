@@ -167,6 +167,32 @@ async def update_unit_fidelity(
     }).eq("unit_id", unit_id).execute()
 
 
+async def update_unit_resolved_entities(unit_id: str, resolved_entity_ids: list[str]) -> None:
+    """Write Stage 3 entity back-links onto the unit row (migration 011, §9.3)."""
+    db = get_db()
+    db.table("memory_units").update(
+        {"resolved_entity_ids": resolved_entity_ids}
+    ).eq("unit_id", unit_id).execute()
+
+
+async def get_persona_relationship(persona_id: str, listener_user_id: str) -> dict | None:
+    """Return the persona_relationships row for this listener, or None.
+
+    Used at WS connect time to resolve the listener's entity canonical for
+    §9.3 listener-aware retrieval biasing.
+    """
+    db = get_db()
+    result = (
+        db.table("persona_relationships")
+        .select("entity_canonical, relationship, address_term")
+        .eq("persona_id", persona_id)
+        .eq("listener_user_id", listener_user_id)
+        .maybe_single()
+        .execute()
+    )
+    return result.data if result is not None else None
+
+
 async def get_memory_units_for_source(source_id: str) -> list[dict]:
     db = get_db()
     result = (
