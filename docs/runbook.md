@@ -20,7 +20,8 @@ docker compose up --build
 cd backend
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn main:app --port 8000 --reload
+# --host :: = IPv6 dual-stack; required because /etc/hosts maps localhost→::1 only on this machine
+uvicorn main:app --host :: --port 8000 --reload
 
 # Without Docker — frontend
 cd frontend
