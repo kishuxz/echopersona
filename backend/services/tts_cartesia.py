@@ -6,11 +6,6 @@ from config import settings
 
 logger = logging.getLogger(__name__)
 
-# Default Cartesia voice — "Barbershop Man" (neutral, warm).
-# Override with CARTESIA_VOICE_ID in .env.
-_DEFAULT_VOICE = "694f9369-aefb-451e-9049-2b6a0f0c2c4a"
-
-
 async def tts_audio_chunks_cartesia(
     text: str,
     voice_id: str | None = None,
@@ -23,8 +18,10 @@ async def tts_audio_chunks_cartesia(
     from cartesia import AsyncCartesia
     from cartesia.types.sse_events import ChunkEvent
 
+    if not voice_id:
+        raise ValueError("voice_id is required — stock voice fallback is disabled")
     client = AsyncCartesia(api_key=settings.cartesia_api_key)
-    vid = voice_id or settings.cartesia_voice_id or _DEFAULT_VOICE
+    vid = voice_id
 
     stream = await client.tts.sse(
         model_id="sonic-2",

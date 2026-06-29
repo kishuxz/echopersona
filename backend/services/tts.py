@@ -101,6 +101,8 @@ async def _mock_audio_chunks(text: str) -> AsyncGenerator[bytes, None]:
 
 
 async def tts_audio_chunks(text: str, voice_id: str | None = None) -> AsyncGenerator[bytes, None]:
+    if not voice_id:
+        raise ValueError("voice_id is required — stock voice fallback is disabled")
     if settings.mock_mode:
         async for chunk in _mock_audio_chunks(text):
             yield chunk
@@ -113,7 +115,7 @@ async def tts_audio_chunks(text: str, voice_id: str | None = None) -> AsyncGener
     _total_bytes = 0
     try:
         async for chunk in client.text_to_speech.convert_as_stream(
-            voice_id=voice_id or settings.elevenlabs_voice_id,
+            voice_id=voice_id,
             text=text,
             model_id="eleven_turbo_v2_5",
             output_format="mp3_22050_32",

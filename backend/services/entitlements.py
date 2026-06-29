@@ -138,11 +138,12 @@ def can_use_voice(
     Pass voice_id=None to enforce this (WS and persona-access paths).
     Omit voice_id entirely for plan-capability checks (billing status).
     """
-    if settings.voice_always_on:
-        return True
-    # Enforce no-stock-voice rule only when voice_id is explicitly supplied by caller.
+    # Product-integrity: no stock voice fallback. Runs before all billing bypasses including
+    # voice_always_on — a missing clone is not a billing question, it's a product invariant.
     if voice_id is not _VOICE_ID_NOT_SET and not voice_id:
         return False
+    if settings.voice_always_on:
+        return True
     if settings.enforce_answer_quotas and answer_count < VOICE_QUESTION_THRESHOLD:
         return False
     if entitlement is None:
