@@ -74,6 +74,9 @@ class CreationSession(BaseModel):
     # Stage 0 source IDs pending batch ingestion at session end
     pending_source_ids: list[str] = Field(default_factory=list)
 
+    # Progressive Q&A — answers counted per category for UI progress display
+    answers_per_category: dict[str, int] = Field(default_factory=dict)
+
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -86,6 +89,7 @@ class NextStep(BaseModel):
     question_id: str | None = None
     probe_id: str | None = None
     question_prompt: str | None = None  # full question text when action=advance
+    question_category: str | None = None  # category of the current/next question
     session: CreationSession
 
 
@@ -176,6 +180,7 @@ def apply_action(
             prompt=probe.prompt if probe else None,
             question_id=session.current_question_id,
             probe_id=probe_id,
+            question_category=question.category,
             session=session,
         )
 
@@ -188,12 +193,15 @@ def apply_action(
             action="steer",
             prompt=steer_text,
             question_id=session.current_question_id,
+            question_category=question.category,
             session=session,
         )
 
-    # advance (or done)
+    # advance (or done) — mark current question complete and increment category counter
     if session.current_question_id:
         session.completed_question_ids.append(session.current_question_id)
+        cat = question.category
+        session.answers_per_category[cat] = session.answers_per_category.get(cat, 0) + 1
     session.current_probe_id = None
     session.followups_used_this_question = 0
 
@@ -207,6 +215,7 @@ def apply_action(
         action="advance",
         question_id=next_q.id,
         question_prompt=next_q.prompt,
+        question_category=next_q.category,
         session=session,
     )
 
@@ -544,6 +553,7 @@ async def start_session(persona_id: str, user_id: str) -> tuple[CreationSession,
             action="advance",
             question_id=next_q.id,
             question_prompt=next_q.prompt,
+            question_category=next_q.category,
             session=session,
         )
     await save_session(session)
