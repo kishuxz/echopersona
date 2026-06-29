@@ -18,9 +18,9 @@ _VOICE_ID_NOT_SET: object = object()
 
 # Q&A answer thresholds that gate feature access (migration 011).
 # Enforcement is flag-gated by ENFORCE_ANSWER_QUOTAS; existing personas default to 0.
-FREE_QUESTION_LIMIT: int = 30       # text chat owner preview
-VOICE_QUESTION_THRESHOLD: int = 60  # voice clone + voice chat
-VIDEO_QUESTION_THRESHOLD: int = 90  # video chat + rich retrieval
+FREE_QUESTION_LIMIT: int = 10       # text chat owner preview
+VOICE_QUESTION_THRESHOLD: int = 20  # voice clone + voice chat
+VIDEO_QUESTION_THRESHOLD: int = 30  # video chat + rich retrieval
 
 # Family member limits per tier. None = unlimited.
 _FAMILY_LIMITS: dict[str, int | None] = {

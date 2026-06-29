@@ -135,7 +135,7 @@ async def _run_reply_core(
     mode:
       "text"  — no TTS worker created, no audio_chunk events, audio_end still sent
       "voice" — existing TTS worker path (ElevenLabs or Cartesia)
-      "video" — TTS worker path + Tavus video background task after audio_end
+      "video" — no TTS; Tavus video background task fires after audio_end (audio is embedded in the Tavus video)
     """
     persona_id = websocket.query_params.get("persona_id")
     persona = PERSONAS.get(persona_id or "")
@@ -217,8 +217,10 @@ async def _run_reply_core(
     tts_error: list[BaseException] = []
     collected_audio: list[bytes] = []
 
-    # Whether TTS is active for this mode
-    _tts_active = mode in ("voice", "video")
+    # Whether TTS is active for this mode.
+    # In video mode Tavus embeds its own audio; suppress ElevenLabs/Cartesia
+    # so the user does not hear the reply twice.
+    _tts_active = mode == "voice"
 
     async def tts_worker() -> None:
         try:
@@ -400,7 +402,7 @@ async def _run_reply_core(
         from services.tavus import generate_tavus_video
 
         async def _send_tavus():
-            url = await generate_tavus_video(persona.tavus_replica_id, full_reply_text)
+            url = await generate_tavus_video(persona.tavus_replica_id, full_reply_text, session_id=session_id)
             if url:
                 await websocket.send_json({"type": "video_ready", "url": url})
             else:

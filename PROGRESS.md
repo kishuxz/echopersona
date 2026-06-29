@@ -1,7 +1,71 @@
 # EchoPersona — Build Progress
 
 ## Active feature
-Slice 8 (Cloned Voice Only) complete — next: Slice 9 (Tavus Video Mode)
+Slice 9 (Tavus Video Mode) complete. Next: live browser test with a configured tavus_replica_id persona.
+
+## 2026-06-29 — Slice 9: Tavus Video Mode ✅
+
+Branch: `porto`
+
+### What changed
+- **`backend/services/tavus.py`**
+  - Bug 1 fixed: URL field `download_url` → `result.get("stream_url") or result.get("hosted_url", "")` (Tavus v2 API)
+  - Bug 2 fixed: primary failure status `"failed"` (was `"error"`); `"error"` kept as a deprecated defensive fallback with `logger.warning`
+  - Bug 3 fixed: `_POLL_TIMEOUT` 30s → 90s (Tavus typical generation: 20–60s)
+  - Mock mode guard added: `settings.mock_mode` returns `"https://example.com/mock-tavus-video.mp4"` after 2s sleep, no HTTP call
+  - Empty `replica_id` guard: returns `None` immediately (was already handled but moved before `tavus_api_key` check for clarity)
+  - `video_name` added to submit payload for traceability: `f"echo-{session_id[:8]}"` or `"echopersona"`
+  - `session_id: str | None = None` optional param added to `generate_tavus_video`
+- **`backend/routers/ws.py`** (narrow change only)
+  - `_tts_active = mode in ("voice", "video")` → `_tts_active = mode == "voice"`: suppresses ElevenLabs/Cartesia TTS in video mode so user does not hear the reply twice (Tavus video has embedded audio)
+  - `_send_tavus()` closure passes `session_id=session_id` to `generate_tavus_video`
+- **`backend/tests/test_tavus.py`** (new) — 6 tests covering: submit failure, poll→ready (stream_url), poll→failed, timeout, mock mode, empty replica_id
+- **`frontend/src/components/VoiceInterface.tsx`** (narrow change only)
+  - Added `negotiatedModeRef = useRef<ChatMode>(initialMode)` — mirrors `negotiatedMode` state so `onmessage` closure reads the live value
+  - `negotiatedModeRef.current = negotiated` written in `MODE_NEGOTIATED` handler alongside `setNegotiatedMode`
+  - `TRANSCRIPT` handler: `setVideoLoading(true)` now guarded by `negotiatedModeRef.current === "video"` (was firing in all modes)
+  - `AUDIO_END` handler: `setVideoLoading(false)` added as safety reset when mode is not video
+
+### Quality gates
+- pytest: 500 passed, 0 failures (`python -m pytest tests/ -q`)
+- tsc: clean (`npx tsc --noEmit`)
+- No new env vars. No new migrations. No secrets printed.
+
+### Latency impact
+- Stage: Video
+- Before: video generation often returned None (wrong URL field — download_url never present in Tavus v2)
+- After: stream_url / hosted_url correctly extracted; URL validation guard unchanged
+- TTS in video mode: suppressed (was firing concurrently with Tavus — double audio bug)
+- Measurement: observe `video_ready` WS message after reply; confirm no `audio_chunk` events arrive in video mode
+
+### Do not forget
+- `TAVUS_API_KEY` required in production `.env`; `tavus_replica_id` must be set per persona in Supabase before video mode activates
+- Browser test: connect in video mode → send text → confirm no TTS audio plays → confirm `video_ready` message arrives with an https URL
+
+## 2026-06-29 — Browser QA + Threshold Rescale ✅
+
+### Q&A unlock thresholds (canonical — follow these exactly)
+| Threshold | Old | New | Unlocks |
+|---|---|---|---|
+| Text chat | 30 | **10** | Owner text-chat preview |
+| Voice chat | 60 | **20** | Voice clone + voice chat |
+| Video chat | 90 | **30** | Video chat + rich retrieval |
+
+**Why:** Question bank has 41 questions; old thresholds (30/60/90) were physically unreachable for testing and impractical for early users. Bank will grow with meaningful questions over time. For testing, 10/20/30 lets you verify all modes without answering 90 questions.
+
+### Files changed
+- `backend/services/entitlements.py` — `FREE_QUESTION_LIMIT=10`, `VOICE_QUESTION_THRESHOLD=20`, `VIDEO_QUESTION_THRESHOLD=30`
+- `frontend/src/components/CreationWizard.tsx` — `MIN_QUESTIONS_TO_FINISH=10`
+- `frontend/src/components/VoiceInterface.tsx` — "Voice: Default" → "Voice: Not configured" (Slice 8 invariant fix)
+- `backend/tests/test_progressive_qa.py` — bank size assertion updated to `>= 10`
+
+### Browser QA findings (Slices 1–8)
+- Slices 1, 5, 6, 7: PASS
+- Slice 2: PASS (after threshold rescale)
+- Slice 3: backend PASS; voice_card/style_card not surfaced in PersonaDetail UI (cosmetic, tracked in backlog)
+- Slice 4: backend PASS; no family-member management UI (functional gap, tracked in backlog)
+- Slice 8: PASS (after "Voice: Not configured" label fix)
+- STT → TTS → audio path: needs interactive browser test with live mic + ready persona (pending)
 
 ## 2026-06-29 — Slice 8: Cloned Voice Only Gate ✅
 

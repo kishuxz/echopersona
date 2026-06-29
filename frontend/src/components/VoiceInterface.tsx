@@ -94,6 +94,8 @@ export function VoiceInterface({
   const [wsError, setWsError]                 = useState<string | null>(null);
   const [requestedMode, setRequestedMode]   = useState<ChatMode>(initialMode);
   const [negotiatedMode, setNegotiatedMode] = useState<ChatMode>(initialMode);
+  // Ref mirrors negotiatedMode so onmessage closure always reads the live value.
+  const negotiatedModeRef = useRef<ChatMode>(initialMode);
   const [modeDowngradeNotice, setModeDowngradeNotice] = useState<string | null>(null);
   const [textInput, setTextInput]           = useState<string>("");
   const isRecordingRef   = useRef(false);
@@ -214,7 +216,9 @@ export function VoiceInterface({
         firstTokenLoggedRef.current = false;
         firstAudioLoggedRef.current = false;
         setStage("LLM");
-        setVideoLoading(true);
+        if (negotiatedModeRef.current === "video") {
+          setVideoLoading(true);
+        }
         setItems((current) => [...current, { role: "user", text: message.text }]);
         sentenceChunksRef.current = [];
         nextPlayAtRef.current     = 0;
@@ -236,6 +240,7 @@ export function VoiceInterface({
       if (message.type === WS_SERVER_MSG.MODE_NEGOTIATED) {
         const negotiated = message.mode as ChatMode;
         const requested  = message.requested as ChatMode;
+        negotiatedModeRef.current = negotiated;
         setNegotiatedMode(negotiated);
         if (negotiated !== requested) {
           const label = MODE_LABELS[negotiated];
@@ -277,6 +282,10 @@ export function VoiceInterface({
         setIsProcessing(false);
         setIsRecording(false);
         setStage("idle");
+        // Safety reset: if not in video mode the spinner must never be stuck.
+        if (negotiatedModeRef.current !== "video") {
+          setVideoLoading(false);
+        }
       }
 
       if (message.type === WS_SERVER_MSG.ERROR) {
@@ -473,7 +482,7 @@ export function VoiceInterface({
           {/* Capability chips */}
           <div className="flex flex-wrap justify-center gap-2">
             <span className={`rounded-full px-2.5 py-0.5 font-sans text-[10px] ${hasVoice ? 'bg-green/10 text-green' : 'bg-cream text-muted'}`}>
-              {hasVoice ? 'Voice: Cloned' : 'Voice: Default'}
+              {hasVoice ? 'Voice: Cloned' : 'Voice: Not configured'}
             </span>
             <span className={`rounded-full px-2.5 py-0.5 font-sans text-[10px] ${(avatarUrl || idleVideoUrl) ? 'bg-green/10 text-green' : 'bg-cream text-muted'}`}>
               {idleVideoUrl ? 'Avatar: Video' : avatarUrl ? 'Avatar: Photo' : 'Avatar: Letter'}
