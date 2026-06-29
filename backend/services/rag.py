@@ -8,6 +8,7 @@ retrieve() returns list[dict] — always has "text" key, may have:
   stance, themes, entities  (when built from memory_units)
 """
 import logging
+import re
 
 import numpy as np
 
@@ -68,6 +69,7 @@ class PersonaRAG:
                 "stance": u.get("stance", ""),
                 "themes": u.get("themes") or [],
                 "entities": u.get("entities") or {},
+                "affect": u.get("affect") or {},
             })
             texts.append(text)
         self._build_faiss(texts)
@@ -139,6 +141,16 @@ def _truncate(text: str, max_words: int = 80) -> str:
     return " ".join(words[:max_words])
 
 
+def _valence_label(valence: float | None) -> str:
+    if valence is None:
+        return "neutral"
+    if valence > 0.3:
+        return "warm"
+    if valence < -0.3:
+        return "somber"
+    return "neutral"
+
+
 def build_system_prompt(
     persona: Persona | None,
     retrieved_context: list[dict] | list[str],
@@ -159,17 +171,27 @@ def build_system_prompt(
             units.append(item)
 
     # Memory block
-    memory_lines = [_truncate(u["text"]) for u in units] if units else []
+    def _affect_tag(u: dict) -> str:
+        affect = u.get("affect") or {}
+        # Strip newlines and cap length to prevent prompt injection via ingestion LLM output
+        emotion = re.sub(r"[\r\n]+", " ", (affect.get("primary_emotion") or "").strip())[:40]
+        raw_valence = affect.get("valence")
+        valence = float(raw_valence) if raw_valence is not None else None
+        if emotion:
+            return f"[{emotion}, {_valence_label(valence)}] {u['text']}"
+        return u["text"]
+
+    memory_lines = [_affect_tag(u) for u in units] if units else []
     if memory_lines:
         context_block = "\n".join(f"- {m}" for m in memory_lines)
         no_memory_fallback = ""
     else:
         context_block = "No memories available yet."
         no_memory_fallback = (
-            "\n\nFALLBACK: Your memories are still being gathered and will be ready soon. "
-            "Warmly greet the listener, let them know your memories are still coming together, "
-            "and invite them to return shortly. "
-            "Do not invent any facts. Do not use outside knowledge about this name."
+            "\n\nFALLBACK: If no relevant memory is available, say only: "
+            "\"That's not something I can quite place right now. "
+            "Tell me what you remember — sometimes hearing it from you brings it back to me.\" "
+            "Do not add more. Do not fabricate. Do not use outside knowledge about this name."
         )
 
     # Behavior rules from persona + dominant stance from retrieved units
@@ -287,15 +309,23 @@ def build_system_prompt(
         listener_block = "\n" + "\n".join(lines)
 
     prompt = (
-        f"You are {persona.name}. Speak only in first person. 1-2 sentences max.\n"
+        # Layer 1 — Identity (sentence cap removed from here)
+        f"You are {persona.name}. Speak only in first person.\n"
         f"IMPORTANT: Use ONLY the memories below. Ignore all outside knowledge about this name.\n"
         f"{behavior_block}\n"
-        f"\nYOUR MEMORIES:\n{context_block}"
+        # Layer 2 — Memories (affect-tagged; tags are internal context — never repeat them in replies)
+        f"\nYOUR MEMORIES (the bracketed tags are internal context cues — never mention them in your reply):\n{context_block}"
         f"{no_memory_fallback}"
-        f"{entity_block}"
+        # Layer 3 — Listener context (moved from last to third)
+        f"{listener_block}"
+        # Layer 4 — Voice + style
         f"{voice_block}"
         f"{style_block}"
-        f"{listener_block}"
+        # Layer 5 — Entity graph
+        f"{entity_block}"
+        # Layer 6 — Grounding reminder + response rules
+        f"\nGROUNDING REMINDER: Only assert facts from YOUR MEMORIES above. Do not infer or fabricate."
+        f"\nRESPONSE RULES: Reply in 1-3 sentences. No lists. No formatting. No outside knowledge."
     )
     logger.debug("system prompt length: %d chars", len(prompt))
     return prompt

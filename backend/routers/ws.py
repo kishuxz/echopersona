@@ -652,10 +652,12 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str) -> None:
         await websocket.close(code=4002, reason="Subscription required")
         return
 
-    # Readiness gate: block personas that have no stories and haven't finished ingestion
+    # Readiness gate: block only when status not ready AND no FAISS units AND no legacy stories
     if persona_id:
         _p = PERSONAS.get(persona_id)
-        if _p and _p.readiness_status not in ("ready",) and not _p.stories:
+        _rag = RAG_INDICES.get(persona_id)
+        _has_index = bool(_rag and _rag._units)
+        if _p and _p.readiness_status not in ("ready",) and not _has_index and not _p.stories:
             await websocket.close(code=4010, reason="memories_processing")
             return
 
