@@ -13,21 +13,34 @@ Branch: `slice-6-preservation-tier`
   - `posthumous_access_subscriptions`: recurring subscription per (persona, family subscriber); UNIQUE on `(persona_id, subscriber_user_id)`; RLS subscriber-read-only; `updated_at` trigger
   - **Applied via Supabase MCP 2026-06-28** (version `20260629062603`)
 - **`backend/models/preservation.py`** (new) — `PersonaPreservation`, `PosthumousAccessSubscription` Pydantic models
-- **`backend/services/preservation.py`** (new) — DB queries (`get_preservation_for_persona`, `upsert_preservation`, `get_posthumous_subscription`, `upsert_posthumous_subscription`, `get_posthumous_subscription_by_stripe_id`) + access predicates (`can_access_preserved_persona`, `can_access_posthumous`)
-- **`backend/config.py`** — added `STRIPE_PRICE_PRESERVATION_ONETIME` and `STRIPE_PRICE_POSTHUMOUS_MONTHLY` fields
-- **`backend/services/billing.py`** — `create_checkout_session` now accepts `mode` and `extra_metadata` kwargs
-- **`backend/services/stripe_webhooks.py`** — four new handlers (`handle_preservation_checkout`, `handle_preservation_payment_intent`, `handle_posthumous_checkout`, `handle_posthumous_subscription_event`); `process_stripe_event` routes by `session.mode` and `metadata.purchase_type`; existing handlers untouched
-- **`backend/models/entitlements.py`** — `BillingStatusResponse` gains `preservation_locked` and `can_use_posthumous_chat` (default False)
-- **`backend/routers/billing.py`** — three new endpoints: `POST /billing/checkout/preservation` (mode=payment), `POST /billing/checkout/posthumous` (mode=subscription), `GET /billing/preservation/{persona_id}`
-- **`backend/tests/test_preservation.py`** (new) — 37 tests covering models, predicates, service queries, all four webhook handlers, event routing, and all three new endpoints
+- **`backend/services/preservation.py`** (new) — DB queries + access predicates (`can_access_preserved_persona`, `can_access_posthumous`)
+- **`backend/config.py`** — added `STRIPE_PRICE_POSTHUMOUS_MONTHLY`; merged `ENFORCE_ANSWER_QUOTAS` from Slice 5
+- **`backend/services/billing.py`** — `create_checkout_session` uses `mode` + `extra_metadata` params
+- **`backend/services/stripe_webhooks.py`** — four new handlers; `process_stripe_event` routes by `session.mode` and `metadata.purchase_type`
+- **`backend/models/entitlements.py`** — `BillingStatusResponse` gains `can_use_posthumous_chat`; merged `family_member_limit`, `is_preservation_locked`, `PersonaAccessDecision` from Slice 5
+- **`backend/routers/billing.py`** — three new endpoints: `POST /billing/checkout/preservation`, `POST /billing/checkout/posthumous`, `GET /billing/preservation/{persona_id}`
+- **`backend/tests/test_preservation.py`** (new) — 37 tests; 465 total passing
 
-### Test result
-465 passed, 0 failed (2026-06-28)
+## 2026-06-28 — Slice 5: Monetization Tiers ✅
 
-### Stripe ops required (human steps before going live)
-1. Create Stripe one-time price → set `STRIPE_PRICE_PRESERVATION_ONETIME` in `.env`
-2. Create Stripe monthly price → set `STRIPE_PRICE_POSTHUMOUS_MONTHLY` in `.env`
-3. Subscribe Stripe webhook to `payment_intent.succeeded` event (not subscribed yet)
+Branch: `slice-5-continuation` → PR to `main`
+
+### What changed
+- **`backend/migrations/012_monetization_tiers.sql`** (new) — `answer_count` on `personas`; `preservation` plan tier; `stripe_payment_intent_id` on `stripe_entitlements`; `preservation_locks` table; `persona_relationships` table
+- **`backend/config.py`** — `STRIPE_PRICE_PRESERVATION_ONETIME`, `ENFORCE_ANSWER_QUOTAS`
+- **`backend/models/entitlements.py`** — `PlanTier` adds `"preservation"`; new fields; `PersonaAccessDecision`
+- **`backend/services/entitlements.py`** — answer quota thresholds; `can_add_family_member`; `family_member_limit_for_tier`; sentinel pattern for voice_id
+- **`backend/routers/billing.py`** — preservation in `CheckoutRequest`; `GET /billing/persona/{persona_id}/access`
+- **`backend/routers/ws.py`** — billing gate passes `answer_count` + `is_owner` + `voice_id`
+- **Frontend** — `BillingStatus` + `PersonaAccess` types; `startCheckout` + `getPersonaAccess`; preservation badge
+
+### Quality gates
+- pytest: 408 passed, 0 failures; /stripe-webhook-review: PASS; /supabase-rls-review: PASS
+
+### Do not forget
+- `ENFORCE_ANSWER_QUOTAS=true` must NOT be set until answer_count backfill is confirmed
+- `persona_relationships` INSERT policy needed when Slice 10 (invite flow) ships
+
 
 ## 2026-06-28 — Slice 4: Listener Profiles + Entity Back-links + Retrieval Score Threshold ✅
 
@@ -49,17 +62,10 @@ Branch: `doha`
   - `build_index_from_units` stores `resolved_entity_ids` per unit in `_units`
   - `retrieve(query, top_k, listener_entity)` — fetches 3× candidates, applies entity boost, filters by threshold
 - **`backend/routers/ws.py`** — both retrieve call sites pass `listener_entity=listener_ctx.entity_canonical` (None-safe)
-- **`backend/tests/test_listener_profiles.py`** (new) — 19 tests: alias resolution (case-insensitive, multi-unit, dedup), index stores `resolved_entity_ids`, threshold and boost constants, keyword-fallback param acceptance, `ListenerContext.entity_canonical`
-- **`backend/tests/test_listener.py`** — 4 beneficiary tests updated (+1 new) for 4-call mock sequence; `entity_canonical` assertions added
-
-### Verification
-```bash
-cd backend && python -m pytest tests/ -q
-# 428 passed, 5 warnings
-```
+- **`backend/tests/test_listener_profiles.py`** (new) — 19 tests: alias resolution, entity boost, threshold constants
+- **`backend/tests/test_listener.py`** — updated for entity_canonical
 
 ### Pre-existing gaps (tracked, not fixed here)
-- Fidelity gate does not block low-score units from indexing → Slice 5 (Fidelity Gate hardening)
 - No API endpoint to register `persona_relationships` rows yet — table seeded manually for now
 
 ## 2026-06-28 — Slice 2: Progressive Q&A ✅

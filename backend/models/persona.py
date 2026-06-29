@@ -32,3 +32,4 @@ class Persona(PersonaCreate):
     relationship_tone: dict = Field(default_factory=dict)
     created_at: datetime | None = None
     readiness_status: str = "pending"
+    answer_count: int = 0

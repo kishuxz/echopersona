@@ -146,13 +146,17 @@ async def _run_turn_inner(
 
     listener_ctx = SESSION_LISTENER.get(session_id)
     _entitlement = SESSION_ENTITLEMENT.get(session_id)
-    # Persona owner is only gated by billing; consent modality flags restrict
-    # external listeners/beneficiaries, not the owner of the persona.
     _is_owner = listener_ctx is not None and listener_ctx.is_owner
-    _voice_allowed = can_use_voice(_entitlement) and (
+    _turn_answer_count = persona.answer_count if persona else 0
+    _turn_voice_id = persona.voice_id if persona else None
+    _voice_allowed = can_use_voice(
+        _entitlement,
+        answer_count=_turn_answer_count,
+        voice_id=_turn_voice_id,
+    ) and (
         _is_owner or listener_ctx is None or listener_ctx.allowed_modalities.voice_clone
     )
-    _video_allowed = can_use_video(_entitlement) and (
+    _video_allowed = can_use_video(_entitlement, answer_count=_turn_answer_count) and (
         _is_owner or listener_ctx is None or listener_ctx.allowed_modalities.video_avatar
     )
     logger.debug(
@@ -411,10 +415,16 @@ async def _run_text_turn(websocket: WebSocket, session_id: str, user_text: str) 
         listener_ctx = SESSION_LISTENER.get(session_id)
         _entitlement = SESSION_ENTITLEMENT.get(session_id)
         _is_owner = listener_ctx is not None and listener_ctx.is_owner
-        _voice_allowed = can_use_voice(_entitlement) and (
+        _text_answer_count = persona.answer_count if persona else 0
+        _text_voice_id = persona.voice_id if persona else None
+        _voice_allowed = can_use_voice(
+            _entitlement,
+            answer_count=_text_answer_count,
+            voice_id=_text_voice_id,
+        ) and (
             _is_owner or listener_ctx is None or listener_ctx.allowed_modalities.voice_clone
         )
-        _video_allowed = can_use_video(_entitlement) and (
+        _video_allowed = can_use_video(_entitlement, answer_count=_text_answer_count) and (
             _is_owner or listener_ctx is None or listener_ctx.allowed_modalities.video_avatar
         )
 
@@ -653,10 +663,12 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str) -> None:
                 RAG_INDICES[persona_id] = rag
 
     # Billing gate: check persona owner's entitlement (or connecting user's for freeform sessions).
-    # Can_use_chat is always True today; gate is wired for future tier changes.
     _owner_id = PERSONAS[persona_id].user_id if persona_id else user_id
     entitlement = await get_entitlement_for_user(db, _owner_id)
-    if not can_use_chat(entitlement):
+    _persona_for_gate = PERSONAS.get(persona_id) if persona_id else None
+    _gate_answer_count = _persona_for_gate.answer_count if _persona_for_gate else 0
+    _is_owner_gate = listener_ctx is None or listener_ctx.is_owner
+    if not can_use_chat(entitlement, answer_count=_gate_answer_count, is_owner=_is_owner_gate):
         await websocket.close(code=4002, reason="Subscription required")
         return
 
@@ -722,14 +734,15 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str) -> None:
             elif msg_type == "simli_session_request":
                 _l = SESSION_LISTENER.get(session_id)
                 _ent = SESSION_ENTITLEMENT.get(session_id)
-                if (_l is not None and not _l.allowed_modalities.video_avatar) or not can_use_video(_ent):
+                _simli_pid = websocket.query_params.get("persona_id", "")
+                _simli_persona = PERSONAS.get(_simli_pid)
+                _simli_ac = _simli_persona.answer_count if _simli_persona else 0
+                if (_l is not None and not _l.allowed_modalities.video_avatar) or not can_use_video(_ent, answer_count=_simli_ac):
                     await websocket.send_json({"type": "simli_session_error", "message": "Video not permitted"})
                 else:
-                    pid = websocket.query_params.get("persona_id", "")
-                    p = PERSONAS.get(pid)
-                    if p and p.simli_face_id:
+                    if _simli_persona and _simli_persona.simli_face_id:
                         from services import simli as simli_svc
-                        simli_token = await simli_svc.create_session(p.simli_face_id)
+                        simli_token = await simli_svc.create_session(_simli_persona.simli_face_id)
                         if simli_token:
                             await websocket.send_json({"type": "simli_session_token", "token": simli_token})
                         else:

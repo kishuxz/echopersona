@@ -23,7 +23,9 @@ async def create_checkout_session(
     extra_metadata: dict | None = None,
 ) -> dict:
     """Get or create a Stripe customer for user_id, then create a Checkout Session.
-    Reuses stripe_customer_id from an existing entitlement row to avoid duplicate customers.
+
+    Pass mode='payment' for one-time purchases (preservation).
+    Pass extra_metadata to merge additional fields into the session metadata.
     Returns {"checkout_url": str, "session_id": str}.
     """
     existing = await get_entitlement_for_user(db, user_id)

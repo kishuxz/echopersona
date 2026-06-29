@@ -9,6 +9,7 @@ import stripe
 from config import settings
 from services.entitlements import (
     get_entitlement_by_customer_or_subscription,
+    get_entitlement_for_user,
     upsert_entitlement_from_subscription,
 )
 from services.preservation import (
@@ -26,8 +27,6 @@ logger = logging.getLogger(__name__)
 
 _EVENTS_TABLE = "stripe_webhook_events"
 
-# Only statuses that map 1-to-1 to our EntitlementStatus are listed here.
-# Anything not found (e.g. "incomplete") defaults to "canceled" — deny paid access.
 _STRIPE_STATUS_MAP: dict[str, str] = {
     "active": "active",
     "trialing": "trialing",
@@ -38,17 +37,18 @@ _STRIPE_STATUS_MAP: dict[str, str] = {
 
 
 def _price_to_tier(price_id: str) -> str | None:
-    """Map a Stripe price ID to a plan tier using configured env vars.
-    Returns None for any price ID not in the configuration — never grants paid access.
-    """
+    """Map a Stripe price ID to a plan tier. Returns None for unrecognised IDs."""
     if not price_id:
         return None
     creator = settings.stripe_price_creator_monthly
     legacy = settings.stripe_price_legacy_monthly
+    preservation = settings.stripe_price_preservation_onetime
     if creator and price_id == creator:
         return "creator"
     if legacy and price_id == legacy:
         return "legacy"
+    if preservation and price_id == preservation:
+        return "preservation"
     return None
 
 
@@ -56,7 +56,7 @@ async def record_event_idempotent(db: "Client", event_id: str, event_type: str) 
     """Record event_id in stripe_webhook_events before processing.
 
     Returns True  → event is new; proceed with processing.
-    Returns False → event already recorded; skip all side effects (return 200 to Stripe).
+    Returns False → event already recorded; skip (return 200 to Stripe).
     """
     existing = (
         db.table(_EVENTS_TABLE)
@@ -74,12 +74,7 @@ async def record_event_idempotent(db: "Client", event_id: str, event_type: str) 
 
 
 async def _resolve_user_id(db: "Client", subscription) -> str | None:
-    """Resolve Supabase user_id from subscription metadata, then fall back to DB lookup.
-
-    Subscription metadata is empty for most subscription events (we only set it on the
-    checkout session and the Stripe customer).  The DB lookup by customer_id is the
-    primary resolution path for subscription.created/updated/deleted.
-    """
+    """Resolve Supabase user_id from subscription metadata, then DB lookup."""
     metadata = getattr(subscription, "metadata", {}) or {}
     user_id = metadata.get("supabase_user_id")
     if user_id:
@@ -299,11 +294,10 @@ async def handle_posthumous_subscription_event(
 
 
 async def handle_checkout_completed(db: "Client", session) -> None:
-    """Handle checkout.session.completed.
+    """Handle checkout.session.completed for standard subscription checkouts.
 
-    The checkout session holds metadata.supabase_user_id (set at session creation),
-    but the subscription object retrieved here may not — so we read user_id from the
-    session first, then fall back to DB lookup.
+    Only handles mode=subscription. mode=payment is routed to
+    handle_preservation_checkout by process_stripe_event before this is called.
     """
     subscription_id = getattr(session, "subscription", None)
     if not subscription_id:
