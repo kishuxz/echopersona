@@ -1,5 +1,5 @@
 import { Pencil } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CreationWizard } from '../components/CreationWizard'
 import { useAuth } from '../hooks/useAuth'
@@ -17,12 +17,16 @@ export function Dashboard() {
   const [newPersonaId, setNewPersonaId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
+  const loadPersonas = useCallback(() => {
+    setLoading(true)
+    setError(null)
     listPersonas()
       .then(setPersonas)
-      .catch((e) => setError(e.message))
+      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load personas'))
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => { loadPersonas() }, [loadPersonas])
 
   const handleDelete = async (id: string, name: string) => {
     if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) return
@@ -44,6 +48,7 @@ export function Dashboard() {
     user?.email?.split('@')[0]?.split('.')[0] ||
     ''
   const displayName = rawName.charAt(0).toUpperCase() + rawName.slice(1)
+  const isInterviewing = createStep === 'interview'
 
   return (
     <div className="min-h-screen bg-bg text-text">
@@ -69,12 +74,14 @@ export function Dashboard() {
           )}
         </div>
         <div className="flex items-center gap-3">
-          <button
-            className="btn-shimmer rounded-lg px-4 py-2 font-sans text-sm font-medium text-white"
-            onClick={() => setCreateStep('shell')}
-          >
-            + New Persona
-          </button>
+          {!isInterviewing && (
+            <button
+              className="btn-shimmer rounded-lg px-4 py-2 font-sans text-sm font-medium text-white"
+              onClick={() => setCreateStep('shell')}
+            >
+              + New Persona
+            </button>
+          )}
           <button
             className="font-sans text-sm text-textdim transition-colors hover:text-text"
             onClick={() => navigate('/dashboard/billing')}
@@ -91,32 +98,46 @@ export function Dashboard() {
       </div>
 
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-8">
+        {/* ── Creation flow ─────────────────────────────────────────── */}
         {createStep !== 'idle' && (
-          <div className="mb-10">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="font-fraunces text-lg font-semibold text-text">
-                {createStep === 'shell' ? 'Create Persona' : 'Share their story'}
-              </h2>
-              {createStep === 'shell' && (
-                <button
-                  className="font-sans text-sm text-muted underline transition-colors hover:text-text"
-                  onClick={() => setCreateStep('idle')}
-                >
-                  Cancel
-                </button>
-              )}
-            </div>
-            <div className="max-w-lg">
-              {createStep === 'shell' && (
-                <PersonaShellForm
-                  onCreated={(personaId) => {
-                    setNewPersonaId(personaId)
-                    setCreateStep('interview')
-                  }}
-                  onCancel={() => setCreateStep('idle')}
-                />
-              )}
-              {createStep === 'interview' && newPersonaId && (
+          <div className={isInterviewing ? 'mb-0' : 'mb-10'}>
+            {createStep === 'shell' && (
+              <>
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="font-fraunces text-lg font-semibold text-text">
+                    Create a new persona
+                  </h2>
+                  <button
+                    className="font-sans text-sm text-muted underline transition-colors hover:text-text"
+                    onClick={() => setCreateStep('idle')}
+                  >
+                    Cancel
+                  </button>
+                </div>
+                <div className="max-w-lg">
+                  <PersonaShellForm
+                    onCreated={(personaId) => {
+                      setNewPersonaId(personaId)
+                      setCreateStep('interview')
+                    }}
+                    onCancel={() => setCreateStep('idle')}
+                  />
+                </div>
+              </>
+            )}
+            {isInterviewing && newPersonaId && (
+              <div className="mx-auto max-w-2xl">
+                <div className="mb-5 flex items-center justify-between">
+                  <h2 className="font-fraunces text-lg font-semibold text-text">
+                    Tell us their story
+                  </h2>
+                  <button
+                    className="font-sans text-sm text-muted underline transition-colors hover:text-text"
+                    onClick={() => setCreateStep('idle')}
+                  >
+                    Save & exit
+                  </button>
+                </div>
                 <CreationWizard
                   personaId={newPersonaId}
                   onComplete={(personaId) => {
@@ -124,41 +145,57 @@ export function Dashboard() {
                     navigate(`/dashboard/persona/${personaId}`)
                   }}
                 />
-              )}
-            </div>
+              </div>
+            )}
           </div>
         )}
 
-        <h2 className="mb-6 font-sans text-xs font-medium uppercase tracking-widest text-muted">
-          My Personas
-        </h2>
+        {/* ── Personas list (hidden during interview) ───────────────── */}
+        {!isInterviewing && (
+          <>
+            <h2 className="mb-6 font-sans text-xs font-medium uppercase tracking-widest text-muted">
+              My Personas
+            </h2>
 
-        {error && (
-          <p className="mb-4 font-sans text-sm text-red">{error}</p>
-        )}
+            {error && (
+              <div className="mb-6 flex items-center gap-3 rounded-xl border border-red/20 bg-red/5 px-5 py-4">
+                <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5 shrink-0 text-red">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                <p className="flex-1 font-sans text-sm text-red">{error}</p>
+                <button
+                  className="rounded-lg border border-red/20 px-4 py-1.5 font-sans text-xs font-medium text-red transition-colors hover:bg-red/10"
+                  onClick={loadPersonas}
+                >
+                  Retry
+                </button>
+              </div>
+            )}
 
-        {loading ? (
-          <div className="flex items-center gap-2">
-            <svg className="h-4 w-4 animate-spin text-green" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-              <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            <span className="font-sans text-sm text-textdim">Loading personas…</span>
-          </div>
-        ) : personas.length === 0 ? (
-          <EmptyState onCreate={() => setCreateStep('shell')} />
-        ) : (
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {personas.map((p) => (
-              <PersonaCard
-                key={p.id}
-                persona={p}
-                onTalk={() => navigate(`/dashboard/persona/${p.id}`)}
-                onEdit={() => navigate(`/dashboard/persona/${p.id}/edit`)}
-                onDelete={() => handleDelete(p.id, p.name)}
-              />
-            ))}
-          </div>
+            {loading ? (
+              <div className="flex items-center gap-2 py-8">
+                <svg className="h-4 w-4 animate-spin text-accent" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                  <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                <span className="font-sans text-sm text-textdim">Loading personas…</span>
+              </div>
+            ) : !error && personas.length === 0 ? (
+              <EmptyState onCreate={() => setCreateStep('shell')} />
+            ) : personas.length > 0 ? (
+              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                {personas.map((p) => (
+                  <PersonaCard
+                    key={p.id}
+                    persona={p}
+                    onTalk={() => navigate(`/dashboard/persona/${p.id}`)}
+                    onEdit={() => navigate(`/dashboard/persona/${p.id}/edit`)}
+                    onDelete={() => handleDelete(p.id, p.name)}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </>
         )}
       </div>
     </div>
@@ -168,16 +205,15 @@ export function Dashboard() {
 function EmptyState({ onCreate }: { onCreate: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-surface py-20 text-center shadow-card">
-      {/* Chat bubbles illustration */}
       <svg width="64" height="48" viewBox="0 0 64 48" fill="none" className="mb-6 text-border">
         <rect x="0" y="8" width="36" height="24" rx="10" fill="currentColor" />
         <path d="M10 32 L6 40 L18 32" fill="currentColor" />
         <rect x="20" y="0" width="44" height="24" rx="10" fill="#E4E4E7" />
         <path d="M54 24 L58 32 L46 24" fill="#E4E4E7" />
       </svg>
-      <h3 className="font-fraunces text-xl font-semibold text-text">No one to talk to yet</h3>
+      <h3 className="font-fraunces text-xl font-semibold text-text">Ready to preserve a voice</h3>
       <p className="mt-2 max-w-xs font-sans text-sm text-textdim">
-        Create a persona from someone's voice, stories, and memories
+        Create a persona from someone's stories, personality, and memories
       </p>
       <button
         className="mt-6 rounded-lg bg-accent px-6 py-2.5 font-sans text-sm font-medium text-white transition-opacity hover:opacity-90"
@@ -216,7 +252,6 @@ function PersonaCard({
       className="group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-card transition-all duration-200 hover:scale-[1.02] hover:shadow-card-hover"
       style={{ minHeight: '220px' }}
     >
-      {/* Card background — photo or gradient */}
       {hasPhoto ? (
         <div className="relative flex-1">
           <img
@@ -224,12 +259,9 @@ function PersonaCard({
             alt={persona.name}
             className="absolute inset-0 h-full w-full object-cover"
           />
-          {/* Gradient overlay for text readability */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
 
-          {/* Content over photo */}
           <div className="relative flex h-full flex-col justify-end p-5" style={{ minHeight: '220px' }}>
-            {/* Delete button — top right, hover only */}
             <button
               className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full bg-black/40 text-white/70 opacity-0 transition-all duration-150 hover:bg-red/80 hover:text-white group-hover:opacity-100"
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
@@ -243,7 +275,6 @@ function PersonaCard({
               </svg>
             </button>
 
-            {/* Traits */}
             <div className="mb-2 flex flex-wrap gap-1.5">
               {persona.personality_traits.slice(0, 3).map((t) => (
                 <span
@@ -271,12 +302,10 @@ function PersonaCard({
         </div>
       ) : (
         <div className="relative flex flex-1 flex-col" style={{ minHeight: '220px' }}>
-          {/* Warm gradient placeholder */}
           <div className="flex flex-1 items-center justify-center bg-gradient-to-br from-cream via-elevated to-surface">
             <span className="font-fraunces text-5xl font-semibold text-text/20">{initials}</span>
           </div>
 
-          {/* Delete button — top right, hover only */}
           <button
             className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full bg-elevated text-muted opacity-0 transition-all duration-150 hover:bg-red/10 hover:text-red group-hover:opacity-100"
             onMouseEnter={() => setDeleteHovered(true)}
@@ -292,7 +321,6 @@ function PersonaCard({
             </svg>
           </button>
 
-          {/* Info area */}
           <div className="border-t border-border px-5 pb-3 pt-3">
             <div className="flex flex-wrap gap-1.5 mb-2">
               {persona.personality_traits.slice(0, 3).map((t) => (
@@ -319,7 +347,6 @@ function PersonaCard({
         </div>
       )}
 
-      {/* Action bar — Talk Now + Edit */}
       <div className="flex">
         <button
           className="flex-1 bg-accent py-3 font-sans text-sm font-medium text-white transition-opacity hover:opacity-90"
@@ -371,7 +398,7 @@ function PersonaShellForm({
   return (
     <form onSubmit={handleSubmit} className="rounded-2xl border border-border bg-surface p-6 shadow-card">
       <p className="mb-4 font-sans text-sm text-textdim">
-        Give this persona a name to get started. You'll share their stories next.
+        Who would you like to preserve? Give them a name to get started.
       </p>
       <label className="mb-1 block font-sans text-xs font-medium uppercase tracking-widest text-muted">
         Name
@@ -392,7 +419,7 @@ function PersonaShellForm({
           className="rounded-lg bg-accent px-5 py-2.5 font-sans text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
           disabled={busy || name.trim().length < 2}
         >
-          {busy ? 'Creating…' : 'Create →'}
+          {busy ? 'Creating…' : 'Begin →'}
         </button>
         <button
           type="button"

@@ -8,7 +8,7 @@ async function getAuthHeaders(): Promise<HeadersInit> {
   const {
     data: { session },
   } = await supabase.auth.getSession()
-  if (!session) throw new Error('Not authenticated')
+  if (!session) throw new Error('Please sign in to continue.')
   return {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${session.access_token}`,
@@ -19,13 +19,21 @@ async function getAuthHeadersNoContentType(): Promise<HeadersInit> {
   const {
     data: { session },
   } = await supabase.auth.getSession()
-  if (!session) throw new Error('Not authenticated')
+  if (!session) throw new Error('Please sign in to continue.')
   return { Authorization: `Bearer ${session.access_token}` }
+}
+
+async function safeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(input, init)
+  } catch {
+    throw new Error('Could not reach the server. Please check your connection and try again.')
+  }
 }
 
 export async function createPersona(data: PersonaCreate): Promise<Persona> {
   const headers = await getAuthHeaders()
-  const res = await fetch(`${API_BASE}/persona/create`, {
+  const res = await safeFetch(`${API_BASE}/persona/create`, {
     method: 'POST',
     headers,
     body: JSON.stringify(data),
@@ -39,21 +47,21 @@ export async function createPersona(data: PersonaCreate): Promise<Persona> {
 
 export async function listPersonas(): Promise<Persona[]> {
   const headers = await getAuthHeaders()
-  const res = await fetch(`${API_BASE}/persona/`, { headers })
-  if (!res.ok) throw new Error('Failed to fetch personas')
+  const res = await safeFetch(`${API_BASE}/persona/`, { headers })
+  if (!res.ok) throw new Error('Failed to load your personas. Please try again.')
   return res.json()
 }
 
 export async function getPersona(personaId: string): Promise<Persona> {
   const headers = await getAuthHeaders()
-  const res = await fetch(`${API_BASE}/persona/${personaId}`, { headers })
+  const res = await safeFetch(`${API_BASE}/persona/${personaId}`, { headers })
   if (!res.ok) throw new Error('Persona not found')
   return res.json()
 }
 
 export async function getPersonaReadiness(personaId: string): Promise<PersonaReadiness> {
   const headers = await getAuthHeaders()
-  const res = await fetch(`${API_BASE}/persona/${personaId}/readiness`, { headers })
+  const res = await safeFetch(`${API_BASE}/persona/${personaId}/readiness`, { headers })
   if (!res.ok) throw new Error('Failed to fetch readiness')
   return res.json()
 }
@@ -62,7 +70,7 @@ export async function uploadVoice(personaId: string, files: File[] | FileList): 
   const authHeader = await getAuthHeadersNoContentType()
   const formData = new FormData()
   Array.from(files).forEach((f) => formData.append('files', f))
-  const res = await fetch(`${API_BASE}/persona/${personaId}/upload-voice`, {
+  const res = await safeFetch(`${API_BASE}/persona/${personaId}/upload-voice`, {
     method: 'POST',
     headers: authHeader,
     body: formData,
@@ -75,7 +83,7 @@ export async function uploadAvatar(personaId: string, file: File): Promise<Perso
   const authHeader = await getAuthHeadersNoContentType()
   const formData = new FormData()
   formData.append('file', file)
-  const res = await fetch(`${API_BASE}/persona/${personaId}/upload-avatar`, {
+  const res = await safeFetch(`${API_BASE}/persona/${personaId}/upload-avatar`, {
     method: 'POST',
     headers: authHeader,
     body: formData,
@@ -86,7 +94,7 @@ export async function uploadAvatar(personaId: string, file: File): Promise<Perso
 
 export async function saveSimliFaceId(personaId: string, faceId: string): Promise<Persona> {
   const headers = await getAuthHeaders()
-  const res = await fetch(`${API_BASE}/persona/${personaId}/simli-face`, {
+  const res = await safeFetch(`${API_BASE}/persona/${personaId}/simli-face`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ face_id: faceId }),
@@ -97,7 +105,7 @@ export async function saveSimliFaceId(personaId: string, faceId: string): Promis
 
 export async function updatePersona(personaId: string, updates: Partial<PersonaCreate>): Promise<Persona> {
   const headers = await getAuthHeaders()
-  const res = await fetch(`${API_BASE}/persona/${personaId}`, {
+  const res = await safeFetch(`${API_BASE}/persona/${personaId}`, {
     method: 'PATCH',
     headers,
     body: JSON.stringify(updates),
@@ -108,7 +116,7 @@ export async function updatePersona(personaId: string, updates: Partial<PersonaC
 
 export async function deletePersona(personaId: string): Promise<void> {
   const headers = await getAuthHeaders()
-  await fetch(`${API_BASE}/persona/${personaId}`, {
+  await safeFetch(`${API_BASE}/persona/${personaId}`, {
     method: 'DELETE',
     headers,
   })
@@ -116,7 +124,7 @@ export async function deletePersona(personaId: string): Promise<void> {
 
 export async function getConsent(personaId: string): Promise<ConsentRecord | null> {
   const headers = await getAuthHeaders()
-  const res = await fetch(`${API_BASE}/personas/${personaId}/consent`, { headers })
+  const res = await safeFetch(`${API_BASE}/personas/${personaId}/consent`, { headers })
   if (res.status === 404) return null
   if (!res.ok) {
     const err = await res.json()
@@ -127,7 +135,7 @@ export async function getConsent(personaId: string): Promise<ConsentRecord | nul
 
 export async function saveConsent(personaId: string, data: ConsentCreate): Promise<ConsentRecord> {
   const headers = await getAuthHeaders()
-  const res = await fetch(`${API_BASE}/personas/${personaId}/consent`, {
+  const res = await safeFetch(`${API_BASE}/personas/${personaId}/consent`, {
     method: 'POST',
     headers,
     body: JSON.stringify(data),
@@ -141,7 +149,7 @@ export async function saveConsent(personaId: string, data: ConsentCreate): Promi
 
 export async function getSuccession(personaId: string): Promise<SuccessionRecord | null> {
   const headers = await getAuthHeaders()
-  const res = await fetch(`${API_BASE}/personas/${personaId}/succession`, { headers })
+  const res = await safeFetch(`${API_BASE}/personas/${personaId}/succession`, { headers })
   if (res.status === 404) return null
   if (!res.ok) {
     const err = await res.json()
@@ -152,7 +160,7 @@ export async function getSuccession(personaId: string): Promise<SuccessionRecord
 
 export async function saveSuccession(personaId: string, data: SuccessionCreate): Promise<SuccessionRecord> {
   const headers = await getAuthHeaders()
-  const res = await fetch(`${API_BASE}/personas/${personaId}/succession`, {
+  const res = await safeFetch(`${API_BASE}/personas/${personaId}/succession`, {
     method: 'POST',
     headers,
     body: JSON.stringify(data),
@@ -166,7 +174,7 @@ export async function saveSuccession(personaId: string, data: SuccessionCreate):
 
 export async function getBillingStatus(): Promise<BillingStatus> {
   const headers = await getAuthHeaders()
-  const res = await fetch(`${API_BASE}/billing/status`, { headers })
+  const res = await safeFetch(`${API_BASE}/billing/status`, { headers })
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
@@ -178,7 +186,7 @@ export async function startCheckout(
   const headers = await getAuthHeaders()
   const body: Record<string, string> = { plan_tier }
   if (persona_id) body.persona_id = persona_id
-  const res = await fetch(`${API_BASE}/billing/checkout`, {
+  const res = await safeFetch(`${API_BASE}/billing/checkout`, {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
@@ -190,14 +198,14 @@ export async function startCheckout(
 
 export async function getPersonaAccess(personaId: string): Promise<PersonaAccess> {
   const headers = await getAuthHeaders()
-  const res = await fetch(`${API_BASE}/billing/persona/${personaId}/access`, { headers })
+  const res = await safeFetch(`${API_BASE}/billing/persona/${personaId}/access`, { headers })
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
 
 export async function startCreationSession(personaId: string): Promise<StartSessionResponse> {
   const headers = await getAuthHeaders()
-  const res = await fetch(`${API_BASE}/creation/session`, {
+  const res = await safeFetch(`${API_BASE}/creation/session`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ persona_id: personaId }),
@@ -211,7 +219,7 @@ export async function startCreationSession(personaId: string): Promise<StartSess
 
 export async function captureTextAnswer(sessionId: string, answerText: string): Promise<CaptureResponse> {
   const headers = await getAuthHeaders()
-  const res = await fetch(`${API_BASE}/creation/session/${sessionId}/capture/text`, {
+  const res = await safeFetch(`${API_BASE}/creation/session/${sessionId}/capture/text`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ answer_text: answerText }),
@@ -225,7 +233,7 @@ export async function captureTextAnswer(sessionId: string, answerText: string): 
 
 export async function finishCreationSession(sessionId: string): Promise<{ enqueued_source_ids: string[]; total: number }> {
   const headers = await getAuthHeaders()
-  const res = await fetch(`${API_BASE}/creation/session/${sessionId}/finish`, {
+  const res = await safeFetch(`${API_BASE}/creation/session/${sessionId}/finish`, {
     method: 'POST',
     headers,
   })
