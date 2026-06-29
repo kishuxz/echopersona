@@ -171,6 +171,12 @@ export function VoiceInterface({
       setIsRecording(false);
       isRecordingRef.current = false;
 
+      // Persona memories are still processing — surface a message, never retry
+      if (e.code === 4010) {
+        setWsError("Memories are still building — please try again in a minute.");
+        return;
+      }
+
       // Auto-retry once on unexpected close during initial connection
       if (retryCount === 0 && e.code !== 1000) {
         setTimeout(() => {
@@ -346,8 +352,20 @@ export function VoiceInterface({
             />
           )}
 
-          {/* Static avatar photo */}
-          {!playingVideo && avatarUrl && (
+          {/* Tavus idle video — loops silently when not playing a D-ID response */}
+          {!playingVideo && idleVideoUrl && (
+            <video
+              src={idleVideoUrl}
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="h-full w-full object-cover"
+            />
+          )}
+
+          {/* Static avatar photo — fallback when no idle video */}
+          {!playingVideo && !idleVideoUrl && avatarUrl && (
             <img
               src={avatarUrl}
               alt={personaName ?? "Persona"}
@@ -357,7 +375,7 @@ export function VoiceInterface({
           )}
 
           {/* Letter / spinner placeholder */}
-          {!playingVideo && !avatarUrl && (
+          {!playingVideo && !idleVideoUrl && !avatarUrl && (
             <div className="flex h-full w-full items-center justify-center" style={{ backgroundColor: '#FAFAF9' }}>
               {videoLoading ? (
                 <svg className="h-8 w-8 animate-spin text-green" viewBox="0 0 24 24" fill="none">
@@ -409,7 +427,7 @@ export function VoiceInterface({
               {hasVoice ? 'Voice: Cloned' : 'Voice: Default'}
             </span>
             <span className={`rounded-full px-2.5 py-0.5 font-sans text-[10px] ${(avatarUrl || idleVideoUrl) ? 'bg-green/10 text-green' : 'bg-cream text-muted'}`}>
-              {(avatarUrl || idleVideoUrl) ? 'Avatar: Photo' : 'Avatar: Letter'}
+              {idleVideoUrl ? 'Avatar: Video' : avatarUrl ? 'Avatar: Photo' : 'Avatar: Letter'}
             </span>
           </div>
 
