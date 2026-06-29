@@ -1,7 +1,32 @@
 # EchoPersona — Build Progress
 
 ## Active feature
-Loop-engineering OS layer in place (gstack/kstack-style); next product priority: APJ persona fidelity live test → Tavus/video path
+Slice 1 (Fidelity Fix) complete — next: Slice 2 (Progressive Q&A)
+
+## 2026-06-28 — Slice 1: Persona Fidelity Fix ✅
+
+Branch: `feat/slice-1-fidelity-fix` → PR to `main`
+
+### What changed
+- **`backend/services/rag.py`** — 6-layer prompt order enforced (listener context moved from last → Layer 3); affect-tagged memory block `[emotion, valence_label]`; `_valence_label` helper; `_affect_tag` inner function with newline-stripping + 40-char cap (prompt injection guard); in-character no-memory fallback replaces system-voice text; GROUNDING REMINDER added before RESPONSE RULES; affect-tag metadata note added to YOUR MEMORIES header; `valence` cast to `float()` before use; `affect` field now stored in `_units` from `build_index_from_units`
+- **`backend/routers/ws.py`** — Readiness gate now checks `RAG_INDICES[persona_id]._units` presence; persona with live FAISS index no longer blocked by empty `stories` or non-`ready` status
+- **`backend/tests/test_rag.py`** (new) — 25 tests: valence bucketing, affect tagging (all edge cases), 6-layer prompt order, no-memory fallback wording, `build_index_from_units` affect propagation
+- **`backend/tests/test_ws_readiness.py`** (new) — 12 tests: readiness gate pass/block matrix
+- **`backend/tests/test_listener.py`** — 1 test updated for new layer order
+
+### Verification
+```bash
+cd backend && python -m pytest tests/ -q
+# 382 passed, 5 warnings
+```
+
+### Pre-existing gaps flagged (tracked as future slices, not regressions)
+- Fidelity gate does not block low-score units from indexing → Slice 5 (Fidelity Gate hardening)
+- `resolved_entity_ids` per-unit back-link not implemented → Slice 4 (Listener Profiles)
+- No cosine-similarity threshold for low-relevance retrievals → Slice 4
+
+### Next action
+Slice 2: Progressive Q&A (session-based, 15-20 questions per category, min 30 threshold)
 
 ## 2026-06-28 — Loop-engineering OS upgrade (gstack/kstack-style)
 

@@ -340,10 +340,15 @@ class TestBuildSystemPromptListenerInjection:
         assert "Do not infer listener identity" in result
 
     def test_beneficiary_ctx_does_not_alter_persona_block(self):
-        # Core persona identity must be unchanged even with listener block
-        base = self._base_prompt()
+        # Core persona identity header must be unchanged even with listener block.
+        # The listener block is now injected after memories (layer 3), so the full
+        # base prompt is no longer a prefix of the beneficiary prompt — instead we
+        # assert that the identity+memory header is present verbatim and the
+        # listener block is additive, not a replacement.
+        identity_header = "You are Gran. Speak only in first person.\nIMPORTANT: Use ONLY the memories below."
         result = build_system_prompt(_make_persona(), [], listener_ctx=_BENEFICIARY_CTX)
-        assert result.startswith(base)
+        assert result.startswith(identity_header)
+        assert "LISTENER CONTEXT:" in result
 
     def test_beneficiary_ctx_minimal_no_address_or_scope(self):
         # address_term=None, scope=None → those lines omitted, no KeyError
