@@ -17,6 +17,7 @@ class Persona(PersonaCreate):
     did_avatar_url: str | None = None
     idle_video_url: str | None = None
     simli_face_id: str | None = None
+    tavus_replica_id: str | None = None
     # Stage 3: resolved entity graph — list of {canonical, type, aliases, description}
     entity_graph: list[dict] = Field(default_factory=list)
     # Stage 4: characteristic speech excerpts for style conditioning

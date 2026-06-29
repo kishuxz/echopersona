@@ -93,7 +93,7 @@ export function CreationWizard({ personaId, onComplete }: CreationWizardProps) {
 
   const canFinish = answeredCount >= MIN_QUESTIONS_TO_FINISH || isDone
   const categoryLabel = currentCategory ? (CATEGORY_LABELS[currentCategory] ?? currentCategory) : null
-  const categoryCount = (currentCategory && session?.answers_per_category[currentCategory]) ?? 0
+  const categoryCount: number = (currentCategory ? (session?.answers_per_category[currentCategory] ?? 0) : 0)
 
   if (isLoading) {
     return (

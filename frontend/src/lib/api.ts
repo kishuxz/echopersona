@@ -1,6 +1,6 @@
 import { DEFAULT_API_BASE, DEFAULT_WS_BASE } from '../constants'
 import { supabase } from './supabase'
-import type { Persona, PersonaCreate, PersonaReadiness, ConsentRecord, ConsentCreate, SuccessionRecord, SuccessionCreate, BillingStatus, PersonaAccess, StartSessionResponse, CaptureResponse } from '../types'
+import type { Persona, PersonaCreate, PersonaReadiness, ConsentRecord, ConsentCreate, SuccessionRecord, SuccessionCreate, BillingStatus, PersonaAccess, StartSessionResponse, CaptureResponse, ChatMode } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? DEFAULT_API_BASE
 
@@ -239,11 +239,13 @@ export async function finishCreationSession(sessionId: string): Promise<{ enqueu
 export async function buildWsUrl(
   sessionId: string,
   personaId: string,
+  mode?: ChatMode,
 ): Promise<string> {
   const {
     data: { session },
   } = await supabase.auth.getSession()
   const token = session?.access_token ?? ''
   const base = import.meta.env.VITE_WS_BASE_URL ?? DEFAULT_WS_BASE
-  return `${base}/ws/${sessionId}?persona_id=${personaId}&token=${encodeURIComponent(token)}`
+  const url = `${base}/ws/${sessionId}?persona_id=${personaId}&token=${encodeURIComponent(token)}`
+  return mode ? `${url}&mode=${encodeURIComponent(mode)}` : url
 }
