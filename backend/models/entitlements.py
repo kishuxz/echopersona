@@ -45,8 +45,9 @@ class BillingStatusResponse(BaseModel):
     can_use_video: bool
     current_period_end: datetime | None = None
     cancel_at_period_end: bool = False
-    family_member_limit: int | None = None   # None = unlimited
+    family_member_limit: int | None = None
     is_preservation_locked: bool = False
+    can_use_posthumous_chat: bool = False
 
 
 class PersonaAccessDecision(BaseModel):
@@ -56,7 +57,7 @@ class PersonaAccessDecision(BaseModel):
     can_use_voice: bool
     can_use_video: bool
     can_add_family_member: bool
-    family_member_limit: int | None       # None = unlimited
+    family_member_limit: int | None
     family_member_count: int
     answer_count: int
     is_preservation_locked: bool

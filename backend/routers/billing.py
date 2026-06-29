@@ -18,6 +18,12 @@ from services.entitlements import (
     family_member_limit_for_tier,
     get_entitlement_for_user,
 )
+from services.preservation import (
+    can_access_posthumous,
+    can_access_preserved_persona,
+    get_posthumous_subscription,
+    get_preservation_for_persona,
+)
 from services.stripe_webhooks import process_stripe_event, record_event_idempotent
 
 logger = logging.getLogger(__name__)
@@ -37,9 +43,23 @@ class CheckoutRequest(BaseModel):
     persona_id: str | None = None  # required for preservation tier
 
 
+class PreservationCheckoutRequest(BaseModel):
+    persona_id: str
+
+
+class PosthumousCheckoutRequest(BaseModel):
+    persona_id: str
+
+
 class CheckoutResponse(BaseModel):
     checkout_url: str
     session_id: str
+
+
+class PreservationStatusResponse(BaseModel):
+    persona_id: str
+    preservation_locked: bool
+    can_use_posthumous_chat: bool
 
 
 @router.post("/checkout", response_model=CheckoutResponse)
@@ -61,16 +81,86 @@ async def start_checkout(
         )
 
     db = get_db()
+    if body.plan_tier == "preservation":
+        checkout_mode = "payment"
+        extra = {"purchase_type": "preservation", "persona_id": body.persona_id}
+    else:
+        checkout_mode = "subscription"
+        extra = None
     result = await create_checkout_session(
         db=db,
         user_id=user_id,
         price_id=price_id,
         success_url=settings.frontend_billing_success_url,
         cancel_url=settings.frontend_billing_cancel_url,
-        plan_tier=body.plan_tier,
-        persona_id=body.persona_id,
+        mode=checkout_mode,
+        extra_metadata=extra,
     )
     return CheckoutResponse(checkout_url=result["checkout_url"], session_id=result["session_id"])
+
+
+@router.post("/checkout/preservation", response_model=CheckoutResponse)
+async def start_preservation_checkout(
+    body: PreservationCheckoutRequest,
+    user_id: str = Depends(get_current_user),
+) -> CheckoutResponse:
+    if not body.persona_id:
+        raise HTTPException(status_code=422, detail="persona_id is required.")
+    price_id = settings.stripe_price_preservation_onetime
+    if not price_id:
+        raise HTTPException(status_code=500, detail="Preservation price ID is not configured.")
+
+    db = get_db()
+    result = await create_checkout_session(
+        db=db,
+        user_id=user_id,
+        price_id=price_id,
+        success_url=settings.frontend_billing_success_url,
+        cancel_url=settings.frontend_billing_cancel_url,
+        mode="payment",
+        extra_metadata={"purchase_type": "preservation", "persona_id": body.persona_id},
+    )
+    return CheckoutResponse(checkout_url=result["checkout_url"], session_id=result["session_id"])
+
+
+@router.post("/checkout/posthumous", response_model=CheckoutResponse)
+async def start_posthumous_checkout(
+    body: PosthumousCheckoutRequest,
+    user_id: str = Depends(get_current_user),
+) -> CheckoutResponse:
+    if not body.persona_id:
+        raise HTTPException(status_code=422, detail="persona_id is required.")
+    price_id = settings.stripe_price_posthumous_monthly
+    if not price_id:
+        raise HTTPException(status_code=500, detail="Posthumous access price ID is not configured.")
+
+    db = get_db()
+    result = await create_checkout_session(
+        db=db,
+        user_id=user_id,
+        price_id=price_id,
+        success_url=settings.frontend_billing_success_url,
+        cancel_url=settings.frontend_billing_cancel_url,
+        mode="subscription",
+        extra_metadata={"purchase_type": "posthumous_access", "persona_id": body.persona_id},
+    )
+    return CheckoutResponse(checkout_url=result["checkout_url"], session_id=result["session_id"])
+
+
+@router.get("/preservation/{persona_id}", response_model=PreservationStatusResponse)
+async def get_preservation_status(
+    persona_id: str,
+    user_id: str = Depends(get_current_user),
+) -> PreservationStatusResponse:
+    """Return preservation lock and posthumous access status for a specific persona."""
+    db = get_db()
+    preservation = await get_preservation_for_persona(db, persona_id)
+    posthumous = await get_posthumous_subscription(db, persona_id, user_id)
+    return PreservationStatusResponse(
+        persona_id=persona_id,
+        preservation_locked=can_access_preserved_persona(preservation),
+        can_use_posthumous_chat=can_access_posthumous(posthumous),
+    )
 
 
 @router.post("/webhook")

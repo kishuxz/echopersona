@@ -12,6 +12,11 @@ from services.entitlements import (
     get_entitlement_for_user,
     upsert_entitlement_from_subscription,
 )
+from services.preservation import (
+    get_posthumous_subscription_by_stripe_id,
+    upsert_posthumous_subscription,
+    upsert_preservation,
+)
 
 if TYPE_CHECKING:
     from supabase import Client
@@ -21,7 +26,6 @@ stripe.api_key = settings.stripe_secret_key
 logger = logging.getLogger(__name__)
 
 _EVENTS_TABLE = "stripe_webhook_events"
-_PRESERVATION_LOCKS_TABLE = "preservation_locks"
 
 _STRIPE_STATUS_MAP: dict[str, str] = {
     "active": "active",
@@ -128,18 +132,173 @@ async def _upsert_from_subscription(
     )
 
 
-async def handle_checkout_completed(db: "Client", session) -> None:
-    """Handle checkout.session.completed.
+async def handle_preservation_checkout(db: "Client", session) -> None:
+    """Handle checkout.session.completed where mode=payment (preservation purchase)."""
+    metadata = getattr(session, "metadata", {}) or {}
+    user_id: str | None = metadata.get("supabase_user_id")
+    persona_id: str | None = metadata.get("persona_id")
 
-    Branches on session.mode: 'payment' routes to the Preservation handler;
-    'subscription' routes to the standard subscription handler.
-    """
-    mode = getattr(session, "mode", "subscription")
-
-    if mode == "payment":
-        await handle_preservation_checkout(db, session)
+    if not user_id or not persona_id:
+        logger.warning(
+            "stripe_webhooks: preservation checkout missing user_id or persona_id — skipping"
+        )
         return
 
+    payment_intent_id = getattr(session, "payment_intent", None)
+    if payment_intent_id:
+        payment_intent_id = str(payment_intent_id)
+
+    customer_id = str(session.customer) if getattr(session, "customer", None) else ""
+    session_id_str = str(session.id) if getattr(session, "id", None) else None
+
+    await upsert_preservation(
+        db,
+        persona_id=persona_id,
+        subject_user_id=user_id,
+        stripe_customer_id=customer_id,
+        stripe_payment_intent_id=payment_intent_id,
+        stripe_checkout_session_id=session_id_str,
+    )
+    logger.info(
+        "stripe_webhooks: preservation purchased for persona %s by user %s",
+        persona_id,
+        user_id,
+    )
+
+
+async def handle_preservation_payment_intent(db: "Client", payment_intent) -> None:
+    """Belt-and-suspenders: payment_intent.succeeded for preservation purchases.
+    Only acts when metadata.purchase_type == 'preservation'; silently skips all others.
+    """
+    metadata = getattr(payment_intent, "metadata", {}) or {}
+    if metadata.get("purchase_type") != "preservation":
+        return
+
+    user_id: str | None = metadata.get("supabase_user_id")
+    persona_id: str | None = metadata.get("persona_id")
+
+    if not user_id or not persona_id:
+        logger.warning(
+            "stripe_webhooks: preservation payment_intent missing metadata — skipping"
+        )
+        return
+
+    customer_id = str(payment_intent.customer) if getattr(payment_intent, "customer", None) else ""
+    pi_id = str(payment_intent.id) if getattr(payment_intent, "id", None) else None
+
+    await upsert_preservation(
+        db,
+        persona_id=persona_id,
+        subject_user_id=user_id,
+        stripe_customer_id=customer_id,
+        stripe_payment_intent_id=pi_id,
+        stripe_checkout_session_id=None,
+    )
+    logger.info(
+        "stripe_webhooks: preservation confirmed via payment_intent for persona %s",
+        persona_id,
+    )
+
+
+async def handle_posthumous_checkout(db: "Client", session) -> None:
+    """Handle checkout.session.completed where purchase_type=posthumous_access."""
+    metadata = getattr(session, "metadata", {}) or {}
+    subscriber_user_id: str | None = metadata.get("supabase_user_id")
+    persona_id: str | None = metadata.get("persona_id")
+
+    if not subscriber_user_id or not persona_id:
+        logger.warning(
+            "stripe_webhooks: posthumous checkout missing user_id or persona_id — skipping"
+        )
+        return
+
+    subscription_id = getattr(session, "subscription", None)
+    if not subscription_id:
+        logger.warning("stripe_webhooks: posthumous checkout has no subscription — skipping")
+        return
+
+    subscription = stripe.Subscription.retrieve(subscription_id)
+    customer_id = str(subscription.customer) if getattr(subscription, "customer", None) else ""
+
+    raw_status = getattr(subscription, "status", "active")
+    status = _STRIPE_STATUS_MAP.get(raw_status, "active")
+
+    period_end_ts = getattr(subscription, "current_period_end", None)
+    current_period_end = (
+        datetime.fromtimestamp(period_end_ts, tz=timezone.utc) if period_end_ts else None
+    )
+
+    await upsert_posthumous_subscription(
+        db,
+        persona_id=persona_id,
+        subscriber_user_id=subscriber_user_id,
+        stripe_customer_id=customer_id,
+        stripe_subscription_id=subscription.id,
+        status=status,
+        current_period_end=current_period_end,
+        cancel_at_period_end=bool(getattr(subscription, "cancel_at_period_end", False)),
+    )
+    logger.info(
+        "stripe_webhooks: posthumous subscription activated for persona %s by user %s",
+        persona_id,
+        subscriber_user_id,
+    )
+
+
+async def handle_posthumous_subscription_event(
+    db: "Client", subscription, event_type: str
+) -> None:
+    """Handle customer.subscription.{created,updated,deleted} for posthumous access."""
+    metadata = getattr(subscription, "metadata", {}) or {}
+    subscriber_user_id: str | None = metadata.get("supabase_user_id")
+    persona_id: str | None = metadata.get("persona_id")
+
+    # Fallback: look up by subscription ID when metadata is absent
+    if not subscriber_user_id or not persona_id:
+        sub_id = getattr(subscription, "id", None)
+        if sub_id:
+            existing = await get_posthumous_subscription_by_stripe_id(db, sub_id)
+            if existing:
+                subscriber_user_id = existing.subscriber_user_id
+                persona_id = existing.persona_id
+
+    if not subscriber_user_id or not persona_id:
+        logger.warning(
+            "stripe_webhooks: posthumous subscription event cannot resolve persona/user — skipping"
+        )
+        return
+
+    customer_id = str(subscription.customer) if getattr(subscription, "customer", None) else ""
+
+    if event_type == "customer.subscription.deleted":
+        status = "canceled"
+    else:
+        raw_status = getattr(subscription, "status", "active")
+        status = _STRIPE_STATUS_MAP.get(raw_status, "active")
+
+    period_end_ts = getattr(subscription, "current_period_end", None)
+    current_period_end = (
+        datetime.fromtimestamp(period_end_ts, tz=timezone.utc) if period_end_ts else None
+    )
+
+    await upsert_posthumous_subscription(
+        db,
+        persona_id=persona_id,
+        subscriber_user_id=subscriber_user_id,
+        stripe_customer_id=customer_id,
+        stripe_subscription_id=subscription.id,
+        status=status,
+        current_period_end=current_period_end,
+        cancel_at_period_end=bool(getattr(subscription, "cancel_at_period_end", False)),
+    )
+
+
+async def handle_checkout_completed(db: "Client", session) -> None:
+    """Handle checkout.session.completed for standard subscription checkouts.
+
+    Only handles mode=subscription. mode=payment is routed to
+    handle_preservation_checkout by process_stripe_event before this is called.
+    """
     subscription_id = getattr(session, "subscription", None)
     if not subscription_id:
         logger.info("stripe_webhooks: checkout.session.completed has no subscription — skipping")
@@ -157,64 +316,6 @@ async def handle_checkout_completed(db: "Client", session) -> None:
         return
 
     await _upsert_from_subscription(db, subscription, user_id)
-
-
-async def handle_preservation_checkout(db: "Client", session) -> None:
-    """Handle a completed Preservation one-time payment checkout.
-
-    Upserts the entitlement row with plan_tier='preservation' and writes
-    a preservation_locks row so the persona is never deleted.
-    """
-    metadata = getattr(session, "metadata", {}) or {}
-    user_id: str | None = metadata.get("supabase_user_id")
-    persona_id: str | None = metadata.get("persona_id")
-    payment_intent_id = getattr(session, "payment_intent", None)
-
-    if not user_id:
-        logger.warning("stripe_webhooks: preservation checkout missing supabase_user_id — skipping")
-        return
-    if not payment_intent_id:
-        logger.warning("stripe_webhooks: preservation checkout missing payment_intent — skipping")
-        return
-
-    # Resolve the tier the subject held before purchasing Preservation.
-    existing = await get_entitlement_for_user(db, user_id)
-    tier_at_lock = existing.plan_tier if existing and existing.plan_tier != "preservation" else "free"
-    customer_id = str(getattr(session, "customer", "")) or (
-        existing.stripe_customer_id if existing else ""
-    )
-
-    await upsert_entitlement_from_subscription(
-        db,
-        user_id=user_id,
-        stripe_customer_id=customer_id,
-        stripe_subscription_id=None,
-        plan_tier="preservation",
-        status="active",
-        current_period_end=None,
-        cancel_at_period_end=False,
-        stripe_payment_intent_id=str(payment_intent_id),
-    )
-
-    if persona_id:
-        try:
-            db.table(_PRESERVATION_LOCKS_TABLE).upsert(
-                {
-                    "persona_id": persona_id,
-                    "user_id": user_id,
-                    "stripe_payment_intent_id": str(payment_intent_id),
-                    "tier_at_lock": tier_at_lock,
-                },
-                on_conflict="persona_id",
-            ).execute()
-        except Exception:
-            logger.warning(
-                "stripe_webhooks: failed to write preservation_locks row for persona %s", persona_id
-            )
-
-    logger.info(
-        "stripe_webhooks: preservation lock applied — user=%s persona=%s", user_id, persona_id
-    )
 
 
 async def handle_subscription_event(db: "Client", subscription) -> None:
@@ -235,12 +336,26 @@ async def process_stripe_event(db: "Client", event) -> None:
     obj = event.data.object
 
     if event_type == "checkout.session.completed":
-        await handle_checkout_completed(db, obj)
+        mode = getattr(obj, "mode", "subscription")
+        if mode == "payment":
+            await handle_preservation_checkout(db, obj)
+        else:
+            metadata = getattr(obj, "metadata", {}) or {}
+            if metadata.get("purchase_type") == "posthumous_access":
+                await handle_posthumous_checkout(db, obj)
+            else:
+                await handle_checkout_completed(db, obj)
+    elif event_type == "payment_intent.succeeded":
+        await handle_preservation_payment_intent(db, obj)
     elif event_type in (
         "customer.subscription.created",
         "customer.subscription.updated",
         "customer.subscription.deleted",
     ):
-        await handle_subscription_event(db, obj)
+        metadata = getattr(obj, "metadata", {}) or {}
+        if metadata.get("purchase_type") == "posthumous_access":
+            await handle_posthumous_subscription_event(db, obj, event_type)
+        else:
+            await handle_subscription_event(db, obj)
     else:
         logger.debug("stripe_webhooks: unhandled event type '%s'", event_type)

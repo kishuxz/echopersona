@@ -19,14 +19,13 @@ async def create_checkout_session(
     price_id: str,
     success_url: str,
     cancel_url: str,
-    plan_tier: str = "creator",
-    persona_id: str | None = None,
+    mode: str = "subscription",
+    extra_metadata: dict | None = None,
 ) -> dict:
     """Get or create a Stripe customer for user_id, then create a Checkout Session.
 
-    For 'preservation' plan_tier: creates a one-time payment session (mode='payment').
-    For all other tiers: creates a recurring subscription session (mode='subscription').
-    persona_id must be supplied for preservation so the webhook can write the lock row.
+    Pass mode='payment' for one-time purchases (preservation).
+    Pass extra_metadata to merge additional fields into the session metadata.
     Returns {"checkout_url": str, "session_id": str}.
     """
     existing = await get_entitlement_for_user(db, user_id)
@@ -36,26 +35,17 @@ async def create_checkout_session(
         customer = stripe.Customer.create(metadata={"supabase_user_id": user_id})
         customer_id = customer.id
 
-    if plan_tier == "preservation":
-        metadata: dict = {"supabase_user_id": user_id}
-        if persona_id:
-            metadata["persona_id"] = persona_id
-        session = stripe.checkout.Session.create(
-            customer=customer_id,
-            line_items=[{"price": price_id, "quantity": 1}],
-            mode="payment",
-            success_url=success_url,
-            cancel_url=cancel_url,
-            metadata=metadata,
-        )
-    else:
-        session = stripe.checkout.Session.create(
-            customer=customer_id,
-            line_items=[{"price": price_id, "quantity": 1}],
-            mode="subscription",
-            success_url=success_url,
-            cancel_url=cancel_url,
-            metadata={"supabase_user_id": user_id},
-        )
+    metadata: dict = {"supabase_user_id": user_id}
+    if extra_metadata:
+        metadata.update(extra_metadata)
+
+    session = stripe.checkout.Session.create(
+        customer=customer_id,
+        line_items=[{"price": price_id, "quantity": 1}],
+        mode=mode,
+        success_url=success_url,
+        cancel_url=cancel_url,
+        metadata=metadata,
+    )
 
     return {"checkout_url": session.url, "session_id": session.id}
