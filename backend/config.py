@@ -63,6 +63,8 @@ class Settings(BaseSettings):
     resend_api_key: str = Field(default="", alias="RESEND_API_KEY")
     resend_from_address: str = Field(default="noreply@kishoreai.online", alias="RESEND_FROM_ADDRESS")
 
+    admin_key: str = Field(default="", alias="ADMIN_KEY")
+
     voice_always_on: bool = Field(default=False, alias="VOICE_ALWAYS_ON")
     force_mock_mode: bool = Field(default=False, alias="MOCK_MODE")
 

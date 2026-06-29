@@ -1,5 +1,6 @@
 import { createBrowserRouter, Navigate, useNavigate } from 'react-router-dom'
 import { ProtectedRoute } from './components/ProtectedRoute'
+import { AdminPage } from './pages/AdminPage'
 import { AuthPage } from './pages/AuthPage'
 import { BillingPage } from './pages/BillingPage'
 import { Dashboard } from './pages/Dashboard'
@@ -115,5 +116,6 @@ export const router = createBrowserRouter([
       />
     ),
   },
+  { path: '/admin', element: <AdminPage /> },
   { path: '*', element: <NotFoundPage /> },
 ])

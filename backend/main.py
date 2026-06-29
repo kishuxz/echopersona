@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from arq.connections import create_pool
 
 from config import settings
-from routers import billing, consent, creation, health, ingest, invites, persona, review, ws
+from routers import admin, billing, consent, creation, health, ingest, invites, persona, review, ws
 from worker import WorkerSettings
 
 logger = logging.getLogger(__name__)
@@ -53,7 +53,7 @@ app.add_middleware(
     allow_origins=settings.cors_origin_list,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Authorization", "Content-Type", "X-Admin-Key"],
 )
 
 app.include_router(health.router)
@@ -64,4 +64,5 @@ app.include_router(creation.router)
 app.include_router(review.router)
 app.include_router(consent.router)
 app.include_router(invites.router)
+app.include_router(admin.router)
 app.include_router(ws.router)
