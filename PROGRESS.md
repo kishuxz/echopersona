@@ -1,7 +1,37 @@
 # EchoPersona — Build Progress
 
 ## Active feature
-Slice 9 (Tavus Video Mode) complete. Next: live browser test with a configured tavus_replica_id persona.
+Slice 10 (Email + Invite Flow) complete. Next: Slice 11 — Admin Panel.
+
+## 2026-06-29 — Slice 10: Email + Invite Flow ✅
+
+Branch: `slice-10-email-invite-flow`
+
+### What changed
+- **`backend/migrations/014_persona_invites.sql`** + **`supabase/migrations/014_persona_invites.sql`**
+  - New `persona_invites` table: token (plain text, UNIQUE), status CHECK, 7-day expires_at, single-use via accepted_at, RLS (owner only)
+  - `persona_relationships.invite_id` back-reference added (idempotent ALTER)
+  - Migration confirmed applied in Supabase
+- **`backend/models/invite.py`** — `InviteCreate`, `InviteRecord`, `AcceptInviteRequest`, `AcceptInviteResponse` Pydantic models
+- **`backend/services/email.py`** — async Resend REST wrapper (`httpx`); three functions: `send_invite_email`, `send_readiness_notification`, `send_acceptance_confirmation`; RESEND_API_KEY absent → logs warning, returns False (never raises)
+- **`backend/services/invite_store.py`** — `create_invite`, `get_invites_for_persona`, `get_invite_by_id`, `get_invite_by_token`, `revoke_invite`, `accept_invite`, `count_accepted_members`; token is `secrets.token_urlsafe(32)` stored raw; expiry and single-use checked in Python
+- **`backend/routers/invites.py`** — four endpoints: `POST /invites/{persona_id}` (201), `GET /invites/{persona_id}`, `DELETE /invites/{invite_id}`, `POST /invites/accept`; entitlement gate at both creation and acceptance via `can_add_family_member`; acceptance uses `db.auth.admin.get_user_by_id` to resolve owner email for confirmation
+- **`backend/worker/tasks/email.py`** — `send_readiness_emails` arq task: fans out readiness notifications to all linked family members via admin API email lookup
+- **`backend/config.py`** — `RESEND_API_KEY`, `RESEND_FROM_ADDRESS` settings added
+- **`backend/.env.example`** — Resend vars documented
+- **`backend/main.py`** — `invites` router registered
+- **`backend/worker/__init__.py`** — `send_readiness_emails` added to `WorkerSettings.functions`
+- **`backend/worker/tasks/enrichment.py`** — `await ctx["redis"].enqueue_job("send_readiness_emails", persona_id)` added after readiness_status=ready; guarded with `if ctx.get("redis")` so standalone/test runs are unaffected
+- **`backend/tests/test_invite_flow.py`** — 25 tests, all passing
+
+### Test results
+`525 passed, 0 failed` (up from 500 before this slice)
+
+### Operational notes
+- `RESEND_FROM_ADDRESS` must be a verified sender domain in the Resend dashboard before emails will deliver
+- `RESEND_API_KEY` absent → all emails silently skipped (safe for dev/test)
+- Invitee must be a logged-in Supabase user before accepting (JWT required on `/invites/accept`); frontend should redirect unauthenticated users to login with `returnTo=/invite/accept?token=...`
+- Token expiry enforced in Python; expired rows remain in DB (no cron cleanup — acceptable for v1, noted in backlog)
 
 ## 2026-06-29 — Slice 9: Tavus Video Mode ✅
 
@@ -463,12 +493,12 @@ Step 7 Slice G ✅ — Minimal frontend billing and upgrade UI (2026-06-17)
 None.
 
 ## Next action
-Slice 5: Fidelity Gate hardening — block low-fidelity units from entering the FAISS index.
+Slice 11: Admin Panel — rag-persona-engineer (router) + frontend-react-engineer.
 
 ## Last known green verification
 ```bash
 cd backend && python -m pytest tests/ -q
-# 428 passed, 5 warnings (2026-06-28, Slice 4)
+# 525 passed, 5 warnings (2026-06-29, Slice 10)
 ```
 
 ## Do not forget
@@ -480,6 +510,7 @@ cd backend && python -m pytest tests/ -q
 - Migration 009 (`persona_readiness`) **confirmed applied** (2026-06-24) — `readiness_status` on `personas`.
 - Migration 010 (`identity_card`) applied manually in Supabase SQL editor.
 - Migration 011 (`listener_profiles`) **applied via Supabase MCP** (2026-06-28) — `resolved_entity_ids` on `memory_units`, `persona_relationships` table.
+- Migration 014 (`persona_invites`) **applied via Supabase MCP** (2026-06-29) — `persona_invites` table, `invite_id` on `persona_relationships`.
 - `SESSION_LISTENER` and `SESSION_HISTORY` are not cleaned up on disconnect — known gap, defer to a future cleanup slice.
 - `posthumous_verified` beneficiary activation is explicitly deferred — activation signal not yet wired.
 - `persona_relationships` rows must be seeded manually (no API endpoint yet) — future Admin UI or API slice.

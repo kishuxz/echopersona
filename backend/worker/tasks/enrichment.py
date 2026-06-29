@@ -82,6 +82,8 @@ async def enrich_persona(ctx: dict, persona_id: str) -> dict:
 
         await update_readiness_status(persona_id, "ready")
         logger.info("[Enrich] readiness_status=ready for persona_id=%s", persona_id)
+        if ctx.get("redis"):
+            await ctx["redis"].enqueue_job("send_readiness_emails", persona_id)
 
         return {
             "persona_id": persona_id,
