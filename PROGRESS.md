@@ -1,7 +1,31 @@
 # EchoPersona — Build Progress
 
 ## Active feature
-Slice 10 (Email + Invite Flow) complete. Next: Slice 11 — Admin Panel.
+Slice 11 (Admin Panel) complete. All 11 slices done.
+
+## 2026-06-29 — Slice 11: Admin Panel ✅
+
+Branch: `admin-panel-slice-11`
+
+### What changed
+- **`backend/middleware/admin_auth.py`** (new) — `require_admin` FastAPI dependency; gates all `/admin` routes on `X-Admin-Key` header; safe-fails (403) when `ADMIN_KEY` is empty
+- **`backend/routers/admin.py`** (new) — 6 endpoints: `GET /admin/stats`, `GET /admin/personas`, `GET /admin/personas/{id}`, `POST /admin/personas/{id}/re-enrich` (409 if processing), `POST /admin/personas/{id}/relationships` (409 if duplicate), `DELETE /admin/personas/{id}/relationships/{listener_user_id}`; uses service-role client (bypasses RLS); enqueues via `app.state.arq_pool`
+- **`backend/config.py`** — `admin_key` / `ADMIN_KEY` setting added
+- **`backend/main.py`** — admin router registered; `X-Admin-Key` added to CORS `allow_headers`
+- **`backend/.env.example`** — `ADMIN_KEY` documented
+- **`backend/tests/test_admin.py`** (new) — 13 tests: auth gates, stats aggregation, persona list, detail 404, re-enrich (404/409/enqueue), relationship add (409) + delete (404/200)
+- **`frontend/src/types/index.ts`** — admin types added: `AdminStats`, `AdminPersonaRow`, `AdminPersonaDetail`, `AdminMemoryUnit`, `AdminRelationship`, `AdminRelationshipCreate`, `ReEnrichResponse`
+- **`frontend/src/lib/adminApi.ts`** (new) — typed admin API client; reads key from `localStorage["adminKey"]`; injects `X-Admin-Key` header
+- **`frontend/src/pages/AdminPage.tsx`** (new) — single-page admin UI: key form (validates via `/admin/stats`), stats bar, persona table, persona detail drawer with memory units + relationship table + add/remove
+- **`frontend/src/router.tsx`** — `/admin` route added (no ProtectedRoute — admin uses its own key guard)
+
+### Test results
+`538 passed, 0 failed` — TypeScript clean, `npm run build` clean
+
+### Operational notes
+- Set `ADMIN_KEY` in production `.env` — generate with `python -c "import secrets; print(secrets.token_urlsafe(32))"`
+- `/admin` is served at the same origin as the main app; never link to it from the public UI
+- Email lookup in persona list/detail uses `auth.admin.get_user_by_id` (O(1) per user in list, paginated `list_users` for the stats endpoint)
 
 ## 2026-06-29 — Slice 10: Email + Invite Flow ✅
 
@@ -493,7 +517,7 @@ Step 7 Slice G ✅ — Minimal frontend billing and upgrade UI (2026-06-17)
 None.
 
 ## Next action
-Slice 11: Admin Panel — rag-persona-engineer (router) + frontend-react-engineer.
+All 11 planned slices are complete. Next: live APJ persona fidelity test, production VPC hardening, or backlog prioritisation.
 
 ## Last known green verification
 ```bash

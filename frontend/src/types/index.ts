@@ -182,3 +182,75 @@ export type ServerMessage =
   | ({ type: "latency_summary" } & Omit<LatencySnapshot, "timestamp">)
   | { type: "error"; message: string }
   | { type: "pong" };
+
+// ── Admin panel types ─────────────────────────────────────────────────────────
+
+export interface AdminStats {
+  total_personas: number;
+  by_readiness: Record<string, number>;
+  total_users: number;
+  total_memory_units: number;
+  total_relationships: number;
+  plan_tier_counts: Record<string, number>;
+}
+
+export interface AdminPersonaRow {
+  id: string;
+  name: string;
+  readiness_status: string;
+  owner_email: string;
+  plan_tier: string;
+  memory_unit_count: number;
+  relationship_count: number;
+  created_at: string | null;
+}
+
+export interface AdminMemoryUnit {
+  unit_id: string;
+  content_first_person: string;
+  memory_category: string;
+  verified: boolean;
+  fidelity_score: number;
+  captured_at: string | null;
+}
+
+export interface AdminRelationship {
+  id: string;
+  listener_user_id: string;
+  listener_email: string;
+  entity_canonical: string;
+  relationship: string;
+  address_term: string;
+  invite_id: string | null;
+  created_at: string | null;
+}
+
+export interface AdminPersonaDetail {
+  id: string;
+  name: string;
+  user_id: string;
+  readiness_status: string;
+  owner_email: string;
+  plan_tier: string;
+  tone: string;
+  avoid_phrases: string[];
+  answer_length_pref: string;
+  tavus_replica_id: string | null;
+  voice_card: Record<string, unknown>;
+  identity_card: Record<string, unknown>;
+  created_at: string | null;
+  recent_memory_units: AdminMemoryUnit[];
+  relationships: AdminRelationship[];
+}
+
+export interface AdminRelationshipCreate {
+  listener_user_id: string;
+  entity_canonical: string;
+  relationship: string;
+  address_term?: string;
+}
+
+export interface ReEnrichResponse {
+  job_id: string | null;
+  persona_id: string;
+}
