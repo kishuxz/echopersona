@@ -1,7 +1,40 @@
 # EchoPersona — Build Progress
 
 ## Active feature
-Slice 2 (Progressive Q&A) complete — next: Slice 3 (TBD)
+Slice 4 (Listener Profiles) complete — next: Slice 5 (Fidelity Gate hardening)
+
+## 2026-06-28 — Slice 4: Listener Profiles + Entity Back-links + Retrieval Score Threshold ✅
+
+Branch: `doha`
+
+### What changed
+- **`backend/migrations/011_listener_profiles.sql`** (new) + `supabase/migrations/011_listener_profiles.sql` (new)
+  - `resolved_entity_ids TEXT[] NOT NULL DEFAULT '{}'` on `memory_units`; GIN index
+  - `persona_relationships` table: maps `(persona_id, listener_user_id)` → `(entity_canonical, relationship, address_term)`; RLS: owner-manage + listener-read-own
+  - Migration applied via Supabase MCP 2026-06-28
+- **`backend/services/ingestion/stage3.py`** — `resolve_unit_entity_ids()`: maps unit raw entity mentions to canonical names using alias lookups; returns `{unit_id: [canonical, ...]}` for enrichment.py to write back
+- **`backend/services/ingestion/source_store.py`** — `update_unit_resolved_entities()` writes Stage 3 back-links; `get_persona_relationship()` fetches entity canonical for a listener
+- **`backend/worker/tasks/enrichment.py`** — after Stage 3, calls `resolve_unit_entity_ids` + `update_unit_resolved_entities` for every unit with matches
+- **`backend/models/consent.py`** — `ListenerContext` gains `entity_canonical: str | None = None` (§9.3 — from `persona_relationships`)
+- **`backend/services/listener.py`** — immediate-beneficiary path now queries `persona_relationships` via passed `db` and sets `entity_canonical` on `ListenerContext`
+- **`backend/services/rag.py`**
+  - `_SCORE_THRESHOLD = 0.25` (§9.7 confidence floor — units below are dropped, triggering no-memory fallback)
+  - `_ENTITY_BOOST = 0.15` (§9.3 — score bonus for units whose `resolved_entity_ids` includes the listener's entity)
+  - `build_index_from_units` stores `resolved_entity_ids` per unit in `_units`
+  - `retrieve(query, top_k, listener_entity)` — fetches 3× candidates, applies entity boost, filters by threshold
+- **`backend/routers/ws.py`** — both retrieve call sites pass `listener_entity=listener_ctx.entity_canonical` (None-safe)
+- **`backend/tests/test_listener_profiles.py`** (new) — 19 tests: alias resolution (case-insensitive, multi-unit, dedup), index stores `resolved_entity_ids`, threshold and boost constants, keyword-fallback param acceptance, `ListenerContext.entity_canonical`
+- **`backend/tests/test_listener.py`** — 4 beneficiary tests updated (+1 new) for 4-call mock sequence; `entity_canonical` assertions added
+
+### Verification
+```bash
+cd backend && python -m pytest tests/ -q
+# 428 passed, 5 warnings
+```
+
+### Pre-existing gaps (tracked, not fixed here)
+- Fidelity gate does not block low-score units from indexing → Slice 5 (Fidelity Gate hardening)
+- No API endpoint to register `persona_relationships` rows yet — table seeded manually for now
 
 ## 2026-06-28 — Slice 2: Progressive Q&A ✅
 
@@ -280,14 +313,12 @@ Step 7 Slice G ✅ — Minimal frontend billing and upgrade UI (2026-06-17)
 None.
 
 ## Next action
-Browser verification of full Guided Q&A → readiness gate flow (merged integration).
+Slice 5: Fidelity Gate hardening — block low-fidelity units from entering the FAISS index.
 
 ## Last known green verification
 ```bash
 cd backend && python -m pytest tests/ -q
-# TBD — post-merge run pending
-cd frontend && npx tsc --noEmit && npm run build
-# TBD — post-merge run pending
+# 428 passed, 5 warnings (2026-06-28, Slice 4)
 ```
 
 ## Do not forget
@@ -297,6 +328,9 @@ cd frontend && npx tsc --noEmit && npm run build
 - Migration 007 (`persona_memory_engine`) **confirmed applied** (2026-06-24) — `memory_category` on `memory_units`.
 - Migration 008 (`voice_card`) **confirmed applied** (2026-06-24) — `voice_card JSONB` on `personas`.
 - Migration 009 (`persona_readiness`) **confirmed applied** (2026-06-24) — `readiness_status` on `personas`.
+- Migration 010 (`identity_card`) applied manually in Supabase SQL editor.
+- Migration 011 (`listener_profiles`) **applied via Supabase MCP** (2026-06-28) — `resolved_entity_ids` on `memory_units`, `persona_relationships` table.
 - `SESSION_LISTENER` and `SESSION_HISTORY` are not cleaned up on disconnect — known gap, defer to a future cleanup slice.
 - `posthumous_verified` beneficiary activation is explicitly deferred — activation signal not yet wired.
+- `persona_relationships` rows must be seeded manually (no API endpoint yet) — future Admin UI or API slice.
 - Tavus not yet wired in — see `docs/backlog.md`.

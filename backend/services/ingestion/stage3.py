@@ -107,6 +107,33 @@ def _coerce_entities(raw: list[dict]) -> list[dict]:
     return out
 
 
+def resolve_unit_entity_ids(units: list[dict], entity_graph: list[dict]) -> dict[str, list[str]]:
+    """Return mapping of unit_id → list of resolved canonical entity names.
+
+    Matches each unit's raw entity mentions (entities.people + entities.places)
+    against every alias in the entity_graph. Used by enrichment.py to write
+    resolved_entity_ids back onto each memory_units row (§9.3 back-link).
+    """
+    alias_map: dict[str, str] = {}
+    for ent in entity_graph:
+        canonical = ent.get("canonical", "").strip()
+        if not canonical:
+            continue
+        alias_map[canonical.lower()] = canonical
+        for alias in ent.get("aliases") or []:
+            if alias:
+                alias_map[alias.lower()] = canonical
+
+    result: dict[str, list[str]] = {}
+    for u in units:
+        uid = str(u.get("unit_id") or u.get("id", ""))
+        ents = u.get("entities") or {}
+        mentions = list(ents.get("people") or []) + list(ents.get("places") or [])
+        resolved = list({alias_map[m.lower()] for m in mentions if m and m.lower() in alias_map})
+        result[uid] = resolved
+    return result
+
+
 def _mock_entity_graph(units: list[dict]) -> list[dict]:
     raw = _collect_raw_entities(units)
     seen_people = list({p for p in raw["people"] if p})

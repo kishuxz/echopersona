@@ -19,6 +19,10 @@ from models.persona import Persona, PersonaCreate
 logger = logging.getLogger(__name__)
 
 _EMBED_MODEL = "paraphrase-MiniLM-L3-v2"
+# §9.7 confidence floor — units scoring below this are treated as no-match
+_SCORE_THRESHOLD = 0.25
+# Boost applied to units whose resolved_entity_ids includes the listener's entity
+_ENTITY_BOOST = 0.15
 
 
 class PersonaRAG:
@@ -70,6 +74,7 @@ class PersonaRAG:
                 "themes": u.get("themes") or [],
                 "entities": u.get("entities") or {},
                 "affect": u.get("affect") or {},
+                "resolved_entity_ids": list(u.get("resolved_entity_ids") or []),
             })
             texts.append(text)
         self._build_faiss(texts)
@@ -97,13 +102,26 @@ class PersonaRAG:
 
     # ── retrieval ───────────────────────────────────────────────────────────
 
-    def retrieve(self, query: str, top_k: int = 3) -> list[dict]:
-        """Return top-k matching units as dicts with at least a 'text' key."""
+    def retrieve(
+        self,
+        query: str,
+        top_k: int = 3,
+        listener_entity: str | None = None,
+    ) -> list[dict]:
+        """Return top-k matching units as dicts with at least a 'text' key.
+
+        listener_entity: canonical entity name (from persona_relationships). When
+        provided, units whose resolved_entity_ids includes this name receive a
+        score boost so listener-relevant memories surface higher (§9.3).
+
+        Units scoring below _SCORE_THRESHOLD are dropped; if all drop the
+        no-memory fallback in build_system_prompt takes over (§9.7).
+        """
         if not self._units:
             return []
 
         if self.index is None or settings.mock_mode:
-            # Keyword fallback
+            # Keyword fallback — no threshold or boost in mock mode
             query_terms = set(query.lower().split())
             scored = [
                 (len(query_terms & set(u["text"].lower().split())), i)
@@ -115,17 +133,42 @@ class PersonaRAG:
 
         self._load()
         q_emb = np.asarray(self.model.encode([query]), dtype=np.float32)
+
         try:
             import faiss
             faiss.normalize_L2(q_emb)
-            _, idxs = self.index.search(q_emb, top_k)
-            return [self._units[i] for i in idxs[0] if 0 <= i < len(self._units)]
+            # Fetch extra candidates so threshold filtering still yields top_k
+            n_candidates = min(len(self._units), top_k * 3)
+            scores_raw, idxs = self.index.search(q_emb, n_candidates)
+            scores = scores_raw[0]
+            indices_raw = idxs[0]
         except Exception:
             norms = np.linalg.norm(q_emb, axis=1, keepdims=True)
-            q_emb = q_emb / np.maximum(norms, 1e-12)
-            scores = np.asarray(self.index) @ q_emb[0]
-            idxs = np.argsort(scores)[::-1][:top_k]
-            return [self._units[int(i)] for i in idxs]
+            q_emb_norm = q_emb / np.maximum(norms, 1e-12)
+            scores = np.asarray(self.index) @ q_emb_norm[0]
+            indices_raw = np.argsort(scores)[::-1][:top_k * 3]
+            scores = scores[indices_raw]
+
+        # Apply entity boost, then threshold filter
+        entity_lower = listener_entity.lower() if listener_entity else ""
+        boosted: list[tuple[float, int]] = []
+        for score, idx in zip(scores, indices_raw):
+            if not (0 <= idx < len(self._units)):
+                continue
+            s = float(score)
+            if entity_lower:
+                unit_entities = [e.lower() for e in self._units[idx].get("resolved_entity_ids") or []]
+                if entity_lower in unit_entities:
+                    s += _ENTITY_BOOST
+            boosted.append((s, idx))
+
+        boosted.sort(key=lambda x: x[0], reverse=True)
+        result = [
+            self._units[idx]
+            for s, idx in boosted[:top_k]
+            if s >= _SCORE_THRESHOLD
+        ]
+        return result
 
 
 # ── process-level cache ─────────────────────────────────────────────────────
