@@ -146,7 +146,8 @@ cd backend && python -m pytest tests/ -q
 cd frontend && npx tsc --noEmit
 
 # Start backend dev server (requires .env)
-cd backend && uvicorn main:app --port 8000 --reload
+# --host :: binds IPv6 dual-stack so Chrome (which resolves localhost → ::1 on this machine) can connect
+cd backend && uvicorn main:app --host :: --port 8000 --reload
 
 # Start frontend dev
 cd frontend && npm run dev
