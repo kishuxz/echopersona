@@ -69,7 +69,7 @@ async def get_persona_by_id(persona_id: str) -> Persona | None:
             "id, user_id, name, stories, personality_traits, speaking_style, voice_id,"
             " did_avatar_url, idle_video_url, simli_face_id, entity_graph, style_exemplars,"
             " voice_card, identity_card, readiness_status, tone, avoid_phrases, answer_length_pref,"
-            " relationship_tone, created_at"
+            " relationship_tone, created_at, answer_count"
         )
         .eq("id", persona_id)
         .maybe_single()
@@ -88,7 +88,7 @@ async def get_persona(persona_id: str, user_id: str) -> Persona | None:
             "id, user_id, name, stories, personality_traits, speaking_style, voice_id,"
             " did_avatar_url, idle_video_url, simli_face_id, entity_graph, style_exemplars,"
             " voice_card, identity_card, readiness_status, tone, avoid_phrases, answer_length_pref,"
-            " relationship_tone, created_at"
+            " relationship_tone, created_at, answer_count"
         )
         .eq("id", persona_id)
         .eq("user_id", user_id)
@@ -108,7 +108,7 @@ async def list_personas(user_id: str) -> list[Persona]:
             "id, user_id, name, stories, personality_traits, speaking_style, voice_id,"
             " did_avatar_url, idle_video_url, simli_face_id, entity_graph, style_exemplars,"
             " voice_card, identity_card, readiness_status, tone, avoid_phrases, answer_length_pref,"
-            " relationship_tone, created_at"
+            " relationship_tone, created_at, answer_count"
         )
         .eq("user_id", user_id)
         .order("created_at", desc=True)

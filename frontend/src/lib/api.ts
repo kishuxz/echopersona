@@ -1,6 +1,6 @@
 import { DEFAULT_API_BASE, DEFAULT_WS_BASE } from '../constants'
 import { supabase } from './supabase'
-import type { Persona, PersonaCreate, PersonaReadiness, ConsentRecord, ConsentCreate, SuccessionRecord, SuccessionCreate, BillingStatus, StartSessionResponse, CaptureResponse } from '../types'
+import type { Persona, PersonaCreate, PersonaReadiness, ConsentRecord, ConsentCreate, SuccessionRecord, SuccessionCreate, BillingStatus, PersonaAccess, StartSessionResponse, CaptureResponse } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? DEFAULT_API_BASE
 
@@ -171,16 +171,28 @@ export async function getBillingStatus(): Promise<BillingStatus> {
   return res.json()
 }
 
-export async function startCheckout(plan_tier: 'creator' | 'legacy'): Promise<void> {
+export async function startCheckout(
+  plan_tier: 'creator' | 'legacy' | 'preservation',
+  persona_id?: string,
+): Promise<void> {
   const headers = await getAuthHeaders()
+  const body: Record<string, string> = { plan_tier }
+  if (persona_id) body.persona_id = persona_id
   const res = await fetch(`${API_BASE}/billing/checkout`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ plan_tier }),
+    body: JSON.stringify(body),
   })
   if (!res.ok) throw new Error(await res.text())
   const { checkout_url } = await res.json()
   window.location.href = checkout_url
+}
+
+export async function getPersonaAccess(personaId: string): Promise<PersonaAccess> {
+  const headers = await getAuthHeaders()
+  const res = await fetch(`${API_BASE}/billing/persona/${personaId}/access`, { headers })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
 }
 
 export async function startCreationSession(personaId: string): Promise<StartSessionResponse> {
