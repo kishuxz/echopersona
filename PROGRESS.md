@@ -1,7 +1,33 @@
 # EchoPersona — Build Progress
 
 ## Active feature
-Slice 4 (Listener Profiles) complete — next: Slice 5 (Fidelity Gate hardening)
+Slice 6 (Preservation Tier) complete — next: Slice 7 (Three Chat Modes)
+
+## 2026-06-28 — Slice 6: Preservation Tier ✅
+
+Branch: `slice-6-preservation-tier`
+
+### What changed
+- **`backend/migrations/012_preservation.sql`** (new) + `supabase/migrations/012_preservation.sql` (new)
+  - `persona_preservation`: one-time purchase record per persona; UNIQUE on `persona_id`; RLS subject-read-only
+  - `posthumous_access_subscriptions`: recurring subscription per (persona, family subscriber); UNIQUE on `(persona_id, subscriber_user_id)`; RLS subscriber-read-only; `updated_at` trigger
+  - **Applied via Supabase MCP 2026-06-28** (version `20260629062603`)
+- **`backend/models/preservation.py`** (new) — `PersonaPreservation`, `PosthumousAccessSubscription` Pydantic models
+- **`backend/services/preservation.py`** (new) — DB queries (`get_preservation_for_persona`, `upsert_preservation`, `get_posthumous_subscription`, `upsert_posthumous_subscription`, `get_posthumous_subscription_by_stripe_id`) + access predicates (`can_access_preserved_persona`, `can_access_posthumous`)
+- **`backend/config.py`** — added `STRIPE_PRICE_PRESERVATION_ONETIME` and `STRIPE_PRICE_POSTHUMOUS_MONTHLY` fields
+- **`backend/services/billing.py`** — `create_checkout_session` now accepts `mode` and `extra_metadata` kwargs
+- **`backend/services/stripe_webhooks.py`** — four new handlers (`handle_preservation_checkout`, `handle_preservation_payment_intent`, `handle_posthumous_checkout`, `handle_posthumous_subscription_event`); `process_stripe_event` routes by `session.mode` and `metadata.purchase_type`; existing handlers untouched
+- **`backend/models/entitlements.py`** — `BillingStatusResponse` gains `preservation_locked` and `can_use_posthumous_chat` (default False)
+- **`backend/routers/billing.py`** — three new endpoints: `POST /billing/checkout/preservation` (mode=payment), `POST /billing/checkout/posthumous` (mode=subscription), `GET /billing/preservation/{persona_id}`
+- **`backend/tests/test_preservation.py`** (new) — 37 tests covering models, predicates, service queries, all four webhook handlers, event routing, and all three new endpoints
+
+### Test result
+465 passed, 0 failed (2026-06-28)
+
+### Stripe ops required (human steps before going live)
+1. Create Stripe one-time price → set `STRIPE_PRICE_PRESERVATION_ONETIME` in `.env`
+2. Create Stripe monthly price → set `STRIPE_PRICE_POSTHUMOUS_MONTHLY` in `.env`
+3. Subscribe Stripe webhook to `payment_intent.succeeded` event (not subscribed yet)
 
 ## 2026-06-28 — Slice 4: Listener Profiles + Entity Back-links + Retrieval Score Threshold ✅
 

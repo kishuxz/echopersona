@@ -19,6 +19,8 @@ async def create_checkout_session(
     price_id: str,
     success_url: str,
     cancel_url: str,
+    mode: str = "subscription",
+    extra_metadata: dict | None = None,
 ) -> dict:
     """Get or create a Stripe customer for user_id, then create a Checkout Session.
     Reuses stripe_customer_id from an existing entitlement row to avoid duplicate customers.
@@ -31,13 +33,17 @@ async def create_checkout_session(
         customer = stripe.Customer.create(metadata={"supabase_user_id": user_id})
         customer_id = customer.id
 
+    metadata: dict = {"supabase_user_id": user_id}
+    if extra_metadata:
+        metadata.update(extra_metadata)
+
     session = stripe.checkout.Session.create(
         customer=customer_id,
         line_items=[{"price": price_id, "quantity": 1}],
-        mode="subscription",
+        mode=mode,
         success_url=success_url,
         cancel_url=cancel_url,
-        metadata={"supabase_user_id": user_id},
+        metadata=metadata,
     )
 
     return {"checkout_url": session.url, "session_id": session.id}

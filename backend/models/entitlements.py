@@ -43,3 +43,5 @@ class BillingStatusResponse(BaseModel):
     can_use_video: bool
     current_period_end: datetime | None = None
     cancel_at_period_end: bool = False
+    preservation_locked: bool = False
+    can_use_posthumous_chat: bool = False

@@ -42,6 +42,8 @@ class Settings(BaseSettings):
     stripe_webhook_secret: str = Field(default="", alias="STRIPE_WEBHOOK_SECRET")
     stripe_price_creator_monthly: str = Field(default="", alias="STRIPE_PRICE_CREATOR_MONTHLY")
     stripe_price_legacy_monthly: str = Field(default="", alias="STRIPE_PRICE_LEGACY_MONTHLY")
+    stripe_price_preservation_onetime: str = Field(default="", alias="STRIPE_PRICE_PRESERVATION_ONETIME")
+    stripe_price_posthumous_monthly: str = Field(default="", alias="STRIPE_PRICE_POSTHUMOUS_MONTHLY")
     frontend_billing_success_url: str = Field(
         default="http://localhost:5173/billing/success",
         alias="FRONTEND_BILLING_SUCCESS_URL",
