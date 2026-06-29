@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
+    resend_api_key: str = Field(default="", alias="RESEND_API_KEY")
+    resend_from_address: str = Field(default="noreply@kishoreai.online", alias="RESEND_FROM_ADDRESS")
+
     voice_always_on: bool = Field(default=False, alias="VOICE_ALWAYS_ON")
     force_mock_mode: bool = Field(default=False, alias="MOCK_MODE")
 
