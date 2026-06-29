@@ -40,6 +40,54 @@ questions:
         prompt: "Was it true, or did it grow a little over the years?"
         good_when: shallow
 
+  - id: q_origins_03
+    category: origins
+    order: 30
+    modality: video_audio
+    required: false
+    prompt: "Who were your parents — not what they did for work, but who they actually were?"
+    intent: "Entity seeding + parental stance + implicit values the subject absorbed."
+    signals: [entities, affect, stance]
+    max_followups: 2
+    probes:
+      - id: q_origins_03_p1
+        prompt: "What's something they used to say that you still hear in your head?"
+        good_when: shallow
+      - id: q_origins_03_p2
+        prompt: "How are you similar to one of them in ways you didn't expect?"
+        good_when: specific_thread
+
+  - id: q_origins_04
+    category: origins
+    order: 40
+    modality: text
+    required: false
+    prompt: "What was the economic reality of your childhood — were things tight, comfortable, unpredictable?"
+    intent: "Factual material context that colors all later stories; seeds how subject narrates scarcity or security."
+    signals: [themes, stance]
+    max_followups: 1
+    probes:
+      - id: q_origins_04_p1
+        prompt: "How did that shape what you valued or chased later in life?"
+        good_when: shallow
+
+  - id: q_origins_05
+    category: origins
+    order: 50
+    modality: video_audio
+    required: false
+    prompt: "What's the first big moment you remember — something that felt significant even then?"
+    intent: "Episodic memory anchor — often reveals formative narrative style and earliest affect signature."
+    signals: [affect, voice_texture, themes]
+    max_followups: 2
+    probes:
+      - id: q_origins_05_p1
+        prompt: "How old were you, and where were you?"
+        good_when: missing_signal
+      - id: q_origins_05_p2
+        prompt: "Why do you think it stayed with you?"
+        good_when: shallow
+
   # ── family ───────────────────────────────────────────────────────────────────
   - id: q_family_01
     category: family
@@ -61,8 +109,122 @@ questions:
         prompt: "Was there tension there too? It's okay if it wasn't simple."
         good_when: specific_thread
 
+  - id: q_family_02
+    category: family
+    order: 20
+    modality: video_audio
+    required: false
+    prompt: "Did you have siblings? What was that like — the alliances, the rivalries, the roles you each played?"
+    intent: "Sibling dynamics + family system roles; captures humor + conflict affect."
+    signals: [entities, humor, affect]
+    max_followups: 2
+    probes:
+      - id: q_family_02_p1
+        prompt: "Who did you feel closest to, and why?"
+        good_when: shallow
+      - id: q_family_02_p2
+        prompt: "Is that still true today?"
+        good_when: specific_thread
+
+  - id: q_family_03
+    category: family
+    order: 30
+    modality: video_audio
+    required: false
+    prompt: "What's a ritual or tradition your family had — big or small — that felt like yours?"
+    intent: "Shared practice encoding + family identity + sensory/affect detail."
+    signals: [affect, themes, voice_texture]
+    max_followups: 2
+    probes:
+      - id: q_family_03_p1
+        prompt: "Who was in charge of keeping it going?"
+        good_when: missing_signal
+      - id: q_family_03_p2
+        prompt: "Does it still happen?"
+        good_when: shallow
+
+  - id: q_family_04
+    category: family
+    order: 40
+    modality: video_audio
+    required: false
+    prompt: "Was there someone in your family who was the 'different one' — the outlier or the wild card?"
+    intent: "Outlier entity + family mythology; reveals how the subject navigates difference."
+    signals: [entities, humor, stance]
+    max_followups: 2
+    probes:
+      - id: q_family_04_p1
+        prompt: "How did the family talk about them?"
+        good_when: shallow
+      - id: q_family_04_p2
+        prompt: "How do you think about them now, looking back?"
+        good_when: specific_thread
+
   # ── coming_of_age ─────────────────────────────────────────────────────────────
-  # (reserved for extension per §5.5; add questions here)
+  - id: q_coming_of_age_01
+    category: coming_of_age
+    order: 10
+    modality: video_audio
+    required: false
+    prompt: "When did you first feel like an adult — not just older, but actually grown?"
+    intent: "Identity transition marker; captures how the subject narrates growth + autonomy."
+    signals: [affect, voice_texture, themes]
+    max_followups: 2
+    probes:
+      - id: q_coming_of_age_01_p1
+        prompt: "What happened right before that moment?"
+        good_when: shallow
+      - id: q_coming_of_age_01_p2
+        prompt: "Did anyone else see it, or was it private?"
+        good_when: missing_signal
+
+  - id: q_coming_of_age_02
+    category: coming_of_age
+    order: 20
+    modality: video_audio
+    required: false
+    prompt: "What's a mistake you made when you were young that you still think about?"
+    intent: "Regret register + moral stance; reveals how subject reconciles the past with the present self."
+    signals: [affect, stance, themes]
+    max_followups: 2
+    probes:
+      - id: q_coming_of_age_02_p1
+        prompt: "What would you do differently?"
+        good_when: shallow
+      - id: q_coming_of_age_02_p2
+        prompt: "Have you made peace with it?"
+        good_when: specific_thread
+
+  - id: q_coming_of_age_03
+    category: coming_of_age
+    order: 30
+    modality: video_audio
+    required: false
+    prompt: "Was there someone who believed in you before you believed in yourself?"
+    intent: "Mentor/champion entity + formative affect; seeds relationship stance."
+    signals: [entities, affect, voice_texture]
+    max_followups: 2
+    probes:
+      - id: q_coming_of_age_03_p1
+        prompt: "What did they see in you?"
+        good_when: shallow
+      - id: q_coming_of_age_03_p2
+        prompt: "Did you ever tell them what that meant?"
+        good_when: specific_thread
+
+  - id: q_coming_of_age_04
+    category: coming_of_age
+    order: 40
+    modality: text
+    required: false
+    prompt: "What did you want to be when you grew up, and how does that compare to where you actually landed?"
+    intent: "Factual vocational/identity arc; reveals self-concept + how subject narrates change."
+    signals: [themes, stance]
+    max_followups: 1
+    probes:
+      - id: q_coming_of_age_04_p1
+        prompt: "Which version of you would be more surprised — the younger one or you now?"
+        good_when: shallow
 
   # ── love ─────────────────────────────────────────────────────────────────────
   - id: q_love_01
@@ -82,6 +244,57 @@ questions:
         prompt: "What's a small ordinary moment with them you'd want remembered?"
         good_when: shallow
 
+  - id: q_love_02
+    category: love
+    order: 20
+    modality: video_audio
+    required: false
+    prompt: "Tell me about a friendship that mattered as much as any romance — the kind you'd call at 2am."
+    intent: "Deep-friendship entity + platonic affect register; broadens love map beyond romantic."
+    signals: [entities, affect, voice_texture]
+    max_followups: 2
+    probes:
+      - id: q_love_02_p1
+        prompt: "What made that friendship different from the others?"
+        good_when: shallow
+      - id: q_love_02_p2
+        prompt: "Is it still there?"
+        good_when: specific_thread
+
+  - id: q_love_03
+    category: love
+    order: 30
+    modality: video_audio
+    required: false
+    prompt: "Tell me about a love that ended — what did you learn from it?"
+    intent: "Loss + growth narrative; captures grief-to-wisdom transition and voice texture under reflection."
+    signals: [affect, stance, voice_texture]
+    max_followups: 2
+    probes:
+      - id: q_love_03_p1
+        prompt: "What did you carry forward from it?"
+        good_when: shallow
+      - id: q_love_03_p2
+        prompt: "Would you do it again, knowing how it ended?"
+        good_when: specific_thread
+
+  - id: q_love_04
+    category: love
+    order: 40
+    modality: video_audio
+    required: false
+    prompt: "How do you show love — through words, through doing things, through showing up?"
+    intent: "Love-language stance; reveals how the subject expresses care and what they value in return."
+    signals: [affect, stance, voice_texture]
+    max_followups: 2
+    probes:
+      - id: q_love_04_p1
+        prompt: "Did you learn that from someone, or figure it out yourself?"
+        good_when: missing_signal
+      - id: q_love_04_p2
+        prompt: "What does 'I love you' sound like from you — do you say it easily or does it cost you something?"
+        good_when: shallow
+
   # ── work ─────────────────────────────────────────────────────────────────────
   - id: q_work_01
     category: work
@@ -95,6 +308,54 @@ questions:
     probes:
       - id: q_work_01_p1
         prompt: "Which of those felt most like 'you'?"
+        good_when: shallow
+
+  - id: q_work_02
+    category: work
+    order: 20
+    modality: video_audio
+    required: false
+    prompt: "What's a professional moment you're most proud of? Not an award — a moment."
+    intent: "Achievement affect + voice when subject lights up; reveals what they actually value professionally."
+    signals: [affect, voice_texture, themes]
+    max_followups: 2
+    probes:
+      - id: q_work_02_p1
+        prompt: "Who else was there, or was it something you did alone?"
+        good_when: missing_signal
+      - id: q_work_02_p2
+        prompt: "Did anyone ever acknowledge it the way you wanted?"
+        good_when: shallow
+
+  - id: q_work_03
+    category: work
+    order: 30
+    modality: video_audio
+    required: false
+    prompt: "Tell me about a difficult colleague, boss, or working relationship — and how you handled it."
+    intent: "Conflict navigation stance; captures how subject talks about difficult people."
+    signals: [stance, affect, entities]
+    max_followups: 2
+    probes:
+      - id: q_work_03_p1
+        prompt: "What did you learn from it?"
+        good_when: shallow
+      - id: q_work_03_p2
+        prompt: "How would you handle it differently today?"
+        good_when: specific_thread
+
+  - id: q_work_04
+    category: work
+    order: 40
+    modality: video_audio
+    required: false
+    prompt: "If money and responsibility weren't factors, what would you spend your days doing?"
+    intent: "Core interest + passion register; reveals what the subject actually loves vs. what they do."
+    signals: [affect, themes, voice_texture]
+    max_followups: 1
+    probes:
+      - id: q_work_04_p1
+        prompt: "Have you ever gotten a glimpse of that life, even briefly?"
         good_when: shallow
 
   # ── beliefs ──────────────────────────────────────────────────────────────────
@@ -115,6 +376,57 @@ questions:
         prompt: "Is there something you used to believe and changed your mind about?"
         good_when: missing_signal
 
+  - id: q_beliefs_02
+    category: beliefs
+    order: 20
+    modality: video_audio
+    required: false
+    prompt: "What do you think happens after we die — genuinely, not what you're supposed to say?"
+    intent: "Death-stance + existential voice register; reveals depth of belief and comfort with mortality."
+    signals: [stance, affect, voice_texture]
+    max_followups: 2
+    probes:
+      - id: q_beliefs_02_p1
+        prompt: "Has that view changed over your life?"
+        good_when: shallow
+      - id: q_beliefs_02_p2
+        prompt: "Is it comforting, or does it still leave you unsettled?"
+        good_when: specific_thread
+
+  - id: q_beliefs_03
+    category: beliefs
+    order: 30
+    modality: video_audio
+    required: false
+    prompt: "What's your relationship with religion or spirituality? Did you grow up with it, leave it, find it?"
+    intent: "Spiritual stance + journey narrative; foundational for voice tone in existential conversations."
+    signals: [stance, themes, voice_texture]
+    max_followups: 2
+    probes:
+      - id: q_beliefs_03_p1
+        prompt: "What do you still carry from it, even if you've moved on?"
+        good_when: shallow
+      - id: q_beliefs_03_p2
+        prompt: "Do you have a practice — something you actually do, not just believe?"
+        good_when: missing_signal
+
+  - id: q_beliefs_04
+    category: beliefs
+    order: 40
+    modality: video_audio
+    required: false
+    prompt: "What do you wish more people understood — about you, or about the world?"
+    intent: "Core unvoiced conviction; often the clearest window into the subject's worldview."
+    signals: [stance, voice_texture, affect]
+    max_followups: 2
+    probes:
+      - id: q_beliefs_04_p1
+        prompt: "Have you ever tried to explain it and had it fall flat?"
+        good_when: shallow
+      - id: q_beliefs_04_p2
+        prompt: "Where did that conviction come from?"
+        good_when: missing_signal
+
   # ── texture ──────────────────────────────────────────────────────────────────
   - id: q_texture_01
     category: texture
@@ -132,6 +444,54 @@ questions:
       - id: q_texture_01_p2
         prompt: "What about something that makes you laugh every time?"
         good_when: missing_signal
+
+  - id: q_texture_02
+    category: texture
+    order: 20
+    modality: video_audio
+    required: false
+    prompt: "When you tell a story, how do you tell it — do you bury the punchline, get lost in the details, cut to the point?"
+    intent: "Self-aware narration style capture; useful for calibrating how the twin tells stories."
+    signals: [voice_texture, humor]
+    max_followups: 2
+    probes:
+      - id: q_texture_02_p1
+        prompt: "Can you give me an example — tell me a story the way you'd actually tell it?"
+        good_when: shallow
+      - id: q_texture_02_p2
+        prompt: "Who do you know that tells stories better than you — and what do they do differently?"
+        good_when: specific_thread
+
+  - id: q_texture_03
+    category: texture
+    order: 30
+    modality: video_audio
+    required: false
+    prompt: "What's a subject you could talk about for hours without getting bored?"
+    intent: "Passion register capture; subject speaks with most natural fluency here."
+    signals: [voice_texture, affect, themes]
+    max_followups: 2
+    probes:
+      - id: q_texture_03_p1
+        prompt: "What do most people miss about it that you find obvious?"
+        good_when: shallow
+      - id: q_texture_03_p2
+        prompt: "Has anyone ever told you you go too deep on this?"
+        good_when: specific_thread
+
+  - id: q_texture_04
+    category: texture
+    order: 40
+    modality: video_audio
+    required: false
+    prompt: "What's something you always notice that others seem to walk past?"
+    intent: "Perceptual signature — reveals what the subject is tuned to; colors all descriptive language."
+    signals: [voice_texture, affect, themes]
+    max_followups: 1
+    probes:
+      - id: q_texture_04_p1
+        prompt: "Did you always notice it, or did something make you start paying attention?"
+        good_when: shallow
 
   # ── hardship ─────────────────────────────────────────────────────────────────
   - id: q_hardship_01
@@ -151,6 +511,57 @@ questions:
         prompt: "What would you say to someone going through that now?"
         good_when: specific_thread
 
+  - id: q_hardship_02
+    category: hardship
+    order: 20
+    modality: video_audio
+    required: false
+    prompt: "Tell me about a loss — a person, a chapter of life, a version of yourself you had to let go."
+    intent: "Grief register + resilience narrative; deeply colors the attunement voice (§9.4)."
+    signals: [affect, voice_texture, themes]
+    max_followups: 2
+    probes:
+      - id: q_hardship_02_p1
+        prompt: "What helped you carry it?"
+        good_when: shallow
+      - id: q_hardship_02_p2
+        prompt: "Is there something about that person or chapter you want remembered?"
+        good_when: specific_thread
+
+  - id: q_hardship_03
+    category: hardship
+    order: 30
+    modality: video_audio
+    required: false
+    prompt: "Tell me about a time you were wrong about something important and had to admit it."
+    intent: "Humility + repair stance; reveals how the subject handles being wrong and how they talk about it."
+    signals: [stance, affect, voice_texture]
+    max_followups: 2
+    probes:
+      - id: q_hardship_03_p1
+        prompt: "What made it hard to admit?"
+        good_when: shallow
+      - id: q_hardship_03_p2
+        prompt: "How did the other person respond?"
+        good_when: missing_signal
+
+  - id: q_hardship_04
+    category: hardship
+    order: 40
+    modality: video_audio
+    required: false
+    prompt: "Is there something you wish you'd done differently — something you'd go back and change if you could?"
+    intent: "Regret distillation + forward-facing stance; important for late-life attunement conversations."
+    signals: [affect, stance, themes]
+    max_followups: 2
+    probes:
+      - id: q_hardship_04_p1
+        prompt: "What stopped you at the time?"
+        good_when: shallow
+      - id: q_hardship_04_p2
+        prompt: "Have you found a way to make peace with it?"
+        good_when: specific_thread
+
   # ── places ───────────────────────────────────────────────────────────────────
   - id: q_places_01
     category: places
@@ -166,6 +577,54 @@ questions:
         prompt: "Which one would you go back to if you could?"
         good_when: shallow
 
+  - id: q_places_02
+    category: places
+    order: 20
+    modality: video_audio
+    required: false
+    prompt: "Tell me about a place you visited that surprised you — somewhere that wasn't what you expected."
+    intent: "Travel + discovery narrative; captures how subject describes new environments."
+    signals: [affect, voice_texture, themes]
+    max_followups: 2
+    probes:
+      - id: q_places_02_p1
+        prompt: "What surprised you most about it?"
+        good_when: shallow
+      - id: q_places_02_p2
+        prompt: "Did it change anything in you, or was it more of a window?"
+        good_when: specific_thread
+
+  - id: q_places_03
+    category: places
+    order: 30
+    modality: text
+    required: false
+    prompt: "Where do you go when you need to think — physically, or in your head?"
+    intent: "Private restorative space; grounds the persona in a recognizable psychological refuge."
+    signals: [affect, themes]
+    max_followups: 1
+    probes:
+      - id: q_places_03_p1
+        prompt: "What does it feel like when you're there?"
+        good_when: shallow
+
+  - id: q_places_04
+    category: places
+    order: 40
+    modality: video_audio
+    required: false
+    prompt: "Is there a place that no longer exists for you — a home, a neighborhood, a version of a city?"
+    intent: "Grief of place + temporal displacement; rich affect territory for the persona."
+    signals: [affect, voice_texture, themes]
+    max_followups: 2
+    probes:
+      - id: q_places_04_p1
+        prompt: "What do you miss most about it?"
+        good_when: shallow
+      - id: q_places_04_p2
+        prompt: "Is there somewhere that feels like it now, or is it gone gone?"
+        good_when: specific_thread
+
   # ── legacy ───────────────────────────────────────────────────────────────────
   - id: q_legacy_01
     category: legacy
@@ -180,6 +639,57 @@ questions:
       - id: q_legacy_01_p1
         prompt: "Is there someone specific you'd want to say something just to?"
         good_when: shallow
+
+  - id: q_legacy_02
+    category: legacy
+    order: 20
+    modality: video_audio
+    required: false
+    prompt: "What do you hope the people close to you remember about you — not what you accomplished, but who you were?"
+    intent: "Relational legacy; captures what the subject most wants to transmit."
+    signals: [affect, voice_texture, stance]
+    max_followups: 2
+    probes:
+      - id: q_legacy_02_p1
+        prompt: "Is there something you feel like you've not yet had the chance to show them?"
+        good_when: shallow
+      - id: q_legacy_02_p2
+        prompt: "Who, in particular, do you think about when you answer that?"
+        good_when: missing_signal
+
+  - id: q_legacy_03
+    category: legacy
+    order: 30
+    modality: video_audio
+    required: false
+    prompt: "Is there something you built or created — a family, a business, a garden, an idea — that outlasted the moment?"
+    intent: "Material legacy + maker identity; seals a core persistent contribution to the persona."
+    signals: [affect, themes, voice_texture]
+    max_followups: 2
+    probes:
+      - id: q_legacy_03_p1
+        prompt: "Who else was part of building it?"
+        good_when: missing_signal
+      - id: q_legacy_03_p2
+        prompt: "What do you hope happens to it after you?"
+        good_when: shallow
+
+  - id: q_legacy_04
+    category: legacy
+    order: 40
+    modality: video_audio
+    required: false
+    prompt: "What advice would you give your younger self — the version of you that was just starting out?"
+    intent: "Compressed wisdom + address mode to a younger self; reveals how subject narrates growth."
+    signals: [stance, affect, voice_texture]
+    max_followups: 2
+    probes:
+      - id: q_legacy_04_p1
+        prompt: "Would that younger version listen?"
+        good_when: shallow
+      - id: q_legacy_04_p2
+        prompt: "Is there someone specific you'd want to say that to now?"
+        good_when: specific_thread
 
 # ── steering bank (§5.4) ──────────────────────────────────────────────────────
 # Evaluator selects steer_id; code fills {topic} from current question context.

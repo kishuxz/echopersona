@@ -7,11 +7,27 @@ interface CreationWizardProps {
   onComplete: (personaId: string) => void
 }
 
-const TOTAL_QUESTIONS = 10
+const TOTAL_QUESTIONS = 41
+const MIN_QUESTIONS_TO_FINISH = 30
+
+const CATEGORY_LABELS: Record<string, string> = {
+  origins: 'Origins',
+  family: 'Family',
+  coming_of_age: 'Coming of Age',
+  love: 'Love',
+  work: 'Work',
+  beliefs: 'Beliefs & Values',
+  texture: 'Your Voice',
+  hardship: 'Hardship',
+  places: 'Places',
+  legacy: 'Legacy',
+  _consent: 'Consent',
+}
 
 export function CreationWizard({ personaId, onComplete }: CreationWizardProps) {
   const [session, setSession] = useState<CreationSession | null>(null)
   const [currentPrompt, setCurrentPrompt] = useState('')
+  const [currentCategory, setCurrentCategory] = useState<string | null>(null)
   const [steerHint, setSteerHint] = useState<string | null>(null)
   const [answerText, setAnswerText] = useState('')
   const [answeredCount, setAnsweredCount] = useState(0)
@@ -26,6 +42,7 @@ export function CreationWizard({ personaId, onComplete }: CreationWizardProps) {
       .then(({ session: s, next_step }) => {
         setSession(s)
         setCurrentPrompt(next_step.question_prompt ?? next_step.prompt ?? '')
+        setCurrentCategory(next_step.question_category ?? null)
         setAnsweredCount(s.completed_question_ids.length)
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Failed to start interview'))
@@ -38,15 +55,17 @@ export function CreationWizard({ personaId, onComplete }: CreationWizardProps) {
     setError(null)
     try {
       const { next_step } = await captureTextAnswer(session.session_id, answerText.trim())
-      const { action, prompt, question_prompt, session: updated } = next_step
+      const { action, prompt, question_prompt, question_category, session: updated } = next_step
       setSession(updated)
       setAnsweredCount(updated.completed_question_ids.length)
       setAnswerText('')
       setSteerHint(null)
       if (action === 'ask_probe') {
         setCurrentPrompt(prompt ?? '')
+        setCurrentCategory(question_category ?? null)
       } else if (action === 'advance') {
         setCurrentPrompt(question_prompt ?? '')
+        setCurrentCategory(question_category ?? null)
       } else if (action === 'steer') {
         setSteerHint(prompt)
       } else if (action === 'done') {
@@ -72,7 +91,9 @@ export function CreationWizard({ personaId, onComplete }: CreationWizardProps) {
     }
   }
 
-  const canFinish = answeredCount >= 3 || isDone
+  const canFinish = answeredCount >= MIN_QUESTIONS_TO_FINISH || isDone
+  const categoryLabel = currentCategory ? (CATEGORY_LABELS[currentCategory] ?? currentCategory) : null
+  const categoryCount = (currentCategory && session?.answers_per_category[currentCategory]) ?? 0
 
   if (isLoading) {
     return (
@@ -89,12 +110,42 @@ export function CreationWizard({ personaId, onComplete }: CreationWizardProps) {
   return (
     <div className="rounded-2xl border border-border bg-surface p-6 shadow-card">
       <div className="mb-5 flex items-center justify-between">
-        <span className="font-sans text-xs font-medium uppercase tracking-widest text-muted">
-          Building your persona
-        </span>
-        <span className="font-sans text-xs text-muted">
-          {answeredCount} of {TOTAL_QUESTIONS}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="font-sans text-xs font-medium uppercase tracking-widest text-muted">
+            Building your persona
+          </span>
+          {categoryLabel && (
+            <>
+              <span className="text-xs text-muted">·</span>
+              <span className="font-sans text-xs font-semibold text-accent">
+                {categoryLabel}
+              </span>
+              {categoryCount > 0 && (
+                <span className="font-sans text-xs text-muted">
+                  {categoryCount} answered
+                </span>
+              )}
+            </>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="font-sans text-xs text-muted">
+            {answeredCount} of {TOTAL_QUESTIONS}
+          </span>
+          {!isDone && answeredCount < MIN_QUESTIONS_TO_FINISH && (
+            <span className="font-sans text-xs text-muted">
+              ({MIN_QUESTIONS_TO_FINISH - answeredCount} more to unlock finish)
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      <div className="mb-5 h-1 w-full rounded-full bg-border">
+        <div
+          className="h-1 rounded-full bg-accent transition-all duration-300"
+          style={{ width: `${Math.min(100, (answeredCount / TOTAL_QUESTIONS) * 100)}%` }}
+        />
       </div>
 
       {steerHint && (

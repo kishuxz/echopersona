@@ -112,6 +112,7 @@ export interface CreationSession {
   completed_question_ids: string[];
   current_question_id: string | null;
   pending_source_ids: string[];
+  answers_per_category: Record<string, number>;
 }
 
 export interface NextStep {
@@ -120,6 +121,7 @@ export interface NextStep {
   question_id: string | null;
   probe_id: string | null;
   question_prompt: string | null;
+  question_category: string | null;
   session: CreationSession;
 }
 

@@ -1,7 +1,27 @@
 # EchoPersona — Build Progress
 
 ## Active feature
-Slice 1 (Fidelity Fix) complete — next: Slice 2 (Progressive Q&A)
+Slice 2 (Progressive Q&A) complete — next: Slice 3 (TBD)
+
+## 2026-06-28 — Slice 2: Progressive Q&A ✅
+
+Branch: `feat/slice-1-fidelity-fix` (extends same branch)
+
+### What changed
+- **`backend/data/question_bank.yaml`** — Expanded from 10 → 41 questions: 5 in origins, 4 each in family, coming_of_age (was 0), love, work, beliefs, texture, hardship, places, legacy. All questions follow §2.1 schema with intents, signals, and probes.
+- **`backend/services/creation.py`** — `CreationSession` gains `answers_per_category: dict[str, int]`; `NextStep` gains `question_category: str | None`; `apply_action` increments category counter on advance and populates category in all NextStep variants; `start_session` includes category in initial NextStep.
+- **`frontend/src/types/index.ts`** — `CreationSession` adds `answers_per_category: Record<string, number>`; `NextStep` adds `question_category: string | null`.
+- **`frontend/src/components/CreationWizard.tsx`** — Category label + per-category answered count displayed; progress bar added; finish threshold raised from `>= 3` to `>= 30`; `TOTAL_QUESTIONS = 41`; `MIN_QUESTIONS_TO_FINISH = 30`; countdown hint shows how many more to unlock finish.
+- **`backend/tests/test_progressive_qa.py`** (new) — 16 tests: bank size (>= 30), all categories have >= 2 questions, probe namespacing, no duplicate IDs, `answers_per_category` tracking, `question_category` in NextStep, done state, category ordering.
+
+### Verification
+```bash
+cd backend && python -m pytest tests/ -q
+# 398 passed, 5 warnings
+```
+
+### Next action
+Slice 3: TBD
 
 ## 2026-06-28 — Slice 1: Persona Fidelity Fix ✅
 
