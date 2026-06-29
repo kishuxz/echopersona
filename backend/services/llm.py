@@ -3,6 +3,7 @@ import logging
 from collections.abc import AsyncGenerator
 
 from config import settings
+from services.groq_limiter import groq_acquire
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,7 @@ async def stream_llm(
     else:
         from groq import AsyncGroq, BadRequestError, RateLimitError
 
+        await groq_acquire(interactive=True)
         client = AsyncGroq(api_key=settings.groq_api_key)
         # Ordered by latency on Groq as of 2025-05.
         # specdec/mixtral/gemma2 are decommissioned; compound-mini is ~1s TTFT.

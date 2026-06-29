@@ -14,7 +14,7 @@ from config import settings
 from middleware.auth import verify_token
 from models.consent import ListenerContext
 from models.session import ConversationTurn
-from services import audio_store, did, persona_store
+from services import persona_store
 from services.db import get_db
 from services.listener import resolve_listener_context
 from services.latency import LatencyTimer
@@ -63,33 +63,13 @@ async def _collect_tts_chunks(text: str, voice_id: str | None) -> list[bytes]:
     """Collect all audio chunks for a sentence (used for prefetch)."""
     async with _tts_semaphore:
         chunks: list[bytes] = []
-        try:
+        if settings.tts_provider == "cartesia":
             async for chunk in tts_audio_chunks_cartesia(text, voice_id):
                 chunks.append(chunk)
-        except Exception:
+        else:
             async for chunk in tts_audio_chunks(text, voice_id):
                 chunks.append(chunk)
         return chunks
-
-
-async def _generate_and_send_video(
-    audio_bytes: bytes,
-    source_url: str,
-    websocket: WebSocket,
-) -> None:
-    """Background task: save pre-generated audio, submit to D-ID for lip-sync, push video_ready."""
-    try:
-        filename = await audio_store.save_audio(audio_bytes, extension="mp3")
-        audio_url = f"{settings.public_base_url}/audio/{filename}"
-        video_url = await did.generate_talking_head(audio_url, source_url)
-        if video_url:
-            await websocket.send_json({"type": "video_ready", "url": video_url})
-        else:
-            await websocket.send_json({"type": "video_error", "message": "Video generation failed"})
-    except Exception as exc:
-        logger.error("[D-ID] video generation failed: %s", exc)
-        with contextlib.suppress(Exception):
-            await websocket.send_json({"type": "video_error", "message": "Video generation failed"})
 
 
 def _negotiate_mode(
@@ -212,10 +192,8 @@ async def _run_reply_core(
     # - Sentences 2+ are prefetched concurrently while sentence 1 is streaming,
     #   then sent immediately after sentence 1 finishes — eliminating the 400ms
     #   ElevenLabs round-trip gap between sequential sentences.
-    # Raw audio bytes are collected into collected_audio for D-ID lip-sync.
     tts_queue: asyncio.Queue[str | None] = asyncio.Queue()
     tts_error: list[BaseException] = []
-    collected_audio: list[bytes] = []
 
     # Whether TTS is active for this mode.
     # In video mode Tavus embeds its own audio; suppress ElevenLabs/Cartesia
@@ -250,7 +228,6 @@ async def _run_reply_core(
                 if not first_audio_sent:
                     first_audio_sent = True
                     mark_first_audio()
-                collected_audio.append(chunk)
                 await websocket.send_json({"type": "audio_chunk", "data": base64.b64encode(chunk).decode()})
             await websocket.send_json({"type": "sentence_end"})
 
@@ -259,7 +236,6 @@ async def _run_reply_core(
             for task in prefetch:
                 audio_bytes = await task
                 for chunk in audio_bytes:
-                    collected_audio.append(chunk)
                     await websocket.send_json(
                         {"type": "audio_chunk", "data": base64.b64encode(chunk).decode()}
                     )
@@ -385,15 +361,6 @@ async def _run_reply_core(
     full_reply_text = response_text.strip()
 
     # Fire D-ID with pre-generated ElevenLabs audio for lip-sync
-    if _video_allowed and persona and persona.did_avatar_url and settings.did_api_key and collected_audio:
-        all_audio = b"".join(collected_audio)
-        _did_task = asyncio.create_task(
-            _generate_and_send_video(all_audio, persona.did_avatar_url, websocket)
-        )
-        _background_tasks.add(_did_task)
-        _did_task.add_done_callback(_background_tasks.discard)
-        logger.info("[D-ID] video queued (%d audio bytes)", len(all_audio))
-
     await websocket.send_json({"type": "audio_end"})
     logger.debug("audio_end sent to client")
 
