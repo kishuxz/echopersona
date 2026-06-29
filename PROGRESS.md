@@ -1,7 +1,41 @@
 # EchoPersona — Build Progress
 
 ## Active feature
-Slice 4 (Listener Profiles) complete — next: Slice 5 (Fidelity Gate hardening)
+Slice 5 (Monetization Tiers) complete — next: Slice 6 (Preservation Tier checkout UI)
+
+## 2026-06-28 — Slice 5: Monetization Tiers ✅
+
+Branch: `slice-5-continuation` → PR to `main`
+
+### What changed
+- **`backend/migrations/012_monetization_tiers.sql`** (new) — `answer_count INT DEFAULT 0` on `personas`; widens `stripe_entitlements.plan_tier` CHECK to include `'preservation'`; adds `stripe_payment_intent_id TEXT` to `stripe_entitlements`; new `preservation_locks` table (RLS: owner SELECT only, service-role write); new `persona_relationships` table (RLS: member OR owner SELECT, service-role write).
+- **`backend/config.py`** — `STRIPE_PRICE_PRESERVATION_ONETIME`, `ENFORCE_ANSWER_QUOTAS` (bool, default False — gates quota thresholds until backfill runs).
+- **`backend/models/entitlements.py`** — `PlanTier` adds `"preservation"`; `StripeEntitlement` + `EntitlementUpsert` add `stripe_payment_intent_id`; `BillingStatusResponse` adds `family_member_limit: int | None` + `is_preservation_locked: bool`; new `PersonaAccessDecision` model.
+- **`backend/models/persona.py`** — `answer_count: int = 0` field added.
+- **`backend/services/entitlements.py`** — `FREE_QUESTION_LIMIT` 20→30; new `VOICE_QUESTION_THRESHOLD=60`, `VIDEO_QUESTION_THRESHOLD=90`; `can_use_chat` now owner-only on free tier + answer_count gate; `can_use_voice` enforces no-stock-voice rule when `voice_id` explicitly provided (sentinel pattern preserves plan-level check); `can_use_video` adds answer_count gate; new `can_add_family_member`; `_VOICE_ID_NOT_SET` sentinel distinguishes plan-capability vs runtime calls; `upsert_entitlement_from_subscription` accepts `stripe_payment_intent_id`.
+- **`backend/services/billing.py`** — `create_checkout_session` accepts `plan_tier` + `persona_id`; branches to `mode="payment"` for Preservation.
+- **`backend/services/stripe_webhooks.py`** — `_price_to_tier` covers preservation; `handle_checkout_completed` branches on `session.mode`; new `handle_preservation_checkout` writes entitlement (`status=active`, `current_period_end=None`) + `preservation_locks` row.
+- **`backend/services/persona_store.py`** — `answer_count` added to SELECT queries in `get_persona_by_id` and `get_persona`.
+- **`backend/routers/billing.py`** — `CheckoutRequest` adds `"preservation"` + optional `persona_id`; `_PLAN_PRICE_MAP` adds preservation; `/billing/status` adds `family_member_limit` + `is_preservation_locked`; new `GET /billing/persona/{persona_id}/access` endpoint returning `PersonaAccessDecision`.
+- **`backend/routers/ws.py`** — billing gate passes `answer_count` + `is_owner`; turn-level `can_use_voice`/`can_use_video` calls pass `answer_count` + `voice_id`; Simli gate passes `answer_count`.
+- **`frontend/src/types/index.ts`** — `BillingStatus` adds `family_member_limit`, `is_preservation_locked`, `"preservation"` tier; new `PersonaAccess` interface.
+- **`frontend/src/lib/api.ts`** — `startCheckout` accepts `"preservation"` + optional `persona_id`; new `getPersonaAccess(personaId)`.
+- **`frontend/src/pages/BillingPage.tsx`** — `"preservation"` added to all tier maps; family limit label; preservation badge; stubbed Preservation CTA (per-persona picker deferred to Slice 6).
+
+### Quality gates
+- pytest: 408 passed, 0 failures
+- TypeScript: 0 new errors (1 pre-existing in CreationWizard.tsx, out of scope)
+- /stripe-webhook-review: PASS
+- /supabase-rls-review: PASS
+
+### Do not forget
+- Migration 012 must be applied in Supabase SQL editor before deploying (run on live worktree).
+- `ENFORCE_ANSWER_QUOTAS=true` must NOT be set until answer_count backfill (migration 013 or runbook) is confirmed.
+- `persona_relationships` INSERT policy needed when Slice 10 (invite flow) ships.
+- `STRIPE_PRICE_PRESERVATION_ONETIME` env var needed in `.env` before Preservation checkout goes live.
+
+### Next action
+Slice 6: Preservation Tier — per-persona checkout UI (persona picker + Stripe payment session), posthumous access model.
 
 ## 2026-06-28 — Slice 4: Listener Profiles + Entity Back-links + Retrieval Score Threshold ✅
 
@@ -23,17 +57,10 @@ Branch: `doha`
   - `build_index_from_units` stores `resolved_entity_ids` per unit in `_units`
   - `retrieve(query, top_k, listener_entity)` — fetches 3× candidates, applies entity boost, filters by threshold
 - **`backend/routers/ws.py`** — both retrieve call sites pass `listener_entity=listener_ctx.entity_canonical` (None-safe)
-- **`backend/tests/test_listener_profiles.py`** (new) — 19 tests: alias resolution (case-insensitive, multi-unit, dedup), index stores `resolved_entity_ids`, threshold and boost constants, keyword-fallback param acceptance, `ListenerContext.entity_canonical`
-- **`backend/tests/test_listener.py`** — 4 beneficiary tests updated (+1 new) for 4-call mock sequence; `entity_canonical` assertions added
-
-### Verification
-```bash
-cd backend && python -m pytest tests/ -q
-# 428 passed, 5 warnings
-```
+- **`backend/tests/test_listener_profiles.py`** (new) — 19 tests: alias resolution, entity boost, threshold constants
+- **`backend/tests/test_listener.py`** — updated for entity_canonical
 
 ### Pre-existing gaps (tracked, not fixed here)
-- Fidelity gate does not block low-score units from indexing → Slice 5 (Fidelity Gate hardening)
 - No API endpoint to register `persona_relationships` rows yet — table seeded manually for now
 
 ## 2026-06-28 — Slice 2: Progressive Q&A ✅

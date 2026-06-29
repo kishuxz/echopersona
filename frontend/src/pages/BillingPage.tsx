@@ -16,18 +16,21 @@ const TIER_LABEL: Record<BillingStatus['plan_tier'], string> = {
   free: 'Free',
   creator: 'Creator',
   legacy: 'Legacy',
+  preservation: 'Preservation',
 }
 
 const TIER_PILL: Record<BillingStatus['plan_tier'], string> = {
   free: 'bg-cream text-textdim',
   creator: 'bg-green/10 text-green',
   legacy: 'bg-accent text-white',
+  preservation: 'bg-amber-100 text-amber-800',
 }
 
 const TIER_ORDER: Record<BillingStatus['plan_tier'], number> = {
   free: 0,
   creator: 1,
   legacy: 2,
+  preservation: 3,
 }
 
 const STATUS_LABEL: Record<NonNullable<BillingStatus['status']>, string> = {
@@ -52,7 +55,7 @@ export function BillingPage() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [checkoutError, setCheckoutError] = useState<string | null>(null)
-  const [checkoutBusy, setCheckoutBusy] = useState<'creator' | 'legacy' | null>(null)
+  const [checkoutBusy, setCheckoutBusy] = useState<'creator' | 'legacy' | 'preservation' | null>(null)
 
   useEffect(() => {
     getBillingStatus()
@@ -105,10 +108,18 @@ export function BillingPage() {
   const currentOrder = TIER_ORDER[status.plan_tier]
   const showCreator = currentOrder < TIER_ORDER['creator']
   const showLegacy = currentOrder < TIER_ORDER['legacy']
+  const showPreservationCta = !status.is_preservation_locked && status.plan_tier !== 'preservation'
 
   const periodEnd = status.current_period_end
     ? new Date(status.current_period_end).toLocaleDateString()
     : null
+
+  const familyLimitLabel =
+    status.family_member_limit === null
+      ? 'Unlimited family members'
+      : status.family_member_limit === 0
+      ? 'No family access'
+      : `Up to ${status.family_member_limit} family member${status.family_member_limit === 1 ? '' : 's'}`
 
   return (
     <div className="min-h-screen bg-bg text-text">
@@ -133,7 +144,7 @@ export function BillingPage() {
           <h2 className="mb-4 font-fraunces text-lg font-semibold text-text">Current plan</h2>
 
           {/* Plan tier */}
-          <div className="mb-4 flex items-center gap-3">
+          <div className="mb-4 flex items-center gap-3 flex-wrap">
             <span className={`rounded-full px-3 py-1 font-sans text-xs font-medium ${TIER_PILL[status.plan_tier]}`}>
               {TIER_LABEL[status.plan_tier]}
             </span>
@@ -142,10 +153,15 @@ export function BillingPage() {
                 {STATUS_LABEL[status.status]}
               </span>
             )}
+            {status.is_preservation_locked && (
+              <span className="rounded-full bg-amber-100 px-2.5 py-0.5 font-sans text-[10px] text-amber-800">
+                Preserved
+              </span>
+            )}
           </div>
 
           {/* Feature access */}
-          <div className="mb-4 flex items-center gap-2">
+          <div className="mb-3 flex items-center gap-2">
             <span
               className={`rounded-full px-2.5 py-0.5 font-sans text-[10px] ${
                 status.can_use_chat ? 'bg-green/10 text-green' : 'bg-cream text-textdim'
@@ -169,6 +185,9 @@ export function BillingPage() {
             </span>
           </div>
 
+          {/* Family member limit */}
+          <p className="mb-3 font-sans text-xs text-textdim">{familyLimitLabel}</p>
+
           {/* Period info */}
           {periodEnd && !status.cancel_at_period_end && (
             <p className="font-sans text-xs text-textdim">Renews {periodEnd}</p>
@@ -178,7 +197,7 @@ export function BillingPage() {
           )}
         </div>
 
-        {/* Upgrade buttons */}
+        {/* Subscription upgrade buttons */}
         {(showCreator || showLegacy) && (
           <div className="mt-6">
             <h3 className="mb-3 font-sans text-sm font-medium text-textdim">Upgrade your plan</h3>
@@ -219,6 +238,30 @@ export function BillingPage() {
             {checkoutError && (
               <p className="mt-3 font-sans text-sm text-red">{checkoutError}</p>
             )}
+          </div>
+        )}
+
+        {/* Preservation CTA — one-time purchase, per-persona */}
+        {showPreservationCta && (
+          <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-6 py-5">
+            <h3 className="mb-1 font-fraunces text-base font-semibold text-amber-900">
+              Preservation
+            </h3>
+            <p className="mb-4 font-sans text-sm text-amber-800">
+              One-time purchase that permanently locks your persona's memories — they're never
+              deleted, even after you're gone. Family access continues as long as they keep an
+              active plan.
+            </p>
+            <button
+              className="rounded-lg border border-amber-400 bg-amber-100 px-4 py-2 font-sans text-sm font-medium text-amber-900 opacity-60 cursor-not-allowed"
+              disabled
+              title="Select a persona from your dashboard to purchase Preservation"
+            >
+              Purchase Preservation — select a persona first
+            </button>
+            <p className="mt-2 font-sans text-[11px] text-amber-700">
+              Go to a persona's page to lock it permanently.
+            </p>
           </div>
         )}
       </div>

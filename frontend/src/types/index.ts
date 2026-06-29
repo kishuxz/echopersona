@@ -96,13 +96,28 @@ export interface SuccessionCreate {
 }
 
 export interface BillingStatus {
-  plan_tier: 'free' | 'creator' | 'legacy';
+  plan_tier: 'free' | 'creator' | 'legacy' | 'preservation';
   status: 'active' | 'trialing' | 'past_due' | 'canceled' | 'unpaid' | null;
   can_use_chat: boolean;
   can_use_voice: boolean;
   can_use_video: boolean;
   cancel_at_period_end: boolean;
   current_period_end: string | null;
+  family_member_limit: number | null;  // null = unlimited
+  is_preservation_locked: boolean;
+}
+
+export interface PersonaAccess {
+  persona_id: string;
+  can_use_chat: boolean;
+  can_use_voice: boolean;
+  can_use_video: boolean;
+  can_add_family_member: boolean;
+  family_member_limit: number | null;
+  family_member_count: number;
+  answer_count: number;
+  is_preservation_locked: boolean;
+  voice_id_present: boolean;
 }
 
 export interface CreationSession {
