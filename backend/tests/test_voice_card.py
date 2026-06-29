@@ -233,6 +233,8 @@ def test_enrichment_calls_update_voice_card():
     exemplars = ["Here's the thing about growing up."]
     voice_card = {**_mock_voice_card(), "formality": "casual"}
 
+    _blank_identity = {"values": [], "worldview": "", "role_identity": "", "emotional_wiring": "", "communication_style": "", "life_philosophy": ""}
+
     with (
         patch("worker.tasks.enrichment.get_memory_units_for_persona", new_callable=AsyncMock,
               return_value=_UNITS),
@@ -243,6 +245,8 @@ def test_enrichment_calls_update_voice_card():
               return_value=(exemplars, voice_card)),
         patch("worker.tasks.enrichment.update_style_exemplars", new_callable=AsyncMock),
         patch("worker.tasks.enrichment.update_voice_card", new_callable=AsyncMock) as mock_uvc,
+        patch("worker.tasks.enrichment.extract_identity_card", new_callable=AsyncMock, return_value=_blank_identity),
+        patch("worker.tasks.enrichment.update_identity_card", new_callable=AsyncMock),
         patch("worker.tasks.enrichment.update_readiness_status", new_callable=AsyncMock),
         patch("worker.tasks.enrichment.RAG_INDICES", {}),
         patch("worker.tasks.enrichment.PERSONAS", {}),

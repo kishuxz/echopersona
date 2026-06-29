@@ -8,8 +8,10 @@ import logging
 from services.ingestion.source_store import get_memory_units_for_persona
 from services.ingestion.stage3 import build_entity_graph
 from services.ingestion.stage4 import extract_style_exemplars
+from services.ingestion.stage4b import extract_identity_card
 from services.persona_store import (
     update_entity_graph,
+    update_identity_card,
     update_readiness_status,
     update_style_exemplars,
     update_voice_card,
@@ -51,6 +53,18 @@ async def enrich_persona(ctx: dict, persona_id: str) -> dict:
             bool(any(voice_card.values())),
         )
 
+        # Stage 4B: identity card — isolated so a failure here does not block readiness
+        identity_card: dict = {}
+        try:
+            identity_card = await extract_identity_card(units)
+            await update_identity_card(persona_id, identity_card)
+            logger.info(
+                "[Enrich] Stage 4B done — identity_card populated=%s",
+                bool(any(identity_card.values())),
+            )
+        except Exception as ic_exc:
+            logger.warning("[Enrich] Stage 4B failed, continuing without identity_card: %s", ic_exc)
+
         # Invalidate in-memory caches so the next WS session sees fresh data
         RAG_INDICES.pop(persona_id, None)
         PERSONAS.pop(persona_id, None)
@@ -65,6 +79,7 @@ async def enrich_persona(ctx: dict, persona_id: str) -> dict:
             "entity_count": len(entity_graph),
             "exemplar_count": len(exemplars),
             "voice_card_populated": bool(any(voice_card.values())),
+            "identity_card_populated": bool(any(identity_card.values())),
         }
 
     except Exception as exc:
