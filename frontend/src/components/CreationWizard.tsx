@@ -8,7 +8,7 @@ interface CreationWizardProps {
 }
 
 const TOTAL_QUESTIONS = 41
-const MIN_QUESTIONS_TO_FINISH = 30
+const MIN_QUESTIONS_TO_FINISH = 10
 
 const CATEGORY_LABELS: Record<string, string> = {
   origins: 'Origins',

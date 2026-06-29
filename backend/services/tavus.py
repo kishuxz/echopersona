@@ -6,18 +6,34 @@ from config import settings
 logger = logging.getLogger(__name__)
 _TAVUS_BASE = "https://tavusapi.com/v2"
 _POLL_INTERVAL = 2.0
-_POLL_TIMEOUT = 30.0
+_POLL_TIMEOUT = 90.0
 
 
-async def generate_tavus_video(replica_id: str, script: str) -> str | None:
+async def generate_tavus_video(
+    replica_id: str,
+    script: str,
+    session_id: str | None = None,
+) -> str | None:
     """
     Submit a Tavus video generation job and poll until ready.
-    Returns the download URL or None on failure/timeout.
+    Returns the stream/hosted URL or None on failure/timeout.
     """
-    if not settings.tavus_api_key or not replica_id:
+    if not replica_id:
         return None
+
+    if settings.mock_mode:
+        await asyncio.sleep(2)
+        return "https://example.com/mock-tavus-video.mp4"
+
+    if not settings.tavus_api_key:
+        return None
+
     headers = {"x-api-key": settings.tavus_api_key, "Content-Type": "application/json"}
-    payload = {"replica_id": replica_id, "script": script}
+    payload = {
+        "replica_id": replica_id,
+        "script": script,
+        "video_name": f"echo-{session_id[:8]}" if session_id else "echopersona",
+    }
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(f"{_TAVUS_BASE}/videos", json=payload, headers=headers) as resp:
@@ -37,13 +53,16 @@ async def generate_tavus_video(replica_id: str, script: str) -> str | None:
                     result = await poll.json()
                     status = result.get("status")
                     if status == "ready":
-                        url = result.get("download_url", "")
+                        url = result.get("stream_url") or result.get("hosted_url", "")
                         if not url.startswith("https://"):
                             logger.error("Tavus returned non-https URL, rejecting")
                             return None
                         return url
-                    if status in ("error", "failed"):
+                    if status == "failed":
                         logger.error("Tavus generation failed: status=%s", status)
+                        return None
+                    if status == "error":
+                        logger.warning("Tavus returned deprecated error status, treating as failed")
                         return None
     except Exception:
         logger.exception("Tavus video generation error")

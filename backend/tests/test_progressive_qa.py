@@ -28,9 +28,9 @@ def _q(qid: str):
 # ── Bank size ─────────────────────────────────────────────────────────────────
 
 
-def test_bank_has_at_least_30_questions():
-    """Min-30 finish threshold requires the bank to have at least 30 questions."""
-    assert len(get_question_bank()) >= 30
+def test_bank_has_at_least_10_questions():
+    """Min-10 finish threshold requires the bank to have at least 10 questions."""
+    assert len(get_question_bank()) >= 10
 
 
 def test_coming_of_age_category_has_questions():
