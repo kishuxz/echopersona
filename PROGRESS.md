@@ -1,7 +1,41 @@
 # EchoPersona — Build Progress
 
 ## Active feature
-Slice 6 (Preservation Tier) complete — next: Slice 7 (Three Chat Modes)
+Slice 7 (Three Chat Modes) complete — next: Slice 8 (Cloned Voice Only gate)
+
+## 2026-06-28 — Slice 7: Three Chat Modes ✅
+
+Branch: `slice-7-three-chat-modes`
+
+### What changed
+- **`backend/migrations/013_tavus_replica_id.sql`** (new) + `supabase/migrations/013_tavus_replica_id.sql` (new)
+  - `tavus_replica_id TEXT` column on `personas`; applied via Supabase MCP 2026-06-28
+- **`backend/config.py`** — `tavus_api_key` field added (reads `TAVUS_API_KEY`)
+- **`backend/models/persona.py`** — `tavus_replica_id: str | None = None` added
+- **`backend/routers/ws.py`**
+  - `SESSION_MODE: dict[str, Literal["text", "voice", "video"]]` added
+  - `_negotiate_mode(requested, voice_allowed, video_allowed)` — pure function, testable in isolation
+  - `_run_reply_core(user_text, mode, websocket, session_id)` — extracted from near-duplicate `_run_turn_inner`/`_run_text_turn`; both become thin wrappers
+  - `mode_negotiated` message sent immediately after `websocket.accept()`
+  - Tavus video tail fires after `audio_end` in video mode (async `create_task`, non-blocking)
+  - Dev bypass (`_run_text_turn`) caps at voice — never triggers video mode
+  - D-ID silent failure fixed — now sends `video_error` to client on exception
+  - `finally` block: background tasks cancelled on disconnect; `SESSION_HISTORY` cleaned up (pre-existing leak fixed)
+- **`backend/services/tavus.py`** (new) — async Tavus video submit + poll; `https://` URL validation; `asyncio.get_running_loop()`; 30s timeout; returns URL or None
+- **`backend/.env.example`** — `TAVUS_API_KEY=` documented
+- **`frontend/src/lib/api.ts`** — `buildWsUrl` gains optional `mode?: ChatMode` param (URI-encoded)
+- **`frontend/src/components/VoiceInterface.tsx`** — mode picker (text/voice/video), `mode_negotiated` handler, conditional mic/text/video UI, `video_ready`/`video_error` handlers, downgrade notice
+- **`frontend/src/types/index.ts`** — `ChatMode`, `ModeNegotiatedMessage`, `VideoReadyMessage`, `VideoErrorMessage` types added
+- **`frontend/src/constants.ts`** — `MODE_NEGOTIATED`, `VIDEO_ERROR` added to `WS_SERVER_MSG`
+- **`backend/tests/test_ws_mode_negotiation.py`** (new) — 15 tests for `_negotiate_mode` pure function
+
+### Quality gates
+- pytest: 480 passed, 0 failures; tsc: clean; /media-latency-review: PASS; /qa-security: PASS WITH NOTES (all FAIL items patched)
+
+### Do not forget
+- `TAVUS_API_KEY` must be set in production `.env`
+- Set `tavus_replica_id` per persona in the DB once a Tavus replica is created: `UPDATE personas SET tavus_replica_id = 'r_...' WHERE id = '...'`
+- Slice 8: Cloned Voice Only gate — enforce that voice mode silently downgrades to text when `elevenlabs_voice_id` is null (no stock voices, no fallback)
 
 ## 2026-06-28 — Slice 6: Preservation Tier ✅
 

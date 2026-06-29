@@ -21,6 +21,8 @@ export const WS_SERVER_MSG = {
   AUDIO_END: 'audio_end',
   SENTENCE_END: 'sentence_end',
   VIDEO_READY: 'video_ready',
+  VIDEO_ERROR: 'video_error',
+  MODE_NEGOTIATED: 'mode_negotiated',
   LATENCY_SUMMARY: 'latency_summary',
   ERROR: 'error',
   PONG: 'pong',

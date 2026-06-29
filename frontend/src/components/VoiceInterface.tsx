@@ -3,7 +3,7 @@ import { CONNECT_DELAY_MS, DEFAULT_WS_BASE, RECONNECT_DELAY_MS, WS_CLIENT_MSG, W
 import { useAudioRecorder } from "../hooks/useAudioRecorder";
 import { useWebSocket } from "../hooks/useWebSocket";
 import { buildWsUrl } from "../lib/api";
-import type { LatencySnapshot, TranscriptItem } from "../types";
+import type { ChatMode, LatencySnapshot, TranscriptItem } from "../types";
 import { ConversationLog } from "./ConversationLog";
 
 interface VoiceInterfaceProps {
@@ -16,6 +16,7 @@ interface VoiceInterfaceProps {
   idleVideoUrl?: string | null;
   avatarUrl?: string | null;
   onLatencyUpdate: (latency: LatencySnapshot) => void;
+  initialMode?: ChatMode;
 }
 
 type Stage = "idle" | "recording" | "STT" | "LLM" | "TTS";
@@ -59,6 +60,12 @@ function PipelineBar({ stage }: { stage: Stage }) {
   );
 }
 
+const MODE_LABELS: Record<ChatMode, string> = {
+  text: "Text",
+  voice: "Voice",
+  video: "Video",
+};
+
 export function VoiceInterface({
   sessionId,
   personaId,
@@ -69,6 +76,7 @@ export function VoiceInterface({
   idleVideoUrl,
   avatarUrl,
   onLatencyUpdate,
+  initialMode = "voice",
 }: VoiceInterfaceProps) {
   const { connect, disconnect, sendJson, sendBinary } = useWebSocket();
 
@@ -84,6 +92,10 @@ export function VoiceInterface({
   const [videoGenSeconds, setVideoGenSeconds] = useState<string>("");
   const [playingVideo, setPlayingVideo]       = useState(false);
   const [wsError, setWsError]                 = useState<string | null>(null);
+  const [requestedMode, setRequestedMode]   = useState<ChatMode>(initialMode);
+  const [negotiatedMode, setNegotiatedMode] = useState<ChatMode>(initialMode);
+  const [modeDowngradeNotice, setModeDowngradeNotice] = useState<string | null>(null);
+  const [textInput, setTextInput]           = useState<string>("");
   const isRecordingRef   = useRef(false);
   const chunkCountRef    = useRef(0);
   const byteCountRef     = useRef(0);
@@ -93,6 +105,12 @@ export function VoiceInterface({
     const t = setTimeout(() => setWsError(null), 5000);
     return () => clearTimeout(t);
   }, [wsError]);
+
+  useEffect(() => {
+    if (!modeDowngradeNotice) return;
+    const t = setTimeout(() => setModeDowngradeNotice(null), 6000);
+    return () => clearTimeout(t);
+  }, [modeDowngradeNotice]);
   const videoGenStartRef = useRef<number>(0);
 
   // Latency tracing refs
@@ -146,7 +164,7 @@ export function VoiceInterface({
     let wsUrl: string;
     try {
       wsUrl = personaId
-        ? await buildWsUrl(sessionId, personaId)
+        ? await buildWsUrl(sessionId, personaId, requestedMode)
         : `${import.meta.env.VITE_WS_BASE_URL ?? DEFAULT_WS_BASE}/ws/${sessionId}`;
     } catch (e) {
       console.error("[WS] failed to build URL:", e);
@@ -210,6 +228,24 @@ export function VoiceInterface({
         setVideoLoading(false);
       }
 
+      if (message.type === WS_SERVER_MSG.VIDEO_ERROR) {
+        setVideoUrl(null);
+        setVideoLoading(false);
+      }
+
+      if (message.type === WS_SERVER_MSG.MODE_NEGOTIATED) {
+        const negotiated = message.mode as ChatMode;
+        const requested  = message.requested as ChatMode;
+        setNegotiatedMode(negotiated);
+        if (negotiated !== requested) {
+          const label = MODE_LABELS[negotiated];
+          const notice = message.reason
+            ? `${MODE_LABELS[requested]} not available — using ${label} (${message.reason as string})`
+            : `${MODE_LABELS[requested]} not available — using ${label}`;
+          setModeDowngradeNotice(notice);
+        }
+      }
+
       if (message.type === WS_SERVER_MSG.LLM_TOKEN) {
         if (!firstTokenLoggedRef.current) {
           firstTokenLoggedRef.current = true;
@@ -268,6 +304,19 @@ export function VoiceInterface({
 
     await new Promise((r) => setTimeout(r, CONNECT_DELAY_MS));
     doConnect(0);
+  };
+
+  const handleTextSend = () => {
+    const trimmed = textInput.trim();
+    if (!trimmed || isProcessing) return;
+    setTextInput("");
+    setIsProcessing(true);
+    setVideoUrl(null);
+    setVideoGenSeconds("");
+    setPlayingVideo(false);
+    sentenceChunksRef.current = [];
+    nextPlayAtRef.current     = 0;
+    sendJson({ type: WS_CLIENT_MSG.TEXT_TURN, text: trimmed });
   };
 
   const recorder = useAudioRecorder((pcm) => {
@@ -432,69 +481,136 @@ export function VoiceInterface({
           </div>
 
           {!connected ? (
-            <button
-              className="w-full rounded-xl bg-accent py-3 font-sans text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-              onClick={handleConnect}
-              disabled={isConnecting}
-            >
-              {isConnecting ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                    <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  Connecting…
-                </span>
-              ) : (
-                "Start Session"
-              )}
-            </button>
-          ) : (
             <>
-              <p className="font-sans text-[11px] text-muted">
-                {isProcessing ? "Processing…" : isRecording ? "Listening…" : "Hold to speak"}
-              </p>
+              {/* Mode picker — shown only before connecting */}
+              <div className="flex w-full items-center justify-center gap-1.5">
+                {(["text", "voice", "video"] as ChatMode[]).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setRequestedMode(m)}
+                    className={`flex-1 rounded-lg border py-1.5 font-sans text-[11px] font-medium transition-colors ${
+                      requestedMode === m
+                        ? "border-accent bg-accent/10 text-accent"
+                        : "border-border bg-surface text-muted hover:border-border-hi hover:text-text"
+                    }`}
+                  >
+                    {MODE_LABELS[m]}
+                  </button>
+                ))}
+              </div>
 
-              {/* Mic button */}
-              <div className="relative flex items-center justify-center">
-                {isRecording && (
-                  <div
-                    className="absolute h-28 w-28 rounded-full border border-green/30"
-                    style={{ animation: "ping-ring 1.2s ease-out infinite" }}
-                  />
-                )}
-                <button
-                  onMouseDown={handleMicMouseDown}
-                  onMouseUp={handleMicMouseUp}
-                  onMouseLeave={handleMicMouseUp}
-                  onTouchStart={(e) => { e.preventDefault(); handleMicMouseDown(); }}
-                  onTouchEnd={(e)   => { e.preventDefault(); handleMicMouseUp(); }}
-                  disabled={isProcessing}
-                  className={`relative z-10 flex h-20 w-20 items-center justify-center rounded-full transition-all duration-150 ${isRecording ? "scale-105" : ""}`}
-                  style={{ backgroundColor: micBg, cursor: isProcessing ? "not-allowed" : "pointer" }}
-                >
-                  {isProcessing ? (
-                    <svg className="h-6 w-6 animate-spin text-white" viewBox="0 0 24 24" fill="none">
+              <button
+                className="w-full rounded-xl bg-accent py-3 font-sans text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                onClick={handleConnect}
+                disabled={isConnecting}
+              >
+                {isConnecting ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
                       <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
                       <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                     </svg>
-                  ) : (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7">
-                      <rect x="9" y="2" width="6" height="12" rx="3" />
-                      <path d="M5 10a7 7 0 0014 0" />
-                      <line x1="12" y1="19" x2="12" y2="23" />
-                      <line x1="8"  y1="23" x2="16" y2="23" />
-                    </svg>
-                  )}
-                </button>
+                    Connecting…
+                  </span>
+                ) : (
+                  "Start Session"
+                )}
+              </button>
+            </>
+          ) : (
+            <>
+              {/* Mode badge — shown after connecting, locked to negotiated mode */}
+              <div className="flex items-center gap-1.5">
+                <span className="rounded-full bg-cream px-2.5 py-0.5 font-sans text-[10px] text-muted">
+                  Mode:
+                </span>
+                <span className="rounded-full bg-accent/10 px-2.5 py-0.5 font-sans text-[10px] font-medium text-accent capitalize">
+                  {negotiatedMode}
+                </span>
               </div>
 
-              {/* Waveform */}
-              {isRecording && (
-                <div className="flex items-center gap-0.5">
-                  {Array.from({ length: 14 }).map((_, i) => (
-                    <span key={i} className="wave-bar" style={{ animationDelay: `${i * 45}ms` }} />
-                  ))}
+              {/* Mode downgrade notice */}
+              {modeDowngradeNotice && (
+                <div className="flex w-full items-center justify-between rounded-xl bg-amber/10 px-3 py-2">
+                  <span className="font-sans text-[10px] text-amber-700">{modeDowngradeNotice}</span>
+                  <button
+                    onClick={() => setModeDowngradeNotice(null)}
+                    className="ml-2 font-sans text-[10px] text-amber-700/60 hover:text-amber-700"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
+              {/* Voice / Video mode: mic button */}
+              {(negotiatedMode === "voice" || negotiatedMode === "video") && (
+                <>
+                  <p className="font-sans text-[11px] text-muted">
+                    {isProcessing ? "Processing…" : isRecording ? "Listening…" : "Hold to speak"}
+                  </p>
+
+                  <div className="relative flex items-center justify-center">
+                    {isRecording && (
+                      <div
+                        className="absolute h-28 w-28 rounded-full border border-green/30"
+                        style={{ animation: "ping-ring 1.2s ease-out infinite" }}
+                      />
+                    )}
+                    <button
+                      onMouseDown={handleMicMouseDown}
+                      onMouseUp={handleMicMouseUp}
+                      onMouseLeave={handleMicMouseUp}
+                      onTouchStart={(e) => { e.preventDefault(); handleMicMouseDown(); }}
+                      onTouchEnd={(e)   => { e.preventDefault(); handleMicMouseUp(); }}
+                      disabled={isProcessing}
+                      className={`relative z-10 flex h-20 w-20 items-center justify-center rounded-full transition-all duration-150 ${isRecording ? "scale-105" : ""}`}
+                      style={{ backgroundColor: micBg, cursor: isProcessing ? "not-allowed" : "pointer" }}
+                    >
+                      {isProcessing ? (
+                        <svg className="h-6 w-6 animate-spin text-white" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                          <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                      ) : (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7">
+                          <rect x="9" y="2" width="6" height="12" rx="3" />
+                          <path d="M5 10a7 7 0 0014 0" />
+                          <line x1="12" y1="19" x2="12" y2="23" />
+                          <line x1="8"  y1="23" x2="16" y2="23" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+
+                  {isRecording && (
+                    <div className="flex items-center gap-0.5">
+                      {Array.from({ length: 14 }).map((_, i) => (
+                        <span key={i} className="wave-bar" style={{ animationDelay: `${i * 45}ms` }} />
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Text mode: text input */}
+              {negotiatedMode === "text" && (
+                <div className="flex w-full gap-2">
+                  <input
+                    type="text"
+                    value={textInput}
+                    onChange={(e) => setTextInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleTextSend(); }}
+                    disabled={isProcessing}
+                    placeholder={isProcessing ? "Processing…" : "Type a message…"}
+                    className="flex-1 rounded-xl border border-border bg-surface px-3 py-2 font-sans text-xs text-text placeholder:text-muted focus:border-accent focus:outline-none disabled:opacity-50"
+                  />
+                  <button
+                    onClick={handleTextSend}
+                    disabled={isProcessing || !textInput.trim()}
+                    className="rounded-xl bg-accent px-3 py-2 font-sans text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Send
+                  </button>
                 </div>
               )}
 
@@ -524,8 +640,32 @@ export function VoiceInterface({
           storyCount={storyCount}
         />
 
-        {/* Watch replay button */}
-        {videoUrl && !playingVideo && (
+        {/* Video mode panel — live video stream or generating spinner */}
+        {negotiatedMode === "video" && connected && (
+          <div className="border-t border-border px-4 py-3">
+            {videoUrl ? (
+              <video
+                src={videoUrl}
+                autoPlay
+                playsInline
+                controls
+                className="w-full rounded-xl"
+                onEnded={() => setVideoUrl(null)}
+              />
+            ) : videoLoading ? (
+              <div className="flex items-center gap-2 py-2">
+                <svg className="h-4 w-4 animate-spin text-accent" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                  <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                <span className="font-mono text-[11px] text-muted">Generating video…</span>
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        {/* Watch replay button — voice mode only (video mode renders inline above) */}
+        {negotiatedMode !== "video" && videoUrl && !playingVideo && (
           <div className="border-t border-border px-4 py-3">
             <button
               onClick={() => setPlayingVideo(true)}

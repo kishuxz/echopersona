@@ -26,6 +26,8 @@ class Settings(BaseSettings):
 
     simli_api_key: str = Field(default="", alias="SIMLI_API_KEY")
 
+    tavus_api_key: str = Field(default="", alias="TAVUS_API_KEY")
+
     vllm_base_url: str = Field(default="", alias="VLLM_BASE_URL")
     use_vllm: bool = Field(default=False, alias="USE_VLLM")
 

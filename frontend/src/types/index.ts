@@ -151,12 +151,33 @@ export interface CaptureResponse {
   next_step: NextStep;
 }
 
+export type ChatMode = "text" | "voice" | "video";
+
+export interface ModeNegotiatedMessage {
+  type: "mode_negotiated";
+  mode: ChatMode;
+  requested: ChatMode;
+  reason?: string;
+}
+
+export interface VideoReadyMessage {
+  type: "video_ready";
+  url: string;
+}
+
+export interface VideoErrorMessage {
+  type: "video_error";
+  message: string;
+}
+
 export type ServerMessage =
   | { type: "transcript"; text: string; is_final: boolean; latency_ms: number }
   | { type: "llm_token"; token: string; latency_ms: number }
   | { type: "audio_chunk"; data: string; latency_ms?: number }
   | { type: "audio_end" }
-  | { type: "video_ready"; url: string }
+  | VideoReadyMessage
+  | VideoErrorMessage
+  | ModeNegotiatedMessage
   | { type: "sentence_end" }
   | ({ type: "latency_summary" } & Omit<LatencySnapshot, "timestamp">)
   | { type: "error"; message: string }
