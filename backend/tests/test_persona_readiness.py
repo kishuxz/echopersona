@@ -109,6 +109,8 @@ def test_enrichment_sets_ready_on_success():
     async def mock_update_readiness(pid: str, status: str) -> None:
         captured_readiness.append((pid, status))
 
+    _blank_identity = {"values": [], "worldview": "", "role_identity": "", "emotional_wiring": "", "communication_style": "", "life_philosophy": ""}
+
     with (
         patch("worker.tasks.enrichment.get_memory_units_for_persona", new_callable=AsyncMock, return_value=_UNITS),
         patch("worker.tasks.enrichment.build_entity_graph", new_callable=AsyncMock, return_value=entity_graph),
@@ -116,6 +118,8 @@ def test_enrichment_sets_ready_on_success():
         patch("worker.tasks.enrichment.extract_style_exemplars", new_callable=AsyncMock, return_value=(exemplars, voice_card)),
         patch("worker.tasks.enrichment.update_style_exemplars", new_callable=AsyncMock),
         patch("worker.tasks.enrichment.update_voice_card", new_callable=AsyncMock),
+        patch("worker.tasks.enrichment.extract_identity_card", new_callable=AsyncMock, return_value=_blank_identity),
+        patch("worker.tasks.enrichment.update_identity_card", new_callable=AsyncMock),
         patch("worker.tasks.enrichment.update_readiness_status", side_effect=mock_update_readiness),
         patch("worker.tasks.enrichment.RAG_INDICES", {}),
         patch("worker.tasks.enrichment.PERSONAS", {}),
@@ -193,6 +197,8 @@ def test_enrichment_pops_personas_cache():
                   "advice_style": "", "verbal_tics": []}
     personas_cache = {_PERSONA_ID: _make_persona()}
 
+    _blank_identity = {"values": [], "worldview": "", "role_identity": "", "emotional_wiring": "", "communication_style": "", "life_philosophy": ""}
+
     with (
         patch("worker.tasks.enrichment.get_memory_units_for_persona", new_callable=AsyncMock, return_value=_UNITS),
         patch("worker.tasks.enrichment.build_entity_graph", new_callable=AsyncMock, return_value=entity_graph),
@@ -200,6 +206,8 @@ def test_enrichment_pops_personas_cache():
         patch("worker.tasks.enrichment.extract_style_exemplars", new_callable=AsyncMock, return_value=(exemplars, voice_card)),
         patch("worker.tasks.enrichment.update_style_exemplars", new_callable=AsyncMock),
         patch("worker.tasks.enrichment.update_voice_card", new_callable=AsyncMock),
+        patch("worker.tasks.enrichment.extract_identity_card", new_callable=AsyncMock, return_value=_blank_identity),
+        patch("worker.tasks.enrichment.update_identity_card", new_callable=AsyncMock),
         patch("worker.tasks.enrichment.update_readiness_status", new_callable=AsyncMock),
         patch("worker.tasks.enrichment.RAG_INDICES", {_PERSONA_ID: object()}),
         patch("worker.tasks.enrichment.PERSONAS", personas_cache),

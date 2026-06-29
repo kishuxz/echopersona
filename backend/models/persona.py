@@ -23,6 +23,8 @@ class Persona(PersonaCreate):
     style_exemplars: list[str] = Field(default_factory=list)
     # Stage 4: structured voice/speech style card (migration 008)
     voice_card: dict = Field(default_factory=dict)
+    # Stage 4B: structured identity card — WHO the persona IS (migration 010)
+    identity_card: dict = Field(default_factory=dict)
     # Phase 2 style card fields (migration 007_persona_style_card)
     tone: str = ""
     avoid_phrases: list[str] = Field(default_factory=list)

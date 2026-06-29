@@ -68,7 +68,7 @@ async def get_persona_by_id(persona_id: str) -> Persona | None:
         .select(
             "id, user_id, name, stories, personality_traits, speaking_style, voice_id,"
             " did_avatar_url, idle_video_url, simli_face_id, entity_graph, style_exemplars,"
-            " voice_card, readiness_status, tone, avoid_phrases, answer_length_pref,"
+            " voice_card, identity_card, readiness_status, tone, avoid_phrases, answer_length_pref,"
             " relationship_tone, created_at"
         )
         .eq("id", persona_id)
@@ -87,7 +87,7 @@ async def get_persona(persona_id: str, user_id: str) -> Persona | None:
         .select(
             "id, user_id, name, stories, personality_traits, speaking_style, voice_id,"
             " did_avatar_url, idle_video_url, simli_face_id, entity_graph, style_exemplars,"
-            " voice_card, readiness_status, tone, avoid_phrases, answer_length_pref,"
+            " voice_card, identity_card, readiness_status, tone, avoid_phrases, answer_length_pref,"
             " relationship_tone, created_at"
         )
         .eq("id", persona_id)
@@ -107,7 +107,7 @@ async def list_personas(user_id: str) -> list[Persona]:
         .select(
             "id, user_id, name, stories, personality_traits, speaking_style, voice_id,"
             " did_avatar_url, idle_video_url, simli_face_id, entity_graph, style_exemplars,"
-            " voice_card, readiness_status, tone, avoid_phrases, answer_length_pref,"
+            " voice_card, identity_card, readiness_status, tone, avoid_phrases, answer_length_pref,"
             " relationship_tone, created_at"
         )
         .eq("user_id", user_id)
@@ -163,6 +163,11 @@ async def update_style_exemplars(persona_id: str, style_exemplars: list[str]) ->
 async def update_voice_card(persona_id: str, voice_card: dict) -> None:
     db = get_db()
     db.table("personas").update({"voice_card": voice_card}).eq("id", persona_id).execute()
+
+
+async def update_identity_card(persona_id: str, identity_card: dict) -> None:
+    db = get_db()
+    db.table("personas").update({"identity_card": identity_card}).eq("id", persona_id).execute()
 
 
 async def update_readiness_status(persona_id: str, status: str) -> None:

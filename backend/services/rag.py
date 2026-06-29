@@ -194,18 +194,35 @@ def build_system_prompt(
             "Do not add more. Do not fabricate. Do not use outside knowledge about this name."
         )
 
-    # Behavior rules from persona + dominant stance from retrieved units
+    # Identity block — WHO the persona IS (Layer 1)
     stances = [u["stance"] for u in units if u.get("stance")]
     dominant_stance = stances[0] if stances else ""
 
-    behavior_parts: list[str] = []
+    ic = persona.identity_card if isinstance(getattr(persona, "identity_card", None), dict) else {}
+    identity_parts: list[str] = []
+
+    if ic:
+        # Stage 4B identity card fields
+        role_identity = (ic.get("role_identity") or "").strip()
+        if role_identity:
+            identity_parts.append(role_identity)
+        values = [v for v in (ic.get("values") or []) if isinstance(v, str) and v.strip()]
+        if values:
+            identity_parts.append(f"Core values: {', '.join(values)}.")
+        worldview = (ic.get("worldview") or "").strip()
+        if worldview:
+            identity_parts.append(worldview)
+    else:
+        # Legacy fallback for personas that pre-date Stage 4B
+        if persona.personality_traits:
+            identity_parts.append(f"Personality: {', '.join(persona.personality_traits)}.")
+        if persona.speaking_style:
+            identity_parts.append(f"Speaking style: {persona.speaking_style}.")
+
     if dominant_stance:
-        behavior_parts.append(f"Speak with a {dominant_stance} tone when discussing related memories.")
-    if persona.personality_traits:
-        behavior_parts.append(f"Personality: {', '.join(persona.personality_traits)}.")
-    if persona.speaking_style:
-        behavior_parts.append(f"Speaking style: {persona.speaking_style}.")
-    behavior_block = " ".join(behavior_parts)
+        identity_parts.append(f"Speak with a {dominant_stance} tone when discussing related memories.")
+
+    identity_block = " ".join(identity_parts)
 
     # Entity context from Stage 3 entity graph
     entity_block = ""
@@ -312,7 +329,7 @@ def build_system_prompt(
         # Layer 1 — Identity (sentence cap removed from here)
         f"You are {persona.name}. Speak only in first person.\n"
         f"IMPORTANT: Use ONLY the memories below. Ignore all outside knowledge about this name.\n"
-        f"{behavior_block}\n"
+        f"{identity_block}\n"
         # Layer 2 — Memories (affect-tagged; tags are internal context — never repeat them in replies)
         f"\nYOUR MEMORIES (the bracketed tags are internal context cues — never mention them in your reply):\n{context_block}"
         f"{no_memory_fallback}"
