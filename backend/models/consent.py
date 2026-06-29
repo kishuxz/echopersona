@@ -72,3 +72,4 @@ class ListenerContext(BaseModel):
     allowed_modalities: ModalityConsent
     closeness_level: int | None = None
     greeting_style: str | None = None
+    entity_canonical: str | None = None  # §9.3 — from persona_relationships table

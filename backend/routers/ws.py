@@ -179,8 +179,12 @@ async def _run_turn_inner(
     async def _no_rag():
         return []
 
+    _listener_entity = listener_ctx.entity_canonical if listener_ctx else None
     retrieved, history = await asyncio.gather(
-        loop.run_in_executor(None, lambda: RAG_INDICES[persona_id].retrieve(user_text, top_k=3))
+        loop.run_in_executor(
+            None,
+            lambda: RAG_INDICES[persona_id].retrieve(user_text, top_k=3, listener_entity=_listener_entity),
+        )
         if persona_id in RAG_INDICES else _no_rag(),
         _fetch_history(),
     )
@@ -432,8 +436,12 @@ async def _run_text_turn(websocket: WebSocket, session_id: str, user_text: str) 
         async def _no_rag():
             return []
 
+        _listener_entity = listener_ctx.entity_canonical if listener_ctx else None
         retrieved, history = await asyncio.gather(
-            loop.run_in_executor(None, lambda: RAG_INDICES[persona_id].retrieve(user_text, top_k=3))
+            loop.run_in_executor(
+                None,
+                lambda: RAG_INDICES[persona_id].retrieve(user_text, top_k=3, listener_entity=_listener_entity),
+            )
             if persona_id in RAG_INDICES else _no_rag(),
             _fetch_history(),
         )

@@ -5,8 +5,11 @@ standalone to refresh a persona's entity graph or style bank.
 """
 import logging
 
-from services.ingestion.source_store import get_memory_units_for_persona
-from services.ingestion.stage3 import build_entity_graph
+from services.ingestion.source_store import (
+    get_memory_units_for_persona,
+    update_unit_resolved_entities,
+)
+from services.ingestion.stage3 import build_entity_graph, resolve_unit_entity_ids
 from services.ingestion.stage4 import extract_style_exemplars
 from services.ingestion.stage4b import extract_identity_card
 from services.persona_store import (
@@ -42,6 +45,13 @@ async def enrich_persona(ctx: dict, persona_id: str) -> dict:
         entity_graph = await build_entity_graph(units)
         await update_entity_graph(persona_id, entity_graph)
         logger.info("[Enrich] Stage 3 done — %d entities", len(entity_graph))
+
+        # Stage 3 back-link: write resolved_entity_ids onto each unit (§9.3)
+        entity_map = resolve_unit_entity_ids(units, entity_graph)
+        for uid, resolved_ids in entity_map.items():
+            if resolved_ids:
+                await update_unit_resolved_entities(uid, resolved_ids)
+        logger.info("[Enrich] Stage 3 back-links written for %d units", len(entity_map))
 
         # Stage 4: style exemplar bank + voice card (single Groq call)
         exemplars, voice_card = await extract_style_exemplars(units)

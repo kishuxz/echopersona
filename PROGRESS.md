@@ -8,7 +8,7 @@ Slice 5 (Monetization Tiers) complete — next: Slice 6 (Preservation Tier check
 Branch: `slice-5-continuation` → PR to `main`
 
 ### What changed
-- **`backend/migrations/011_monetization_tiers.sql`** (new) — `answer_count INT DEFAULT 0` on `personas`; widens `stripe_entitlements.plan_tier` CHECK to include `'preservation'`; adds `stripe_payment_intent_id TEXT` to `stripe_entitlements`; new `preservation_locks` table (RLS: owner SELECT only, service-role write); new `persona_relationships` table (RLS: member OR owner SELECT, service-role write).
+- **`backend/migrations/012_monetization_tiers.sql`** (new) — `answer_count INT DEFAULT 0` on `personas`; widens `stripe_entitlements.plan_tier` CHECK to include `'preservation'`; adds `stripe_payment_intent_id TEXT` to `stripe_entitlements`; new `preservation_locks` table (RLS: owner SELECT only, service-role write); new `persona_relationships` table (RLS: member OR owner SELECT, service-role write).
 - **`backend/config.py`** — `STRIPE_PRICE_PRESERVATION_ONETIME`, `ENFORCE_ANSWER_QUOTAS` (bool, default False — gates quota thresholds until backfill runs).
 - **`backend/models/entitlements.py`** — `PlanTier` adds `"preservation"`; `StripeEntitlement` + `EntitlementUpsert` add `stripe_payment_intent_id`; `BillingStatusResponse` adds `family_member_limit: int | None` + `is_preservation_locked: bool`; new `PersonaAccessDecision` model.
 - **`backend/models/persona.py`** — `answer_count: int = 0` field added.
@@ -29,13 +29,39 @@ Branch: `slice-5-continuation` → PR to `main`
 - /supabase-rls-review: PASS
 
 ### Do not forget
-- Migration 011 must be applied in Supabase SQL editor before deploying (run on live worktree).
-- `ENFORCE_ANSWER_QUOTAS=true` must NOT be set until answer_count backfill (migration 012 or runbook) is confirmed.
+- Migration 012 must be applied in Supabase SQL editor before deploying (run on live worktree).
+- `ENFORCE_ANSWER_QUOTAS=true` must NOT be set until answer_count backfill (migration 013 or runbook) is confirmed.
 - `persona_relationships` INSERT policy needed when Slice 10 (invite flow) ships.
 - `STRIPE_PRICE_PRESERVATION_ONETIME` env var needed in `.env` before Preservation checkout goes live.
 
 ### Next action
 Slice 6: Preservation Tier — per-persona checkout UI (persona picker + Stripe payment session), posthumous access model.
+
+## 2026-06-28 — Slice 4: Listener Profiles + Entity Back-links + Retrieval Score Threshold ✅
+
+Branch: `doha`
+
+### What changed
+- **`backend/migrations/011_listener_profiles.sql`** (new) + `supabase/migrations/011_listener_profiles.sql` (new)
+  - `resolved_entity_ids TEXT[] NOT NULL DEFAULT '{}'` on `memory_units`; GIN index
+  - `persona_relationships` table: maps `(persona_id, listener_user_id)` → `(entity_canonical, relationship, address_term)`; RLS: owner-manage + listener-read-own
+  - Migration applied via Supabase MCP 2026-06-28
+- **`backend/services/ingestion/stage3.py`** — `resolve_unit_entity_ids()`: maps unit raw entity mentions to canonical names using alias lookups; returns `{unit_id: [canonical, ...]}` for enrichment.py to write back
+- **`backend/services/ingestion/source_store.py`** — `update_unit_resolved_entities()` writes Stage 3 back-links; `get_persona_relationship()` fetches entity canonical for a listener
+- **`backend/worker/tasks/enrichment.py`** — after Stage 3, calls `resolve_unit_entity_ids` + `update_unit_resolved_entities` for every unit with matches
+- **`backend/models/consent.py`** — `ListenerContext` gains `entity_canonical: str | None = None` (§9.3 — from `persona_relationships`)
+- **`backend/services/listener.py`** — immediate-beneficiary path now queries `persona_relationships` via passed `db` and sets `entity_canonical` on `ListenerContext`
+- **`backend/services/rag.py`**
+  - `_SCORE_THRESHOLD = 0.25` (§9.7 confidence floor — units below are dropped, triggering no-memory fallback)
+  - `_ENTITY_BOOST = 0.15` (§9.3 — score bonus for units whose `resolved_entity_ids` includes the listener's entity)
+  - `build_index_from_units` stores `resolved_entity_ids` per unit in `_units`
+  - `retrieve(query, top_k, listener_entity)` — fetches 3× candidates, applies entity boost, filters by threshold
+- **`backend/routers/ws.py`** — both retrieve call sites pass `listener_entity=listener_ctx.entity_canonical` (None-safe)
+- **`backend/tests/test_listener_profiles.py`** (new) — 19 tests: alias resolution, entity boost, threshold constants
+- **`backend/tests/test_listener.py`** — updated for entity_canonical
+
+### Pre-existing gaps (tracked, not fixed here)
+- No API endpoint to register `persona_relationships` rows yet — table seeded manually for now
 
 ## 2026-06-28 — Slice 2: Progressive Q&A ✅
 
@@ -314,14 +340,12 @@ Step 7 Slice G ✅ — Minimal frontend billing and upgrade UI (2026-06-17)
 None.
 
 ## Next action
-Browser verification of full Guided Q&A → readiness gate flow (merged integration).
+Slice 5: Fidelity Gate hardening — block low-fidelity units from entering the FAISS index.
 
 ## Last known green verification
 ```bash
 cd backend && python -m pytest tests/ -q
-# TBD — post-merge run pending
-cd frontend && npx tsc --noEmit && npm run build
-# TBD — post-merge run pending
+# 428 passed, 5 warnings (2026-06-28, Slice 4)
 ```
 
 ## Do not forget
@@ -331,6 +355,9 @@ cd frontend && npx tsc --noEmit && npm run build
 - Migration 007 (`persona_memory_engine`) **confirmed applied** (2026-06-24) — `memory_category` on `memory_units`.
 - Migration 008 (`voice_card`) **confirmed applied** (2026-06-24) — `voice_card JSONB` on `personas`.
 - Migration 009 (`persona_readiness`) **confirmed applied** (2026-06-24) — `readiness_status` on `personas`.
+- Migration 010 (`identity_card`) applied manually in Supabase SQL editor.
+- Migration 011 (`listener_profiles`) **applied via Supabase MCP** (2026-06-28) — `resolved_entity_ids` on `memory_units`, `persona_relationships` table.
 - `SESSION_LISTENER` and `SESSION_HISTORY` are not cleaned up on disconnect — known gap, defer to a future cleanup slice.
 - `posthumous_verified` beneficiary activation is explicitly deferred — activation signal not yet wired.
+- `persona_relationships` rows must be seeded manually (no API endpoint yet) — future Admin UI or API slice.
 - Tavus not yet wired in — see `docs/backlog.md`.

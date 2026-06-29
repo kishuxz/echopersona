@@ -91,6 +91,16 @@ async def resolve_listener_context(
         for b in succession_row.data.get("beneficiaries") or []:
             if b.get("user_id") == user_id:
                 if b.get("activation_trigger") == "immediate":
+                    # §9.3 — look up entity canonical for listener-aware retrieval biasing
+                    rel_result = (
+                        db.table("persona_relationships")
+                        .select("entity_canonical")
+                        .eq("persona_id", persona_id)
+                        .eq("listener_user_id", user_id)
+                        .maybe_single()
+                        .execute()
+                    )
+                    rel_data = rel_result.data if rel_result is not None else None
                     return ListenerContext(
                         listener_user_id=user_id,
                         is_owner=False,
@@ -100,6 +110,7 @@ async def resolve_listener_context(
                         allowed_modalities=consent.modality_consent,
                         closeness_level=b.get("closeness_level"),
                         greeting_style=b.get("greeting_style"),
+                        entity_canonical=rel_data.get("entity_canonical") if rel_data else None,
                     )
                 # Found but not immediately activated
                 logger.info(
